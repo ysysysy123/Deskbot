@@ -7,6 +7,7 @@ import json
 import os
 import ssl
 import sys
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -28,15 +29,24 @@ class ZhipuVisionAnalyzer:
         model: str,
         timeout_seconds: int = 60,
         thinking: Optional[str] = None,
+        retries: int = 0,
+        retry_delay_seconds: float = 5.0,
     ) -> None:
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.timeout_seconds = timeout_seconds
         self.thinking = thinking
+        self.retries = max(0, retries)
+        self.retry_delay_seconds = max(0.0, retry_delay_seconds)
 
     @classmethod
-    def from_config(cls, config: Optional[VisionConfig] = None) -> "ZhipuVisionAnalyzer":
+    def from_config(
+        cls,
+        config: Optional[VisionConfig] = None,
+        retries: int = 0,
+        retry_delay_seconds: float = 5.0,
+    ) -> "ZhipuVisionAnalyzer":
         config = config or load_config()
         if not config.zhipu_api_key:
             raise VisionError("ZHIPUAI_API_KEY is required for the zhipu vision provider.")
@@ -45,6 +55,8 @@ class ZhipuVisionAnalyzer:
             base_url=config.zhipu_base_url,
             model=config.zhipu_vision_model,
             thinking=config.zhipu_thinking,
+            retries=retries,
+            retry_delay_seconds=retry_delay_seconds,
         )
 
     @property
@@ -119,23 +131,29 @@ class ZhipuVisionAnalyzer:
             },
         )
 
-        try:
-            with urllib.request.urlopen(
-                request,
-                timeout=self.timeout_seconds,
-                context=_ssl_context(),
-            ) as response:
-                charset = response.headers.get_content_charset() or "utf-8"
-                return json.loads(response.read().decode(charset))
-        except urllib.error.HTTPError as exc:
-            detail = exc.read().decode("utf-8", errors="replace")
-            raise VisionError(f"Zhipu API returned HTTP {exc.code}: {_redact(detail)}") from exc
-        except urllib.error.URLError as exc:
-            raise VisionError(f"Zhipu API request failed: {exc.reason}") from exc
-        except ssl.SSLError as exc:
-            raise VisionError(f"Zhipu API TLS setup failed: {exc}") from exc
-        except json.JSONDecodeError as exc:
-            raise VisionError("Zhipu API response was not valid JSON.") from exc
+        for attempt in range(self.retries + 1):
+            try:
+                with urllib.request.urlopen(
+                    request,
+                    timeout=self.timeout_seconds,
+                    context=_ssl_context(),
+                ) as response:
+                    charset = response.headers.get_content_charset() or "utf-8"
+                    return json.loads(response.read().decode(charset))
+            except urllib.error.HTTPError as exc:
+                detail = exc.read().decode("utf-8", errors="replace")
+                if exc.code == 429 and attempt < self.retries:
+                    time.sleep(self.retry_delay_seconds)
+                    continue
+                raise VisionError(_http_error_message(exc.code, detail, self.retries)) from exc
+            except urllib.error.URLError as exc:
+                raise VisionError(f"Zhipu API request failed: {exc.reason}") from exc
+            except ssl.SSLError as exc:
+                raise VisionError(f"Zhipu API TLS setup failed: {exc}") from exc
+            except json.JSONDecodeError as exc:
+                raise VisionError("Zhipu API response was not valid JSON.") from exc
+
+        raise VisionError("Zhipu API request failed after retry attempts.")
 
 
 def _read_image(path: Path) -> tuple[bytes, ImageInfo]:
@@ -226,6 +244,18 @@ def _thinking_payload(value: Optional[str]) -> Optional[Dict[str, str]]:
     if isinstance(decoded, dict):
         return {str(key): str(item) for key, item in decoded.items()}
     return {"type": normalized}
+
+
+def _http_error_message(status_code: int, detail: str, retries: int) -> str:
+    redacted_detail = _redact(detail)
+    if status_code == 429:
+        retry_hint = (
+            f" Retried {retries} time(s), but the service is still busy."
+            if retries
+            else " Try again later, choose another vision model, or rerun with --retries."
+        )
+        return f"Zhipu API is rate limited or busy (HTTP 429): {redacted_detail}{retry_hint}"
+    return f"Zhipu API returned HTTP {status_code}: {redacted_detail}"
 
 
 def _redact(value: str) -> str:

@@ -68,6 +68,12 @@ ZHIPUAI_THINKING=disabled
 python -m deskbot_vision.cli path\to\image.png --provider zhipu --env-file .env --prompt "Describe the image." --pretty
 ```
 
+如果云端模型返回 HTTP 429，表示模型繁忙或被限流，可以加重试参数：
+
+```powershell
+python -m deskbot_vision.cli path\to\image.png --provider zhipu --env-file .env --prompt "Describe the image." --pretty --retries 3 --retry-delay 10
+```
+
 使用 `.env` 中的 `VISION_PROVIDER` 自动选择适配器：
 
 ```powershell

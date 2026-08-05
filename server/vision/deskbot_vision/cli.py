@@ -28,6 +28,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="Vision provider. 'auto' reads VISION_PROVIDER from .env.",
     )
     parser.add_argument("--env-file", help="Optional .env path. Defaults to .env in the current directory.")
+    parser.add_argument(
+        "--retries",
+        type=int,
+        default=0,
+        help="Retry count for transient cloud-provider failures such as HTTP 429.",
+    )
+    parser.add_argument(
+        "--retry-delay",
+        type=float,
+        default=5.0,
+        help="Seconds to wait between cloud-provider retries.",
+    )
     return parser
 
 
@@ -36,7 +48,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
-        analyzer = _build_analyzer(args.provider, args.env_file)
+        analyzer = _build_analyzer(args.provider, args.env_file, args.retries, args.retry_delay)
         result = analyzer.analyze(args.image, prompt=args.prompt)
     except VisionError as exc:
         print(f"vision error: {exc}", file=sys.stderr)
@@ -52,7 +64,7 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-def _build_analyzer(provider: str, env_file: str | None):
+def _build_analyzer(provider: str, env_file: str | None, retries: int = 0, retry_delay: float = 5.0):
     if provider == "local":
         return StaticImageAnalyzer()
 
@@ -61,7 +73,7 @@ def _build_analyzer(provider: str, env_file: str | None):
     if selected_provider == "local":
         return StaticImageAnalyzer()
     if selected_provider == "zhipu":
-        return ZhipuVisionAnalyzer.from_config(config)
+        return ZhipuVisionAnalyzer.from_config(config, retries=retries, retry_delay_seconds=retry_delay)
     raise VisionError(f"Unsupported vision provider: {selected_provider}")
 
 

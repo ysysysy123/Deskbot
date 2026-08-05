@@ -1,9 +1,11 @@
 import json
+import urllib.error
 import unittest
 from pathlib import Path
 from unittest import mock
 
 from deskbot_vision.config import VisionConfig, load_env_file
+from deskbot_vision.analyzer import VisionError
 from deskbot_vision.zhipu_adapter import ZhipuVisionAnalyzer
 
 
@@ -33,6 +35,20 @@ class _FakeResponse:
                 ]
             }
         ).encode("utf-8")
+
+
+class _FakeRateLimitError(urllib.error.HTTPError):
+    def __init__(self):
+        super().__init__(
+            url="https://open.bigmodel.cn/api/paas/v4/chat/completions",
+            code=429,
+            msg="Too Many Requests",
+            hdrs={},
+            fp=None,
+        )
+
+    def read(self):
+        return b'{"error":{"code":"1305","message":"busy"}}'
 
 
 class ZhipuVisionAnalyzerTest(unittest.TestCase):
@@ -71,6 +87,40 @@ class ZhipuVisionAnalyzerTest(unittest.TestCase):
         self.assertEqual(result.adapter, "zhipu:glm-4.6v-flash")
         self.assertIn("cloud", result.tags)
         self.assertIn("small red sample", result.summary)
+
+    def test_retries_rate_limited_request(self):
+        sample = Path(__file__).resolve().parents[1] / "samples" / "deskbot-scene.ppm"
+        analyzer = ZhipuVisionAnalyzer(
+            api_key="test-key",
+            base_url="https://open.bigmodel.cn/api/paas/v4",
+            model="glm-4.6v-flash",
+            retries=1,
+            retry_delay_seconds=0,
+        )
+
+        with mock.patch(
+            "urllib.request.urlopen",
+            side_effect=[_FakeRateLimitError(), _FakeResponse()],
+        ) as urlopen:
+            result = analyzer.analyze(str(sample))
+
+        self.assertEqual(urlopen.call_count, 2)
+        self.assertEqual(result.adapter, "zhipu:glm-4.6v-flash")
+
+    def test_rate_limit_message_suggests_retry(self):
+        sample = Path(__file__).resolve().parents[1] / "samples" / "deskbot-scene.ppm"
+        analyzer = ZhipuVisionAnalyzer(
+            api_key="test-key",
+            base_url="https://open.bigmodel.cn/api/paas/v4",
+            model="glm-4.6v-flash",
+        )
+
+        with mock.patch("urllib.request.urlopen", side_effect=_FakeRateLimitError()):
+            with self.assertRaises(VisionError) as context:
+                analyzer.analyze(str(sample))
+
+        self.assertIn("HTTP 429", str(context.exception))
+        self.assertIn("--retries", str(context.exception))
 
     def test_from_config_requires_api_key(self):
         config = VisionConfig(
