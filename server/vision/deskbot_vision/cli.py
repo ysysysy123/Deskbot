@@ -7,6 +7,8 @@ import sys
 from pathlib import Path
 
 from .analyzer import StaticImageAnalyzer, VisionError
+from .config import load_config
+from .zhipu_adapter import ZhipuVisionAnalyzer
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -19,6 +21,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--pretty", action="store_true", help="Pretty-print JSON output.")
     parser.add_argument("--output", help="Optional path for the JSON result.")
+    parser.add_argument(
+        "--provider",
+        choices=["local", "zhipu", "auto"],
+        default="local",
+        help="Vision provider. 'auto' reads VISION_PROVIDER from .env.",
+    )
+    parser.add_argument("--env-file", help="Optional .env path. Defaults to .env in the current directory.")
     return parser
 
 
@@ -27,7 +36,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
-        result = StaticImageAnalyzer().analyze(args.image, prompt=args.prompt)
+        analyzer = _build_analyzer(args.provider, args.env_file)
+        result = analyzer.analyze(args.image, prompt=args.prompt)
     except VisionError as exc:
         print(f"vision error: {exc}", file=sys.stderr)
         return 2
@@ -40,6 +50,19 @@ def main(argv: list[str] | None = None) -> int:
     else:
         print(payload)
     return 0
+
+
+def _build_analyzer(provider: str, env_file: str | None):
+    if provider == "local":
+        return StaticImageAnalyzer()
+
+    config = load_config(env_file)
+    selected_provider = config.provider if provider == "auto" else provider
+    if selected_provider == "local":
+        return StaticImageAnalyzer()
+    if selected_provider == "zhipu":
+        return ZhipuVisionAnalyzer.from_config(config)
+    raise VisionError(f"Unsupported vision provider: {selected_provider}")
 
 
 if __name__ == "__main__":

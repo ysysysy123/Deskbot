@@ -6,12 +6,12 @@
 
 ## 当前实现
 
-当前分支先实现一个可直接运行的静态图片分析器：
+当前分支先实现两个静态图片分析器：
 
-- 默认不需要 API Key、模型权重或网络服务。
-- 使用 Python 标准库解析 PNG、JPEG、GIF、BMP 和 PPM P3 的基础信息。
-- 对 PPM P3 样例做简单颜色估计，用于验证结构化视觉结果。
-- 输出稳定 JSON，后续可替换为 xiaozhi-server VLLM、Ollama 或 OpenAI-compatible 视觉模型适配器。
+- `local`：默认模式，不需要 API Key、模型权重或网络服务，使用 Python 标准库解析 PNG、JPEG、GIF、BMP 和 PPM P3 的基础信息。
+- `zhipu`：云端视觉模式，通过 OpenAI-compatible chat completions 请求调用智谱 GLM 视觉模型。
+
+两种模式输出相同的稳定 JSON 契约，后续可继续增加 Ollama 或其他 OpenAI-compatible 视觉模型适配器。
 
 输出结果包含：
 
@@ -44,6 +44,36 @@ python -m deskbot_vision.cli samples\deskbot-scene.ppm --pretty
 python -m deskbot_vision.cli samples\deskbot-scene.ppm --pretty --output .\build\vision-result.json
 ```
 
+## 智谱云端视觉
+
+复制 `.env.example` 为 `.env`，并填写 API Key：
+
+```powershell
+copy .env.example .env
+```
+
+配置项：
+
+```text
+VISION_PROVIDER=zhipu
+ZHIPUAI_API_KEY=
+ZHIPUAI_BASE_URL=https://open.bigmodel.cn/api/paas/v4
+ZHIPUAI_VISION_MODEL=glm-4.6v-flash
+ZHIPUAI_THINKING=disabled
+```
+
+运行云端视觉分析：
+
+```powershell
+python -m deskbot_vision.cli path\to\image.png --provider zhipu --env-file .env --prompt "Describe the image." --pretty
+```
+
+使用 `.env` 中的 `VISION_PROVIDER` 自动选择适配器：
+
+```powershell
+python -m deskbot_vision.cli path\to\image.png --provider auto --env-file .env --pretty
+```
+
 运行测试：
 
 ```powershell
@@ -51,8 +81,8 @@ cd server\vision
 python -m unittest discover tests
 ```
 
-## 与小智视觉链路的关系
+## 集成边界
 
-《小智开源复现方案.md》中推荐的视觉路线是：PC 客户端或设备摄像头采集图像，服务端通过 VLLM / Ollama / OpenAI-compatible 视觉模型返回图像解释。Deskbot 当前实现先复现其中的服务端输入输出契约：静态图片进入 `server/vision`，模块输出结构化结果，但不直接控制电机。
+视觉路线是：PC 客户端或设备摄像头采集图像，服务端通过 VLLM / Ollama / OpenAI-compatible 视觉模型返回图像解释。Deskbot 当前实现先固定其中的服务端输入输出契约：静态图片进入 `server/vision`，模块输出结构化结果，但不直接控制电机。
 
 后续接模型时，只需要新增适配器并保持当前 JSON 契约稳定。

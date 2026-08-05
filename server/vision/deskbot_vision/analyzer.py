@@ -84,7 +84,7 @@ class StaticImageAnalyzer:
         if not data:
             raise VisionError(f"Image file is empty: {path}")
 
-        image_info = _detect_image_info(data)
+        image_info = detect_image_info(data)
         color_label = _dominant_color_for_ppm_p3(data)
         tags = [image_info.format.lower(), image_info.orientation]
         findings = [
@@ -131,7 +131,7 @@ class StaticImageAnalyzer:
         )
 
 
-def _detect_image_info(data: bytes) -> ImageInfo:
+def detect_image_info(data: bytes) -> ImageInfo:
     if data.startswith(b"\x89PNG\r\n\x1a\n"):
         if len(data) < 24:
             raise VisionError("PNG header is incomplete.")
