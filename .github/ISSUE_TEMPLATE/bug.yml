@@ -1,0 +1,37 @@
+name: 缺陷报告
+description: 报告可复现的软件、协议或硬件问题
+title: "[Bug] "
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: 问题描述
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤
+      value: "1. "
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期结果
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: 环境
+      description: 填写提交、板卡、固件、接线、服务端系统及相关日志。
+    validations:
+      required: true
+  - type: textarea
+    id: safety
+    attributes:
+      label: 安全影响
+      description: 是否涉及过热、电机异常、供电、数据或密钥风险？
+    validations:
+      required: true

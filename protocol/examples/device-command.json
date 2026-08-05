@@ -1,0 +1,12 @@
+{
+  "version": "0.1",
+  "type": "device.command",
+  "id": "cmd-001",
+  "timestamp_ms": 1785945600000,
+  "payload": {
+    "name": "set_expression",
+    "arguments": {
+      "expression": "happy"
+    }
+  }
+}

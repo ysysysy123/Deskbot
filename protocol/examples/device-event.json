@@ -1,0 +1,11 @@
+{
+  "version": "0.1",
+  "type": "device.event",
+  "id": "evt-001",
+  "timestamp_ms": 1785945600120,
+  "correlation_id": "cmd-001",
+  "payload": {
+    "name": "command.completed",
+    "status": "ok"
+  }
+}

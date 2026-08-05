@@ -1,0 +1,16 @@
+name: Repository checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  validate-json:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate protocol JSON files
+        shell: bash
+        run: |
+          find protocol -type f -name '*.json' -print0 | xargs -0 -n1 python -m json.tool >/dev/null

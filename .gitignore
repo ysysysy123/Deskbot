@@ -1,0 +1,24 @@
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+sdkconfig
+sdkconfig.old
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Build and runtime output
+build/
+dist/
+coverage/
+__pycache__/
+*.py[cod]
+*.log
+
+# Large local assets
+models/
+recordings/

@@ -1,0 +1,47 @@
+name: 开发任务
+description: 创建一个有明确范围和验收标准的任务
+title: "[Task] "
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: 目标
+      description: 这项任务要解决什么问题？
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: 范围
+      description: 写清包含与不包含的内容。
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 验收标准
+      description: 使用可检查的列表。
+      value: "- [ ] "
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: 依赖与硬件
+      description: 列出前置 Issue、板卡、外设或账号；没有请写“无”。
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: 模块
+      options:
+        - firmware/hal
+        - firmware/services
+        - firmware/orchestrator
+        - server/voice
+        - server/vision
+        - protocol
+        - mechanical/docs
+    validations:
+      required: true
