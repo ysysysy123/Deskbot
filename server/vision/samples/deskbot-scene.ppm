@@ -1,0 +1,7 @@
+P3
+# Simple static image sample for the Deskbot vision service.
+4 3
+255
+220 40 40   230 50 50   210 40 45   220 45 40
+230 60 55   240 70 60   220 55 50   210 50 45
+180 80 70   190 90 80   170 85 75   160 80 70
