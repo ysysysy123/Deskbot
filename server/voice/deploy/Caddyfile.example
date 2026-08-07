@@ -1,0 +1,13 @@
+# Before exposing this site, set auth.ota_include_token to false.
+voice.example.com {
+    # Caddy obtains and renews TLS certificates automatically.
+    handle /xiaozhi/v1/* {
+        reverse_proxy 127.0.0.1:8000
+    }
+
+    handle /xiaozhi/ota/* {
+        reverse_proxy 127.0.0.1:8003
+    }
+
+    # Deliberately no /api/ route: the memory admin service stays private.
+}

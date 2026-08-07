@@ -1,0 +1,19 @@
+from typing import Protocol
+
+from voice_server.memory.models import MemoryContext, SummaryBatch
+
+
+class MemoryProvider(Protocol):
+    async def remember(self, device_id: str, session_id: str, role: str, content: str) -> None: ...
+
+    async def recall(self, device_id: str, query: str, recent_limit: int) -> MemoryContext: ...
+
+    async def clear(self, device_id: str) -> None: ...
+
+    async def close(self) -> None: ...
+
+
+class SummaryStore(Protocol):
+    async def load_summary_batch(self, device_id: str, threshold: int) -> SummaryBatch | None: ...
+
+    async def save_summary(self, device_id: str, summary: str, through_message_id: int) -> None: ...

@@ -1,0 +1,61 @@
+server:
+  host: 0.0.0.0
+  ws_port: 8000
+  ota_host: 0.0.0.0
+  ota_port: 8003
+  public_websocket_url: ""
+  hello_timeout_s: 10
+  idle_timeout_s: 120
+  max_text_bytes: 16384
+  max_binary_bytes: 65536
+  max_recording_bytes: 2000000
+  max_recording_seconds: 30
+
+audio:
+  input_sample_rate: 16000
+  output_sample_rate: 24000
+  channels: 1
+  frame_duration_ms: 60
+
+auth:
+  mode: none
+  allowed_devices: []
+  ota_include_token: false
+# Secrets are never stored in this file. Use VOICE_AUTH_TOKEN when mode is bearer.
+
+admin_api:
+  host: 127.0.0.1
+  port: 8004
+# Set VOICE_MEMORY_ADMIN_TOKEN before binding this service beyond loopback.
+
+vad:
+  model_path: models/snakers4_silero-vad
+  speech_threshold: 0.5
+  silence_threshold: 0.3
+  min_silence_duration_ms: 600
+
+asr:
+  model_path: models/SenseVoiceSmall
+  max_concurrency: 1
+  timeout_s: 30
+
+llm:
+  base_url: http://127.0.0.1:11434/v1
+  model: qwen2.5
+  temperature: 0.7
+  max_tokens: 1024
+  summary_max_tokens: 256
+  timeout_s: 60
+# For a remote OpenAI-compatible endpoint, set VOICE_LLM_API_KEY.
+
+tts:
+  voice: zh-CN-XiaoxiaoNeural
+  rate: +0%
+  volume: +0%
+  timeout_s: 30
+  error_text: 抱歉，服务暂时不可用。
+
+memory:
+  database_path: data/memory.db
+  recent_limit: 10
+  summary_threshold: 12
