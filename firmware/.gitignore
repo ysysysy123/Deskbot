@@ -1,0 +1,8 @@
+# Local build products; release images are kept explicitly under releases/.
+**/.build/
+**/managed_components/
+**/sdkconfig
+**/sdkconfig.old
+*.elf
+*.map
+
