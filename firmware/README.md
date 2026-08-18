@@ -1,25 +1,30 @@
-# ESP32 固件
+# 桌面宠物固件
 
-固件分为三层，依赖只能自下而上：
+本目录可以直接随仓库上传 GitHub，包含两块主板的源码、编译/烧录入口和可恢复固件。
 
-```text
-orchestrator  ->  services  ->  hal
-       \             |
-        \------ protocol
+## 目录
+
+| 路径 | 内容 |
+| --- | --- |
+| `atk-dnesp32s3-eye-uart/source/xiaozhi-esp32/` | ATK-DNESP32S3 小智 2.2.6 完整源码 |
+| `atk-dnesp32s3-eye-uart/releases/` | ATK 应用包及 16 MB 完整包 |
+| `dualeye-eye-test/` | DualEye Arduino 源码及本地 LVGL 8.3.10 |
+| `dualeye-eye-test/releases/` | DualEye 16 MB 完整包 |
+| `tools/` | 两块板的编译和烧录脚本 |
+| `hal/`、`services/`、`orchestrator/` | 后续桌宠电机和行为控制分层代码 |
+
+## 快速使用
+
+```powershell
+# ATK 编译、生成应用包和完整包
+& .\firmware\tools\build-atk.ps1
+
+# ATK 应用更新，默认 COM12，保留 Wi-Fi/绑定
+& .\firmware\tools\flash-atk.ps1
+
+# DualEye 编译和烧录，默认 COM11
+& .\firmware\tools\build-dualeye.ps1
+& .\firmware\tools\flash-dualeye.ps1
 ```
 
-## `hal/`
-
-封装板级差异和外设读写：麦克风、扬声器、屏幕、灯光、电机、电源。上层只看到稳定接口，不访问具体 GPIO 或寄存器。
-
-## `services/`
-
-组合底层接口形成可测试服务，例如 `show_expression`、`play_audio`、`set_light`、`move_head`。服务必须限制电机角度、速度和持续时间。
-
-## `orchestrator/`
-
-管理设备状态、连接、命令路由和离线回退。它选择调用哪个服务，但不实现硬件细节。
-
-## 第一项任务
-
-确定目标开发板与 ESP-IDF 版本，建立最小工程并让三个层级各有一个可编译的空组件。版本确定前不提交猜测性的引脚定义。
+详细参数和完整恢复方式见 [tools/README.md](tools/README.md)。临时依赖、构建对象、ELF、MAP 和 `sdkconfig` 均由 `.gitignore` 排除；`releases/*.bin` 保留用于发布。

@@ -1,0 +1,24 @@
+tmp/
+# Keep the locally patched esp-ml307 component; ignore any other local components.
+components/*
+!components/78__esp-ml307/
+!components/78__esp-ml307/**
+managed_components/
+build/
+dist/
+.vscode/
+.devcontainer/
+sdkconfig.old
+sdkconfig
+# Committed to keep component versions reproducible.
+!dependencies.lock
+.env
+releases/
+main/assets/lang_config.h
+main/mmap_generate_emoji.h
+.DS_Store
+.cache
+*.pyc
+*.bin
+mmap_generate_*.h
+.clangd

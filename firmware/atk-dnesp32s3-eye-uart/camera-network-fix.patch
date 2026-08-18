@@ -1,0 +1,196 @@
+diff --git a/main/boards/atk-dnesp32s3/atk_dnesp32s3.cc b/main/boards/atk-dnesp32s3/atk_dnesp32s3.cc
+index 833c669..b34e54c 100644
+--- a/main/boards/atk-dnesp32s3/atk_dnesp32s3.cc
++++ b/main/boards/atk-dnesp32s3/atk_dnesp32s3.cc
+@@ -6,7 +6,7 @@
+ #include "config.h"
+ #include "i2c_device.h"
+ #include "led/single_led.h"
+-#include "esp_video.h"
++#include "esp32_camera.h"
+ 
+ #include <esp_log.h>
+ #include <esp_lcd_panel_vendor.h>
+@@ -49,7 +49,7 @@ private:
+     Button boot_button_;
+     LcdDisplay* display_;
+     XL9555* xl9555_;
+-    EspVideo* camera_;
++    Esp32Camera* camera_;
+ 
+     void InitializeI2c() {
+         // Initialize I2C peripheral
+@@ -130,8 +130,8 @@ private:
+                                     DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_OFFSET_X, DISPLAY_OFFSET_Y, DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y, DISPLAY_SWAP_XY);
+     }
+ 
+-    // 初始化摄像头：ov2640；
+-    // 根据正点原子官方示例参数
++    // 使用正点原子已验证的 esp32-camera + RGB565/QVGA 路径。
++    // esp_video 的 OV5640 YUV/SVGA 路径在本板上会产生横向错位和绿色色块。
+     void InitializeCamera() {
+         xl9555_->SetOutputState(OV_PWDN_IO, 0); // PWDN=低 (上电)
+         xl9555_->SetOutputState(OV_RESET_IO, 0); // 确保复位
+@@ -139,47 +139,35 @@ private:
+         xl9555_->SetOutputState(OV_RESET_IO, 1); // 释放复位
+         vTaskDelay(pdMS_TO_TICKS(50));           // 延长 50ms
+ 
+-        static esp_cam_ctlr_dvp_pin_config_t dvp_pin_config = {
+-            .data_width = CAM_CTLR_DATA_WIDTH_8,
+-            .data_io = {
+-                [0] = CAM_PIN_D0,
+-                [1] = CAM_PIN_D1,
+-                [2] = CAM_PIN_D2,
+-                [3] = CAM_PIN_D3,
+-                [4] = CAM_PIN_D4,
+-                [5] = CAM_PIN_D5,
+-                [6] = CAM_PIN_D6,
+-                [7] = CAM_PIN_D7,
+-            },
+-            .vsync_io = CAM_PIN_VSYNC,
+-            .de_io = CAM_PIN_HREF,
+-            .pclk_io = CAM_PIN_PCLK,
+-            .xclk_io = CAM_PIN_XCLK,
+-        };
+-
+-        esp_video_init_sccb_config_t sccb_config = {
+-            .init_sccb = true,
+-            .i2c_config = {
+-                .port = 1,
+-                .scl_pin = CAM_PIN_SIOC,
+-                .sda_pin = CAM_PIN_SIOD,
+-            },
+-            .freq = 100000,
+-        };
+-
+-        esp_video_init_dvp_config_t dvp_config = {
+-            .sccb_config = sccb_config,
+-            .reset_pin = CAM_PIN_RESET,   // 实际由 XL9555 控制
+-            .pwdn_pin = CAM_PIN_PWDN,     // 实际由 XL9555 控制
+-            .dvp_pin = dvp_pin_config,
+-            .xclk_freq = 20000000,
+-        };
+-
+-        esp_video_init_config_t video_config = {
+-            .dvp = &dvp_config,
+-        };
+-
+-        camera_ = new EspVideo(video_config);
++        camera_config_t config = {};
++        config.pin_d0 = CAM_PIN_D0;
++        config.pin_d1 = CAM_PIN_D1;
++        config.pin_d2 = CAM_PIN_D2;
++        config.pin_d3 = CAM_PIN_D3;
++        config.pin_d4 = CAM_PIN_D4;
++        config.pin_d5 = CAM_PIN_D5;
++        config.pin_d6 = CAM_PIN_D6;
++        config.pin_d7 = CAM_PIN_D7;
++        config.pin_xclk = CAM_PIN_XCLK;
++        config.pin_pclk = CAM_PIN_PCLK;
++        config.pin_vsync = CAM_PIN_VSYNC;
++        config.pin_href = CAM_PIN_HREF;
++        config.pin_sccb_sda = CAM_PIN_SIOD;
++        config.pin_sccb_scl = CAM_PIN_SIOC;
++        config.sccb_i2c_port = I2C_NUM_1;
++        config.pin_pwdn = CAM_PIN_PWDN;
++        config.pin_reset = CAM_PIN_RESET;
++        config.xclk_freq_hz = 24000000;
++        config.ledc_timer = LEDC_TIMER_0;
++        config.ledc_channel = LEDC_CHANNEL_0;
++        config.pixel_format = PIXFORMAT_RGB565;
++        config.frame_size = FRAMESIZE_QVGA;
++        config.jpeg_quality = 12;
++        config.fb_count = 1;
++        config.fb_location = CAMERA_FB_IN_PSRAM;
++        config.grab_mode = CAMERA_GRAB_WHEN_EMPTY;
++
++        camera_ = new Esp32Camera(config);
+     }
+ 
+ public:
+diff --git a/main/boards/common/esp32_camera.cc b/main/boards/common/esp32_camera.cc
+index 76eaaab..05c4c9c 100644
+--- a/main/boards/common/esp32_camera.cc
++++ b/main/boards/common/esp32_camera.cc
+@@ -123,8 +123,9 @@ bool Esp32Camera::Capture() {
+         ESP_LOGW(TAG, "JPEG capture success, len=%zu, but not supported for preview", current_fb_->len);
+     }
+ 
+-    ESP_LOGI(TAG, "Captured frame: %dx%d, len=%zu, format=%d",
+-             current_fb_->width, current_fb_->height, current_fb_->len, current_fb_->format);
++    ESP_LOGI(TAG, "Captured frame: %ux%u, len=%u, format=%d",
++             static_cast<unsigned>(current_fb_->width), static_cast<unsigned>(current_fb_->height),
++             static_cast<unsigned>(current_fb_->len), current_fb_->format);
+ 
+     return true;
+ }
+diff --git a/managed_components/78__esp-ml307/src/http_client.cc b/managed_components/78__esp-ml307/src/http_client.cc
+index 16fa458..3acfa6c 100644
+--- a/managed_components/78__esp-ml307/src/http_client.cc
++++ b/managed_components/78__esp-ml307/src/http_client.cc
+@@ -15,8 +15,14 @@ HttpClient::HttpClient(NetworkInterface* network, int connect_id) : network_(net
+ }
+ 
+ HttpClient::~HttpClient() {
+-    if (connected_) {
+-        Close();
++    if (tcp_) {
++        // The peer may have disconnected first, which makes connected_ false
++        // before the receive task has finished running our callbacks. Always
++        // wait for that task before destroying this object and its mutexes.
++        tcp_->Disconnect();
++        tcp_->OnStream({});
++        tcp_->OnDisconnected({});
++        tcp_.reset();
+     }
+     vEventGroupDelete(event_group_handle_);
+ }
+diff --git a/managed_components/78__esp-ml307/src/esp/esp_tcp.cc b/managed_components/78__esp-ml307/src/esp/esp_tcp.cc
+index e0c28df..9803d12 100644
+--- a/managed_components/78__esp-ml307/src/esp/esp_tcp.cc
++++ b/managed_components/78__esp-ml307/src/esp/esp_tcp.cc
+@@ -25,7 +25,7 @@ EspTcp::~EspTcp() {
+ 
+ bool EspTcp::Connect(const std::string& host, int port) {
+     // 确保先断开已有连接
+-    if (connected_) {
++    if (connected_ || receive_task_handle_ != nullptr) {
+         Disconnect();
+     }
+ 
+@@ -72,13 +72,20 @@ bool EspTcp::Connect(const std::string& host, int port) {
+ }
+ 
+ void EspTcp::Disconnect() {
+-    // 如果已经断开，直接返回
+-    if (!connected_) {
+-        return;
++    if (connected_) {
++        // 主动断开，需要等待接收任务退出
++        DoDisconnect(true);
++    } else if (receive_task_handle_ != nullptr && event_group_ != nullptr) {
++        // The peer may have closed the socket and cleared connected_ while the
++        // receive task is still finishing its disconnect callback.
++        auto bits = xEventGroupWaitBits(event_group_, ESP_TCP_EVENT_RECEIVE_TASK_EXIT,
++                                        pdFALSE, pdFALSE, pdMS_TO_TICKS(10000));
++        if (!(bits & ESP_TCP_EVENT_RECEIVE_TASK_EXIT)) {
++            ESP_LOGE(TAG, "Failed to wait for receive task exit");
++        } else {
++            receive_task_handle_ = nullptr;
++        }
+     }
+-
+-    // 主动断开，需要等待接收任务退出
+-    DoDisconnect(true);
+ }
+ 
+ void EspTcp::DoDisconnect(bool wait_for_task) {
+@@ -94,6 +101,8 @@ void EspTcp::DoDisconnect(bool wait_for_task) {
+             auto bits = xEventGroupWaitBits(event_group_, ESP_TCP_EVENT_RECEIVE_TASK_EXIT, pdFALSE, pdFALSE, pdMS_TO_TICKS(10000));
+             if (!(bits & ESP_TCP_EVENT_RECEIVE_TASK_EXIT)) {
+                 ESP_LOGE(TAG, "Failed to wait for receive task exit");
++            } else {
++                receive_task_handle_ = nullptr;
+             }
+         }
+     }
