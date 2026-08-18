@@ -2,7 +2,9 @@
 
 本目录现在包含可独立编译的小智 2.2.6 源码、双眼 UART 适配层、发布固件和操作补丁。当前已在 ESP-IDF 5.5.3、ATK-DNESP32S3 上编译并通过 COM12 实机启动测试。
 
-完整工程位于 [source/xiaozhi-esp32](source/xiaozhi-esp32)。第三方依赖由 `dependencies.lock` 锁定；修复后的 `78/esp-ml307` 作为本地组件放在工程的 `components/78__esp-ml307`，因此从 GitHub 克隆后无需再手工修改 `managed_components`。
+完整工程位于 [source/xiaozhi-esp32](source/xiaozhi-esp32)。第三方依赖由 `dependencies.lock` 锁定；修复后的 `78/esp-ml307` 作为本地组件放在工程的 `components/78__esp-ml307`，因此从 GitHub 克隆后无需再手工修改 `managed_components`。约 723 MiB 的 `managed_components` 只是可再下载的构建缓存，已从源码目录清除且不会上传 GitHub；首次编译会自动恢复。
+
+这是面向本机 ATK-DNESP32S3 的裁剪版本。`main/boards` 仅保留 `atk-dnesp32s3` 和编译时直接依赖的 `common`；其他上游板型源码已移除。`Kconfig.projbuild` 和 `CMakeLists.txt` 仍保留上游板型选项，便于以后同步源码，但本仓库只保证 `CONFIG_BOARD_TYPE_ATK_DNESP32S3` 可以构建。
 
 使用方法：
 
