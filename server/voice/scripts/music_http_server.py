@@ -104,7 +104,11 @@ class MusicHandler(BaseHTTPRequestHandler):
             )
             self.send_response(200)
             self.send_header("Content-Type", "audio/ogg")
-            self.send_header("X-Music-Title", track.title)
+            # BaseHTTPRequestHandler writes headers as Latin-1. Preserve the
+            # original UTF-8 bytes so the ESP32 can display Chinese titles.
+            safe_title = track.title.replace("\r", " ").replace("\n", " ")
+            title_header = safe_title.encode("utf-8").decode("latin-1")
+            self.send_header("X-Music-Title", title_header)
             self.send_header("Cache-Control", "no-store")
             self.send_header("Connection", "close")
             self.end_headers()
