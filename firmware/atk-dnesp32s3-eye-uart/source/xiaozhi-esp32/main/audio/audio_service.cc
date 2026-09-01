@@ -498,7 +498,12 @@ void AudioService::PushTaskToEncodeQueue(AudioTaskType type, std::vector<int16_t
         timestamp_queue_.pop_front();
     }
 
-    audio_queue_cv_.wait(lock, [this]() { return audio_encode_queue_.size() < MAX_ENCODE_TASKS_IN_QUEUE; });
+    // Voice data is real-time. Keeping stale frames is worse than dropping them,
+    // and blocking here can eventually stall the microphone input path.
+    if (audio_encode_queue_.size() >= MAX_ENCODE_TASKS_IN_QUEUE) {
+        audio_encode_queue_.pop_front();
+        ESP_LOGD(TAG, "Encode queue full, dropping oldest audio frame");
+    }
     audio_encode_queue_.push_back(std::move(task));
     audio_queue_cv_.notify_all();
 }
@@ -663,6 +668,14 @@ void AudioService::WaitForPlaybackQueueEmpty() {
     audio_queue_cv_.wait(lock, [this]() { 
         return service_stopped_ || (audio_decode_queue_.empty() && audio_playback_queue_.empty()); 
     });
+}
+
+void AudioService::ResetEncoder() {
+    std::lock_guard<std::mutex> lock(audio_queue_mutex_);
+    audio_encode_queue_.clear();
+    audio_send_queue_.clear();
+    timestamp_queue_.clear();
+    audio_queue_cv_.notify_all();
 }
 
 void AudioService::ResetDecoder() {

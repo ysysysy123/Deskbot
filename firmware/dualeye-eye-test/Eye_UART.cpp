@@ -54,6 +54,12 @@ bool parse_state(const char *name, EyeState &state)
     state = EyeState::SPEAKING;
   } else if (strcmp(name, "HAPPY") == 0) {
     state = EyeState::HAPPY;
+  } else if (strcmp(name, "SAD") == 0) {
+    state = EyeState::SAD;
+  } else if (strcmp(name, "ANGRY") == 0) {
+    state = EyeState::ANGRY;
+  } else if (strcmp(name, "SURPRISED") == 0) {
+    state = EyeState::SURPRISED;
   } else if (strcmp(name, "SLEEPING") == 0) {
     state = EyeState::SLEEPING;
   } else {

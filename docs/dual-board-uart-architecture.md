@@ -52,6 +52,9 @@ flowchart TB
 | `STATE THINKING` | `OK STATE THINKING` | 紫色，快速左右思考 |
 | `STATE SPEAKING` | `OK STATE SPEAKING` | 青色，轻微上下运动 |
 | `STATE HAPPY` | `OK STATE HAPPY` | 金色、眯眼 |
+| `STATE SAD` | `OK STATE SAD` | 灰蓝、眼睑下垂、视线向下 |
+| `STATE ANGRY` | `OK STATE ANGRY` | 红色、眯眼、快速左右抖动 |
+| `STATE SURPRISED` | `OK STATE SURPRISED` | 亮黄、虹膜放大、睁大眼 |
 | `STATE SLEEPING` | `OK STATE SLEEPING` | 闭眼 |
 | `GAZE -100 50` | `OK GAZE` | 视线左移并略向下，2 秒后恢复自动动作 |
 | `BLINK` | `OK BLINK` | 立即同步眨眼 |
@@ -122,7 +125,35 @@ state_machine_.AddStateChangeListener([this](DeviceState old_state,
 | `Starting`、`WifiConfiguring`、`Connecting`、`Upgrading`、`Activating`、`AudioTesting` | `THINKING` |
 | `FatalError` | `SLEEPING` |
 
-`HAPPY` 和真正的 `SLEEPING` 不是现有小智状态枚举的一部分，后续可分别在唤醒成功/任务完成与电源管理事件中显式调用 `SendState("HAPPY")`、`SendState("SLEEPING")`。
+`HAPPY`、`SAD`、`ANGRY`、`SURPRISED` 和真正的 `SLEEPING` 不是现有小智状态枚举的一部分，而是由语气情绪驱动（见下），或后续在唤醒成功/任务完成与电源管理事件中显式调用。
+
+### 语气情绪映射（Speaking 期间生效）
+
+服务器在 `llm` 消息里下发 `emotion` 字段（共 21 种），ATK 缓存后，在进入 `Speaking` 时用它覆盖默认的 `SPEAKING` 表情，从而让说话时的表情跟随语气。离开 `Speaking`（回到 `Idle`/`Listening`）时清空，恢复活动态。
+
+| 服务器 `emotion` | 眼睛状态 |
+| --- | --- |
+| `neutral`、`relaxed`、`cool`、`confident`、`winking` | `SPEAKING` |
+| `happy`、`laughing`、`funny`、`silly`、`delicious`、`loving`、`kissy` | `HAPPY` |
+| `sad`、`crying` | `SAD` |
+| `angry` | `ANGRY` |
+| `surprised`、`shocked`、`embarrassed` | `SURPRISED` |
+| `thinking`、`confused` | `THINKING` |
+| `sleepy` | `SLEEPING` |
+
+映射实现见 `application.cc` 的 `GetEyeStateFromEmotion()`；若服务器未下发 `emotion`，`Speaking` 回落到默认 `SPEAKING`。
+
+### 物理按键
+
+板载 KEY0~KEY3 由 XL9555 输入端口 1 读取（P1_7~P1_4，低电平有效）。已分配：
+
+| 按键 | XL9555 端口 | 功能 |
+| --- | --- | --- |
+| BOOT（GPIO0） | — | 单击切换对话状态；开机时进入配网 |
+| KEY1 | P1_6（bit6） | 音量减（步进 10） |
+| KEY3 | P1_4（bit4） | 音量加（步进 10） |
+
+音量按键在 `atk_dnesp32s3.cc` 的 `InitializeVolumeKeys()` 中通过轮询 XL9555 输入实现，带 20ms 采样 + 去抖。打断仍使用唤醒词或 BOOT 键。
 
 ATK 的默认 ESP32-S3 控制台也是 UART0 GPIO43/44。必须把应用和 bootloader 主控制台切到原生 USB，才能让物理引脚只承载双眼协议：
 

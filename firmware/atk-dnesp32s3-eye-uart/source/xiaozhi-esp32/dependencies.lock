@@ -2,7 +2,7 @@ dependencies:
   78/esp-ml307:
     dependencies: []
     source:
-      path: D:\desktop\xiaozhi\Deskbot\firmware\atk-dnesp32s3-eye-uart\source\xiaozhi-esp32\components\78__esp-ml307
+      path: components/78__esp-ml307
       type: local
     version: 3.6.6
   78/esp-wifi-connect:
@@ -957,7 +957,7 @@ dependencies:
   idf:
     source:
       type: idf
-    version: 5.5.3
+    version: 5.5.5
   laride/heatshrink:
     component_hash: 0828b0fea3f0754f8404a5279e883c52fe27494bbe1762e38d5cd96c99229e47
     dependencies:

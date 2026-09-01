@@ -137,7 +137,20 @@ void Es8388AudioCodec::CreateDuplexChannels(gpio_num_t mclk, gpio_num_t bclk, gp
 }
 
 void Es8388AudioCodec::SetOutputVolume(int volume) {
-    ESP_ERROR_CHECK(esp_codec_dev_set_out_vol(output_dev_, volume));
+    if (output_dev_ == nullptr) {
+        ESP_LOGW(TAG, "Cannot set output volume: codec is not initialized");
+        return;
+    }
+
+    // Volume keys can run while the audio service is opening or closing the
+    // codec. Serialize control-bus access and keep a transient I2C error from
+    // aborting the whole device.
+    std::lock_guard<std::mutex> lock(data_if_mutex_);
+    esp_err_t ret = esp_codec_dev_set_out_vol(output_dev_, volume);
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "Set output volume to %d failed: %s", volume, esp_err_to_name(ret));
+        return;
+    }
     AudioCodec::SetOutputVolume(volume);
 }
 
@@ -206,8 +219,21 @@ void Es8388AudioCodec::EnableOutput(bool enable) {
 }
 
 int Es8388AudioCodec::Read(int16_t* dest, int samples) {
-    if (input_enabled_) {
-        ESP_ERROR_CHECK_WITHOUT_ABORT(esp_codec_dev_read(input_dev_, (void*)dest, samples * sizeof(int16_t)));
+    if (!input_enabled_) {
+        return 0;
+    }
+
+    static uint32_t consecutive_errors = 0;
+    esp_err_t ret = esp_codec_dev_read(input_dev_, (void*)dest, samples * sizeof(int16_t));
+    if (ret != ESP_OK) {
+        if ((consecutive_errors++ % 100) == 0) {
+            ESP_LOGE(TAG, "Microphone read failed: %s", esp_err_to_name(ret));
+        }
+        return 0;
+    }
+    if (consecutive_errors > 0) {
+        ESP_LOGI(TAG, "Microphone read recovered after %lu errors", (unsigned long)consecutive_errors);
+        consecutive_errors = 0;
     }
     return samples;
 }

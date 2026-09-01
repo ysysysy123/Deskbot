@@ -11,6 +11,9 @@ enum class EyeState : uint8_t {
   THINKING,
   SPEAKING,
   HAPPY,
+  SAD,
+  ANGRY,
+  SURPRISED,
   SLEEPING,
 };
 

@@ -3,7 +3,7 @@ param(
     [string]$Port = 'COM12',
     [ValidateSet('App', 'Full')]
     [string]$Mode = 'App',
-    [string]$Python = 'D:\Arduino\esp5.4\python_env\idf5.5_py3.11_env\Scripts\python.exe'
+    [string]$Python = 'D:\Espressif\python_env\idf5.5_py3.11_env\Scripts\python.exe'
 )
 
 $ErrorActionPreference = 'Stop'

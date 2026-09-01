@@ -13,6 +13,19 @@ Thumbs.db
 
 # Build and runtime output
 build/
+managed_components/
+/.clangd
+/dependencies.lock
+**/bootloader-prefix/
+**/config/
+**/esp-idf/
+**/gdbinit/
+**/kconfigs.in
+**/kconfigs_projbuild.in
+**/specs/
+**/toolchain/
+**/components_with_manifests_list.temp.overrides
+**/config.env
 dist/
 coverage/
 __pycache__/

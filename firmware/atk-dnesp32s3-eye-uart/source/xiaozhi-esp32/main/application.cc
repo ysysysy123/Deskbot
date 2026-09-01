@@ -12,6 +12,8 @@
 #include "eye_uart_link.h"
 
 #include <cstring>
+#include <mutex>
+#include <string>
 #include <esp_log.h>
 #include <cJSON.h>
 #include <driver/gpio.h>
@@ -42,6 +44,54 @@ const char* GetEyeState(DeviceState state) {
             return "THINKING";
     }
     return "IDLE";
+}
+
+const char* GetEyeStateFromEmotion(const char* emotion) {
+    if (emotion == nullptr) {
+        return "SPEAKING";
+    }
+    if (strcmp(emotion, "happy") == 0 || strcmp(emotion, "laughing") == 0 ||
+        strcmp(emotion, "funny") == 0 || strcmp(emotion, "silly") == 0 ||
+        strcmp(emotion, "delicious") == 0 || strcmp(emotion, "loving") == 0 ||
+        strcmp(emotion, "kissy") == 0) {
+        return "HAPPY";
+    }
+    if (strcmp(emotion, "sad") == 0 || strcmp(emotion, "crying") == 0) {
+        return "SAD";
+    }
+    if (strcmp(emotion, "angry") == 0) {
+        return "ANGRY";
+    }
+    if (strcmp(emotion, "surprised") == 0 || strcmp(emotion, "shocked") == 0 ||
+        strcmp(emotion, "embarrassed") == 0) {
+        return "SURPRISED";
+    }
+    if (strcmp(emotion, "thinking") == 0 || strcmp(emotion, "confused") == 0) {
+        return "THINKING";
+    }
+    if (strcmp(emotion, "sleepy") == 0) {
+        return "SLEEPING";
+    }
+    // neutral / relaxed / cool / confident / winking / unknown -> calm talking face
+    return "SPEAKING";
+}
+
+std::mutex g_emotion_mutex;
+std::string g_current_emotion = "neutral";
+
+void SetCurrentEmotion(const std::string& emotion) {
+    std::lock_guard<std::mutex> lock(g_emotion_mutex);
+    g_current_emotion = emotion;
+}
+
+void ClearCurrentEmotion() {
+    std::lock_guard<std::mutex> lock(g_emotion_mutex);
+    g_current_emotion = "neutral";
+}
+
+std::string GetCurrentEmotion() {
+    std::lock_guard<std::mutex> lock(g_emotion_mutex);
+    return g_current_emotion;
 }
 
 }  // namespace
@@ -121,7 +171,12 @@ void Application::Initialize() {
     // Add state change listeners
     state_machine_.AddStateChangeListener([this](DeviceState old_state, DeviceState new_state) {
         xEventGroupSetBits(event_group_, MAIN_EVENT_STATE_CHANGED);
-        EyeUartLink::SendState(GetEyeState(new_state));
+        if (new_state == kDeviceStateSpeaking) {
+            EyeUartLink::SendState(GetEyeStateFromEmotion(GetCurrentEmotion().c_str()));
+        } else {
+            ClearCurrentEmotion();
+            EyeUartLink::SendState(GetEyeState(new_state));
+        }
     });
 
     // Start the clock timer to update the status bar
@@ -254,6 +309,11 @@ void Application::Run() {
         if (bits & MAIN_EVENT_SEND_AUDIO) {
             while (auto packet = audio_service_.PopPacketFromSendQueue()) {
                 if (protocol_ && !protocol_->SendAudio(std::move(packet))) {
+                    ESP_LOGW(TAG, "Audio upload failed, resetting the audio channel");
+                    audio_service_.ResetEncoder();
+                    protocol_->CloseAudioChannel(false);
+                    last_error_message_ = Lang::Strings::SERVER_ERROR;
+                    xEventGroupSetBits(event_group_, MAIN_EVENT_ERROR);
                     break;
                 }
             }
@@ -592,8 +652,12 @@ void Application::InitializeProtocol() {
         } else if (strcmp(type->valuestring, "llm") == 0) {
             auto emotion = cJSON_GetObjectItem(root, "emotion");
             if (cJSON_IsString(emotion)) {
-                Schedule([display, emotion_str = std::string(emotion->valuestring)]() {
+                Schedule([this, display, emotion_str = std::string(emotion->valuestring)]() {
                     display->SetEmotion(emotion_str.c_str());
+                    SetCurrentEmotion(emotion_str);
+                    if (GetDeviceState() == kDeviceStateSpeaking) {
+                        EyeUartLink::SendState(GetEyeStateFromEmotion(emotion_str.c_str()));
+                    }
                 });
             }
         } else if (strcmp(type->valuestring, "mcp") == 0) {
@@ -756,6 +820,12 @@ void Application::ContinueOpenAudioChannel(ListeningMode mode) {
 
     if (!protocol_->IsAudioChannelOpened()) {
         if (!protocol_->OpenAudioChannel()) {
+            ESP_LOGW(TAG, "Failed to open audio channel");
+            audio_service_.ResetEncoder();
+            board.SetPowerSaveLevel(PowerSaveLevel::LOW_POWER);
+            if (GetDeviceState() == kDeviceStateConnecting) {
+                SetDeviceState(kDeviceStateIdle);
+            }
             return;
         }
     }
@@ -869,7 +939,13 @@ void Application::ContinueWakeWordInvoke(const std::string& wake_word) {
 
     if (!protocol_->IsAudioChannelOpened()) {
         if (!protocol_->OpenAudioChannel()) {
+            ESP_LOGW(TAG, "Failed to open audio channel for wake word");
+            audio_service_.ResetEncoder();
+            board.SetPowerSaveLevel(PowerSaveLevel::LOW_POWER);
             audio_service_.EnableWakeWordDetection(true);
+            if (GetDeviceState() == kDeviceStateConnecting) {
+                SetDeviceState(kDeviceStateIdle);
+            }
             return;
         }
     }
@@ -907,6 +983,7 @@ void Application::HandleStateChangedEvent() {
             display->ClearChatMessages();  // Clear messages first
             display->SetEmotion("neutral"); // Then set emotion (wechat mode checks child count)
             audio_service_.EnableVoiceProcessing(false);
+            audio_service_.ResetEncoder();
             audio_service_.EnableWakeWordDetection(true);
             break;
         case kDeviceStateConnecting:

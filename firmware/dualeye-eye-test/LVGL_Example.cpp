@@ -40,6 +40,7 @@ uint32_t next_blink_at = 0;
 uint32_t manual_gaze_until = 0;
 bool thinking_looks_right = false;
 bool speaking_moves_down = false;
+bool angry_jitters_left = false;
 
 bool time_reached(uint32_t now, uint32_t deadline)
 {
@@ -168,6 +169,7 @@ void apply_state(EyeState state, uint32_t now)
   manual_gaze_until = 0;
   thinking_looks_right = false;
   speaking_moves_down = false;
+  angry_jitters_left = false;
 
   int16_t iris_size = IRIS_SIZE;
   lv_color_t iris_color = lv_color_hex(0x39A8FF);
@@ -198,6 +200,24 @@ void apply_state(EyeState state, uint32_t now)
       iris_color = lv_color_hex(0xFFC84A);
       base_eye_height = 94;
       target_y = 6;
+      break;
+    case EyeState::SAD:
+      iris_size = 64;
+      iris_color = lv_color_hex(0x6B7BD9);
+      base_eye_height = 120;
+      target_y = 10;
+      break;
+    case EyeState::ANGRY:
+      iris_size = 60;
+      iris_color = lv_color_hex(0xFF5A4E);
+      base_eye_height = 140;
+      target_y = -6;
+      break;
+    case EyeState::SURPRISED:
+      iris_size = 88;
+      iris_color = lv_color_hex(0xFFD75A);
+      base_eye_height = EYE_HEIGHT;
+      target_y = -8;
       break;
     case EyeState::SLEEPING:
       base_eye_height = BLINK_HEIGHT;
@@ -287,6 +307,25 @@ void update_automatic_motion(uint32_t now)
       if (time_reached(now, next_gaze_at)) {
         start_gaze(0, 6, 180);
         next_gaze_at = now + 1500;
+      }
+      break;
+    case EyeState::SAD:
+      if (time_reached(now, next_gaze_at)) {
+        start_gaze(0, 10, 320);
+        next_gaze_at = now + 1800;
+      }
+      break;
+    case EyeState::ANGRY:
+      if (time_reached(now, next_gaze_at)) {
+        angry_jitters_left = !angry_jitters_left;
+        start_gaze(angry_jitters_left ? -6 : 6, -6, 120);
+        next_gaze_at = now + 260;
+      }
+      break;
+    case EyeState::SURPRISED:
+      if (time_reached(now, next_gaze_at)) {
+        start_gaze(0, -8, 200);
+        next_gaze_at = now + 2000;
       }
       break;
     case EyeState::SLEEPING:

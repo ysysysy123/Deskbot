@@ -7,11 +7,16 @@
 #include "i2c_device.h"
 #include "led/single_led.h"
 #include "esp32_camera.h"
+#include "assets/lang_config.h"
 
 #include <esp_log.h>
 #include <esp_lcd_panel_vendor.h>
 #include <driver/i2c_master.h>
 #include <driver/spi_common.h>
+#include <esp_heap_caps.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/idf_additions.h>
+#include <freertos/task.h>
 
 #define TAG "atk_dnesp32s3"
 
@@ -20,6 +25,12 @@ public:
     XL9555(i2c_master_bus_handle_t i2c_bus, uint8_t addr) : I2cDevice(i2c_bus, addr) {
         WriteReg(0x06, 0x03);
         WriteReg(0x07, 0xF0);
+    }
+
+    // 读取输入端口 1（寄存器 0x01）。KEY0~KEY3 位于 P1_7~P1_4（bit7~bit4），低电平有效。
+    esp_err_t ReadInputPort1(uint8_t* value) {
+        uint8_t reg = 0x01;
+        return i2c_master_transmit_receive(i2c_device_, &reg, 1, value, 1, 20);
     }
 
     void SetOutputState(uint8_t bit, uint8_t level) {
@@ -50,6 +61,7 @@ private:
     LcdDisplay* display_;
     XL9555* xl9555_;
     Esp32Camera* camera_;
+    TaskHandle_t volume_key_task_ = nullptr;
 
     void InitializeI2c() {
         // Initialize I2C peripheral
@@ -92,6 +104,123 @@ private:
             }
             app.ToggleChatState();
         });
+    }
+
+    void AdjustVolume(int delta) {
+        // The key task uses a PSRAM stack. Run codec control and NVS volume
+        // persistence on the application task, whose stack is in internal RAM.
+        Application::GetInstance().Schedule([delta]() {
+            auto codec = Board::GetInstance().GetAudioCodec();
+            if (codec == nullptr) {
+                return;
+            }
+
+            int volume = codec->output_volume() + delta;
+            if (volume < 0) {
+                volume = 0;
+            } else if (volume > 100) {
+                volume = 100;
+            }
+            ESP_LOGI(TAG, "Volume key: %+d -> %d", delta, volume);
+            codec->SetOutputVolume(volume);
+
+            auto display = Board::GetInstance().GetDisplay();
+            std::string message;
+            if (volume == 0) {
+                message = Lang::Strings::MUTED;
+            } else if (volume == 100) {
+                message = Lang::Strings::MAX_VOLUME;
+            } else {
+                message = std::string(Lang::Strings::VOLUME) + std::to_string(volume);
+            }
+            display->ShowNotification(message, 1000);
+            display->UpdateStatusBar(true);
+        });
+    }
+
+    void InitializeVolumeKeys() {
+        // KEY1 = P1_6（bit6）调小音量，KEY3 = P1_4（bit4）调大音量，均为低电平有效。
+        BaseType_t task_created = xTaskCreateWithCaps([](void* arg) {
+            auto* self = static_cast<atk_dnesp32s3*>(arg);
+            constexpr uint8_t KEY1_BIT = 6;
+            constexpr uint8_t KEY3_BIT = 4;
+            constexpr int VOLUME_STEP = 5;
+            constexpr TickType_t POLL_INTERVAL = pdMS_TO_TICKS(20);
+            constexpr TickType_t LONG_PRESS_DELAY = pdMS_TO_TICKS(450);
+            constexpr TickType_t REPEAT_INTERVAL = pdMS_TO_TICKS(120);
+
+            uint8_t raw = 0xFF;
+            uint32_t read_error_count = 0;
+            while (self->xl9555_->ReadInputPort1(&raw) != ESP_OK) {
+                vTaskDelay(pdMS_TO_TICKS(100));
+            }
+            uint8_t key1_state = (raw >> KEY1_BIT) & 1;
+            uint8_t key3_state = (raw >> KEY3_BIT) & 1;
+            uint8_t key1_count = 0;
+            uint8_t key3_count = 0;
+            TickType_t key1_pressed_at = 0;
+            TickType_t key3_pressed_at = 0;
+            TickType_t key1_last_repeat = 0;
+            TickType_t key3_last_repeat = 0;
+            TickType_t last_wake = xTaskGetTickCount();
+
+            while (true) {
+                vTaskDelayUntil(&last_wake, POLL_INTERVAL);
+                esp_err_t ret = self->xl9555_->ReadInputPort1(&raw);
+                if (ret != ESP_OK) {
+                    if ((read_error_count++ % 50) == 0) {
+                        ESP_LOGW(TAG, "Volume key I2C read failed: %s", esp_err_to_name(ret));
+                    }
+                    continue;
+                }
+                read_error_count = 0;
+
+                uint8_t key1 = (raw >> KEY1_BIT) & 1;
+                uint8_t key3 = (raw >> KEY3_BIT) & 1;
+                TickType_t now = xTaskGetTickCount();
+
+                key1_count = (key1 == key1_state) ? 0 : key1_count + 1;
+                key3_count = (key3 == key3_state) ? 0 : key3_count + 1;
+
+                if (key1_count >= 2) {
+                    key1_state = key1;
+                    key1_count = 0;
+                    if (key1_state == 0) {
+                        key1_pressed_at = now;
+                        key1_last_repeat = now;
+                        if (key3_state != 0) {
+                            self->AdjustVolume(-VOLUME_STEP);
+                        }
+                    }
+                }
+                if (key3_count >= 2) {
+                    key3_state = key3;
+                    key3_count = 0;
+                    if (key3_state == 0) {
+                        key3_pressed_at = now;
+                        key3_last_repeat = now;
+                        if (key1_state != 0) {
+                            self->AdjustVolume(VOLUME_STEP);
+                        }
+                    }
+                }
+
+                if (key1_state == 0 && key3_state != 0 &&
+                    now - key1_pressed_at >= LONG_PRESS_DELAY &&
+                    now - key1_last_repeat >= REPEAT_INTERVAL) {
+                    key1_last_repeat = now;
+                    self->AdjustVolume(-VOLUME_STEP);
+                } else if (key3_state == 0 && key1_state != 0 &&
+                           now - key3_pressed_at >= LONG_PRESS_DELAY &&
+                           now - key3_last_repeat >= REPEAT_INTERVAL) {
+                    key3_last_repeat = now;
+                    self->AdjustVolume(VOLUME_STEP);
+                }
+            }
+        }, "vol_keys", 4096, this, 5, &volume_key_task_, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (task_created != pdPASS) {
+            ESP_LOGE(TAG, "Failed to create volume key task in PSRAM");
+        }
     }
 
     void InitializeSt7789Display() {
@@ -177,6 +306,7 @@ public:
         InitializeSt7789Display();
         InitializeButtons();
         InitializeCamera();
+        InitializeVolumeKeys();
     }
 
     virtual Led* GetLed() override {

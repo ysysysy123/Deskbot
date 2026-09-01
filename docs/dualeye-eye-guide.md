@@ -9,7 +9,7 @@
 - 已安装 Core：`esp32:esp32 3.3.11`。官方示例目录名为 `Arduino-3.2.0`；本项目已在 3.3.11 下实际编译、烧录并验证显示正常。
 - 当前程序：[../firmware/dualeye-eye-test](../firmware/dualeye-eye-test)。它来自官方 `01_LCD_Driver` 的独立副本，只修改了 `LVGL_Example.cpp` 的界面层。
 
-当前效果：两个圆屏均为黑色背景、椭圆白色眼球、彩色虹膜、黑色瞳孔和双高光。默认视线会随机选择目标，以缓动动画移动并自然停顿；两只眼睛会同步眨眼。程序现在还支持 UART 控制的 `IDLE`、`LISTENING`、`THINKING`、`SPEAKING`、`HAPPY`、`SLEEPING` 六种状态。
+当前效果：两个圆屏均为黑色背景、椭圆白色眼球、彩色虹膜、黑色瞳孔和双高光。默认视线会随机选择目标，以缓动动画移动并自然停顿；两只眼睛会同步眨眼。程序现在还支持 UART 控制的 `IDLE`、`LISTENING`、`THINKING`、`SPEAKING`、`HAPPY`、`SAD`、`ANGRY`、`SURPRISED`、`SLEEPING` 九种状态。
 
 ATK-DNESP32S3 的接线、协议、状态映射、电机引脚和供电方案见 [双板 UART 架构](dual-board-uart-architecture.md)。
 
@@ -99,7 +99,7 @@ Lvgl_Example1()
 按这个顺序扩展，便于定位问题：
 
 1. **实机 UART 联调：** 完成 ATK P4 跳帽、TX/RX/GND 三线连接，逐条验证 `PING`、六种 `STATE`、`GAZE` 和 `BLINK`。
-2. **小智联动（已完成）：** 小智 2.2.6 的 `DeviceStateMachine` 监听器已通过 `EyeUartLink::SendState()` 映射到双眼状态；网络和音频仍只在 ATK 侧处理。
+2. **小智联动（已完成）：** 小智 2.2.6 的 `DeviceStateMachine` 监听器已通过 `EyeUartLink::SendState()` 映射到双眼状态；服务器 `llm.emotion` 的语气情绪也已映射到眼睛表情（Speaking 期间生效）；网络和音频仍只在 ATK 侧处理。
 3. **启动重同步：** ATK 收到 `READY EYE_UART_V1` 后重发当前状态，避免任一主板后启动导致状态丢失。
 4. **电机控制：** 停用不需要的 ATK SPI LCD 后再分配 DRV8833 四路 PWM，先单轮低速测试供电噪声。
 5. **项目可移植性：** 将当前 `$LIBRARIES` 路径中的必要库版本纳入项目依赖说明或固定下载脚本，避免换电脑后依赖本机目录。

@@ -1,8 +1,8 @@
 [CmdletBinding()]
 param(
-    [string]$IdfRoot = 'D:\Arduino\esp5.4\frameworks\esp-idf-v5.5.3',
-    [string]$IdfTools = 'D:\Arduino\esp5.4',
-    [string]$PythonEnv = 'D:\Arduino\esp5.4\python_env\idf5.5_py3.11_env'
+    [string]$IdfRoot = 'D:\Espressif\frameworks\esp-idf-v5.5.5',
+    [string]$IdfTools = 'D:\Espressif',
+    [string]$PythonEnv = 'D:\Espressif\python_env\idf5.5_py3.11_env'
 )
 
 $ErrorActionPreference = 'Stop'
