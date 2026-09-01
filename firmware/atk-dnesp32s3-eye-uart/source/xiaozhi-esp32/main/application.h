@@ -152,6 +152,7 @@ private:
     TaskHandle_t activation_task_handle_ = nullptr;
     TaskHandle_t music_task_handle_ = nullptr;
     std::atomic<bool> music_playing_{false};
+    std::string music_query_;
 
 
     // Event handlers

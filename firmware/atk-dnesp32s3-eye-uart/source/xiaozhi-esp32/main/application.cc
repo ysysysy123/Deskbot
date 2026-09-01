@@ -15,6 +15,7 @@
 #include <cstring>
 #include <string>
 #include <esp_log.h>
+#include <esp_heap_caps.h>
 #include <cJSON.h>
 #include <driver/gpio.h>
 #include <arpa/inet.h>
@@ -716,13 +717,17 @@ void Application::StartMusicPlayback(const std::string& query) {
     display->SetChatMessage("system", (std::string("正在搜索并播放：") + query).c_str());
     SetDeviceState(kDeviceStateSpeaking);
 
-    BaseType_t result = xTaskCreate([](void* arg) {
-        auto* request = static_cast<std::pair<Application*, std::string>*>(arg);
-        request->first->MusicPlaybackTask(std::move(request->second));
-        delete request;
+    // The AFE reserves most internal SRAM. Keep the streaming task stack in
+    // PSRAM so a valid music request cannot fail just because the device is idle.
+    music_query_ = query;
+    BaseType_t result = xTaskCreateWithCaps([](void* arg) {
+        auto* app = static_cast<Application*>(arg);
+        app->MusicPlaybackTask(app->music_query_);
+        app->music_playing_.store(false);
+        app->music_task_handle_ = nullptr;
         vTaskDelete(nullptr);
-    }, "music_stream", 8192, new std::pair<Application*, std::string>(this, query), 4,
-       &music_task_handle_);
+    }, "music_stream", 8192, this, 4, &music_task_handle_,
+       MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (result != pdPASS) {
         music_playing_.store(false);
         ESP_LOGE(TAG, "Failed to create music streaming task");
@@ -990,17 +995,14 @@ void Application::HandleWakeWordDetectedEvent() {
         audio_service_.EncodeWakeWord();
         auto wake_word = audio_service_.GetLastWakeWord();
 
-        if (!protocol_->IsAudioChannelOpened()) {
-            SetDeviceState(kDeviceStateConnecting);
-            // Schedule to let the state change be processed first (UI update),
-            // then continue with OpenAudioChannel which may block for ~1 second
-            Schedule([this, wake_word]() {
-                ContinueWakeWordInvoke(wake_word);
-            });
-            return;
-        }
-        // Channel already opened, continue directly
-        ContinueWakeWordInvoke(wake_word);
+        // Always pass through connecting, even when MQTT still owns an old
+        // UDP channel. Calling ContinueWakeWordInvoke directly in that case
+        // used to be a no-op because it only accepts the connecting state,
+        // which swallowed every second wake word after a server goodbye.
+        SetDeviceState(kDeviceStateConnecting);
+        Schedule([this, wake_word]() {
+            ContinueWakeWordInvoke(wake_word);
+        });
     } else if (state == kDeviceStateSpeaking || state == kDeviceStateListening) {
         AbortSpeaking(kAbortReasonWakeWordDetected);
         // Clear send queue to avoid sending residues to server
