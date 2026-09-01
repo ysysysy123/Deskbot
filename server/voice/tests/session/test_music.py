@@ -20,6 +20,8 @@ class FakeMusic:
 
 def test_extract_music_query_requires_an_explicit_play_request():
     assert extract_music_query("播放周杰伦的晴天") == "周杰伦的晴天"
+    assert extract_music_query("可以播放周杰伦的晴天吗？") == "周杰伦的晴天"
+    assert extract_music_query("能不能放歌曲稻香？") == "稻香"
     assert extract_music_query("我想听晴天这首歌") == "晴天"
     assert extract_music_query("今天天气怎么样") is None
 

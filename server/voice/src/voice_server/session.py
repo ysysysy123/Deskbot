@@ -23,7 +23,7 @@ def extract_music_query(text: str) -> str | None:
     """Return a song title when the utterance is an explicit play request."""
     cleaned = re.sub(r"[，。！？、,.!?；;：:]+$", "", text.strip())
     patterns = (
-        r"^(?:请)?(?:播放|放)(?:歌曲|音乐)?(?P<query>.+)$",
+        r"^(?:能不能|可以|请)?(?:播放|放)(?:歌曲|音乐)?(?P<query>.+)$",
         r"^(?:我想听|我想要听|我要听|想听|听一下|来一首|来点)(?:歌曲|音乐)?(?P<query>.+)$",
         r"^(?:请)?搜索(?:歌曲|音乐)?(?P<query>.+)$",
     )
@@ -32,7 +32,7 @@ def extract_music_query(text: str) -> str | None:
         if match is None:
             continue
         query = match.group("query").strip().strip(" \"'“”‘’")
-        query = re.sub(r"(?:这首歌|这首音乐)$", "", query).strip()
+        query = re.sub(r"(?:吗|这首歌|这首音乐)[？。！!?]*$", "", query).strip()
         if query and query not in {"音乐", "歌曲", "一首歌"}:
             return query
     return None

@@ -13,6 +13,7 @@
 #include "ogg_demuxer.h"
 
 #include <cstring>
+#include <new>
 #include <string>
 #include <esp_log.h>
 #include <esp_heap_caps.h>
@@ -29,11 +30,42 @@
 
 namespace {
 
+struct PsramFree {
+    void operator()(void* ptr) const {
+        heap_caps_free(ptr);
+    }
+};
+
+struct OggDemuxerFree {
+    void operator()(OggDemuxer* demuxer) const {
+        if (demuxer != nullptr) {
+            demuxer->~OggDemuxer();
+            heap_caps_free(demuxer);
+        }
+    }
+};
+
 std::string TrimMusicQuery(std::string query) {
     while (!query.empty() && (query.back() == ' ' || query.back() == '\t' ||
                               query.back() == '.' || query.back() == '?' ||
-                              query.back() == '!' || query.back() == '\xEF')) {
+                              query.back() == '!')) {
         query.pop_back();
+    }
+    static constexpr const char* suffixes[] = {
+        "？", "！", "。", "，", "吗", "这首歌", "这首音乐"
+    };
+    bool removed_suffix = true;
+    while (!query.empty() && removed_suffix) {
+        removed_suffix = false;
+        for (const auto* suffix : suffixes) {
+            const size_t suffix_size = strlen(suffix);
+            if (query.size() >= suffix_size &&
+                query.compare(query.size() - suffix_size, suffix_size, suffix) == 0) {
+                query.erase(query.size() - suffix_size);
+                removed_suffix = true;
+                break;
+            }
+        }
     }
     while (!query.empty() && (query.front() == ' ' || query.front() == '\t')) {
         query.erase(query.begin());
@@ -51,8 +83,9 @@ std::string TrimMusicQuery(std::string query) {
 
 bool ExtractMusicQuery(const std::string& text, std::string& query) {
     static constexpr const char* prefixes[] = {
-        "请播放", "播放", "我想听", "我想要听", "我要听", "想听",
-        "听一下", "来一首", "来点", "请搜索", "搜索"
+        "能不能播放", "可以播放", "请播放", "播放", "能不能放", "可以放",
+        "放一首", "我想要听", "我想听", "我要听", "想听", "听一下",
+        "来一首", "来点", "请搜索", "搜索"
     };
     for (const auto* prefix : prefixes) {
         if (text.rfind(prefix, 0) == 0) {
@@ -772,8 +805,19 @@ void Application::MusicPlaybackTask(std::string query) {
         });
     }
 
-    OggDemuxer demuxer;
-    demuxer.OnDemuxerFinished([this](const uint8_t* data, int sample_rate, size_t size) {
+    // OggDemuxer owns an 8 KB packet buffer. The task itself also uses a
+    // streaming buffer, so neither can live on the 8 KB task stack.
+    std::unique_ptr<OggDemuxer, OggDemuxerFree> demuxer(
+        static_cast<OggDemuxer*>(heap_caps_malloc(sizeof(OggDemuxer),
+                                                   MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)));
+    std::unique_ptr<char, PsramFree> buffer(
+        static_cast<char*>(heap_caps_malloc(4096, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)));
+    if (!demuxer || !buffer) {
+        finish("歌曲播放内存不足");
+        return;
+    }
+    new (demuxer.get()) OggDemuxer();
+    demuxer->OnDemuxerFinished([this](const uint8_t* data, int sample_rate, size_t size) {
         if (!music_playing_.load()) {
             return;
         }
@@ -784,10 +828,9 @@ void Application::MusicPlaybackTask(std::string query) {
         audio_service_.PushPacketToDecodeQueue(std::move(packet), true);
     });
 
-    char buffer[8192];
     size_t total_bytes = 0;
     while (music_playing_.load()) {
-        const int read = http->Read(buffer, sizeof(buffer));
+        const int read = http->Read(buffer.get(), 4096);
         if (read < 0) {
             ESP_LOGE(TAG, "Music stream read failed after %u bytes", total_bytes);
             http->Close();
@@ -798,7 +841,7 @@ void Application::MusicPlaybackTask(std::string query) {
             break;
         }
         total_bytes += static_cast<size_t>(read);
-        demuxer.Process(reinterpret_cast<const uint8_t*>(buffer), static_cast<size_t>(read));
+        demuxer->Process(reinterpret_cast<const uint8_t*>(buffer.get()), static_cast<size_t>(read));
     }
     http->Close();
     if (total_bytes == 0) {
