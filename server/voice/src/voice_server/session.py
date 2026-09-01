@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import logging
+import re
 import sys
 from typing import Any
 
@@ -10,8 +12,30 @@ from voice_server.protocol.messages import AbortMessage, ListenMessage, make_llm
 from voice_server.protocol.state import SessionState, SessionStateMachine
 
 
+_LOGGER = logging.getLogger(__name__)
+
+
 class SessionLimitError(ValueError):
     close_code = 1009
+
+
+def extract_music_query(text: str) -> str | None:
+    """Return a song title when the utterance is an explicit play request."""
+    cleaned = re.sub(r"[，。！？、,.!?；;：:]+$", "", text.strip())
+    patterns = (
+        r"^(?:请)?(?:播放|放)(?:歌曲|音乐)?(?P<query>.+)$",
+        r"^(?:我想听|我想要听|我要听|想听|听一下|来一首|来点)(?:歌曲|音乐)?(?P<query>.+)$",
+        r"^(?:请)?搜索(?:歌曲|音乐)?(?P<query>.+)$",
+    )
+    for pattern in patterns:
+        match = re.match(pattern, cleaned, re.IGNORECASE)
+        if match is None:
+            continue
+        query = match.group("query").strip().strip(" \"'“”‘’")
+        query = re.sub(r"(?:这首歌|这首音乐)$", "", query).strip()
+        if query and query not in {"音乐", "歌曲", "一首歌"}:
+            return query
+    return None
 
 
 class VoiceSession:
@@ -36,6 +60,8 @@ class VoiceSession:
         max_recording_bytes: int,
         max_recording_seconds: float,
         error_text: str,
+        music: Any | None = None,
+        music_search_timeout_s: float = 20.0,
     ) -> None:
         self.device_id = device_id
         self.session_id = session_id
@@ -55,6 +81,8 @@ class VoiceSession:
         self._max_recording_bytes = max_recording_bytes
         self._max_recording_seconds = max_recording_seconds
         self._error_text = error_text
+        self._music = music
+        self._music_search_timeout_s = music_search_timeout_s
         self._state_machine = SessionStateMachine()
         self._state_machine.transition(SessionState.IDLE)
         self._pcm = bytearray()
@@ -161,6 +189,21 @@ class VoiceSession:
                 return
             await self._memory.remember(self.device_id, self.session_id, "user", text)
             if not self._is_current(generation):
+                return
+            music_query = extract_music_query(text)
+            if music_query is not None and self._music is not None:
+                _LOGGER.info("Music request from %s: %s", self.device_id, music_query)
+                track = await wait_for(
+                    self._music.search(music_query), self._music_search_timeout_s
+                )
+                if track is None:
+                    raise RuntimeError(f"Music not found: {music_query}")
+                await self._play_music(track, generation)
+                if self._is_current(generation):
+                    await self._memory.remember(
+                        self.device_id, self.session_id, "assistant", f"正在播放：{track.title}"
+                    )
+                    self._memory.schedule_summary(self.device_id)
                 return
             context = await self._memory.recall(self.device_id, text, self._recent_limit)
             if not self._is_current(generation):
@@ -290,6 +333,33 @@ class VoiceSession:
         if sent_packets == 0:
             raise RuntimeError("TTS produced no audio packets")
         return started
+
+    async def _play_music(self, track: Any, generation: int) -> None:
+        if not self._is_current(generation):
+            return
+        self._state_machine.transition(SessionState.SPEAKING)
+        if not await self._send_json(generation, make_llm(self.session_id, track.title, "relaxed")):
+            return
+        if not await self._send_json(generation, make_tts(self.session_id, "start")):
+            return
+        self._tts_started = True
+        if not await self._send_json(
+            generation, make_tts(self.session_id, "sentence_start", f"正在播放：{track.title}")
+        ):
+            return
+
+        sent_packets = 0
+        async for pcm in self._music.stream_pcm(track):
+            if not self._is_current(generation):
+                return
+            for packet in self._codec.encode_output(pcm):
+                if not await self._send_bytes(generation, packet):
+                    return
+                sent_packets += 1
+        if sent_packets == 0:
+            raise RuntimeError("Music provider produced no audio")
+        if await self._send_json(generation, make_tts(self.session_id, "stop")):
+            self._tts_started = False
 
     async def _cancel_pipeline(self) -> None:
         task = self._pipeline_task

@@ -88,6 +88,14 @@ class TtsConfig:
 
 
 @dataclass(frozen=True)
+class MusicConfig:
+    enabled: bool = True
+    ffmpeg_path: str = "ffmpeg"
+    max_duration_s: int = 300
+    search_timeout_s: float = 20.0
+
+
+@dataclass(frozen=True)
 class MemoryConfig:
     database_path: str = "data/memory.db"
     recent_limit: int = 10
@@ -104,6 +112,7 @@ class AppConfig:
     asr: AsrConfig = field(default_factory=AsrConfig)
     llm: LlmConfig = field(default_factory=LlmConfig)
     tts: TtsConfig = field(default_factory=TtsConfig)
+    music: MusicConfig = field(default_factory=MusicConfig)
     memory: MemoryConfig = field(default_factory=MemoryConfig)
 
 
@@ -133,6 +142,7 @@ def load_config(path: Path, environ: Mapping[str, str] = os.environ) -> AppConfi
         "asr": AsrConfig,
         "llm": LlmConfig,
         "tts": TtsConfig,
+        "music": MusicConfig,
         "memory": MemoryConfig,
     }
     unknown_sections = set(raw_config) - set(section_types)
@@ -241,6 +251,8 @@ def _validate(config: AppConfig) -> None:
         ("llm.summary_max_tokens", config.llm.summary_max_tokens),
         ("llm.timeout_s", config.llm.timeout_s),
         ("tts.timeout_s", config.tts.timeout_s),
+        ("music.max_duration_s", config.music.max_duration_s),
+        ("music.search_timeout_s", config.music.search_timeout_s),
         ("memory.recent_limit", config.memory.recent_limit),
         ("memory.summary_threshold", config.memory.summary_threshold),
     ):

@@ -16,6 +16,7 @@ from voice_server.auth import build_authenticator
 from voice_server.config import AppConfig
 from voice_server.memory.service import MemoryService
 from voice_server.memory.sqlite import SQLiteMemoryProvider
+from voice_server.music import MusicProvider
 from voice_server.ota import create_ota_app
 from voice_server.providers.edge_tts import EdgeTTSProvider
 from voice_server.providers.openai_compatible import OpenAICompatibleLLMProvider
@@ -78,6 +79,10 @@ class ServerApplication:
             rate=config.tts.rate,
             volume=config.tts.volume,
         )
+        music = MusicProvider(
+            ffmpeg_path=config.music.ffmpeg_path,
+            max_duration_s=config.music.max_duration_s,
+        ) if config.music.enabled else None
         memory_service = MemoryService(
             memory_store,
             memory_store,
@@ -98,6 +103,7 @@ class ServerApplication:
                 speech_threshold=config.vad.speech_threshold,
                 silence_threshold=config.vad.silence_threshold,
             ),
+            music=music,
         )
         return cls(
             config=config,
@@ -116,7 +122,7 @@ class ServerApplication:
             admin_listener_factory=lambda: _start_aiohttp(
                 create_admin_app(config, memory_service), config.admin_api.host, config.admin_api.port
             ),
-            provider_resources=(asr, llm, tts),
+            provider_resources=tuple(item for item in (asr, llm, tts, music) if item is not None),
         )
 
     async def start(self) -> None:

@@ -9,10 +9,8 @@
 #include "mcp_server.h"
 #include "assets.h"
 #include "settings.h"
-#include "eye_uart_link.h"
 
 #include <cstring>
-#include <mutex>
 #include <string>
 #include <esp_log.h>
 #include <cJSON.h>
@@ -21,80 +19,6 @@
 #include <font_awesome.h>
 
 #define TAG "Application"
-
-namespace {
-
-const char* GetEyeState(DeviceState state) {
-    switch (state) {
-        case kDeviceStateListening:
-            return "LISTENING";
-        case kDeviceStateSpeaking:
-            return "SPEAKING";
-        case kDeviceStateFatalError:
-            return "SLEEPING";
-        case kDeviceStateIdle:
-        case kDeviceStateUnknown:
-            return "IDLE";
-        case kDeviceStateStarting:
-        case kDeviceStateWifiConfiguring:
-        case kDeviceStateConnecting:
-        case kDeviceStateUpgrading:
-        case kDeviceStateActivating:
-        case kDeviceStateAudioTesting:
-            return "THINKING";
-    }
-    return "IDLE";
-}
-
-const char* GetEyeStateFromEmotion(const char* emotion) {
-    if (emotion == nullptr) {
-        return "SPEAKING";
-    }
-    if (strcmp(emotion, "happy") == 0 || strcmp(emotion, "laughing") == 0 ||
-        strcmp(emotion, "funny") == 0 || strcmp(emotion, "silly") == 0 ||
-        strcmp(emotion, "delicious") == 0 || strcmp(emotion, "loving") == 0 ||
-        strcmp(emotion, "kissy") == 0) {
-        return "HAPPY";
-    }
-    if (strcmp(emotion, "sad") == 0 || strcmp(emotion, "crying") == 0) {
-        return "SAD";
-    }
-    if (strcmp(emotion, "angry") == 0) {
-        return "ANGRY";
-    }
-    if (strcmp(emotion, "surprised") == 0 || strcmp(emotion, "shocked") == 0 ||
-        strcmp(emotion, "embarrassed") == 0) {
-        return "SURPRISED";
-    }
-    if (strcmp(emotion, "thinking") == 0 || strcmp(emotion, "confused") == 0) {
-        return "THINKING";
-    }
-    if (strcmp(emotion, "sleepy") == 0) {
-        return "SLEEPING";
-    }
-    // neutral / relaxed / cool / confident / winking / unknown -> calm talking face
-    return "SPEAKING";
-}
-
-std::mutex g_emotion_mutex;
-std::string g_current_emotion = "neutral";
-
-void SetCurrentEmotion(const std::string& emotion) {
-    std::lock_guard<std::mutex> lock(g_emotion_mutex);
-    g_current_emotion = emotion;
-}
-
-void ClearCurrentEmotion() {
-    std::lock_guard<std::mutex> lock(g_emotion_mutex);
-    g_current_emotion = "neutral";
-}
-
-std::string GetCurrentEmotion() {
-    std::lock_guard<std::mutex> lock(g_emotion_mutex);
-    return g_current_emotion;
-}
-
-}  // namespace
 
 Application::Application() {
     event_group_ = xEventGroupCreate();
@@ -136,13 +60,6 @@ bool Application::SetDeviceState(DeviceState state) {
 
 void Application::Initialize() {
     auto& board = Board::GetInstance();
-    esp_err_t eye_uart_result = EyeUartLink::Init();
-    if (eye_uart_result == ESP_OK) {
-        EyeUartLink::SendState("THINKING");
-        EyeUartLink::Ping();
-    } else {
-        ESP_LOGW(TAG, "Eye UART initialization failed: %s", esp_err_to_name(eye_uart_result));
-    }
     SetDeviceState(kDeviceStateStarting);
 
     // Setup the display
@@ -171,12 +88,6 @@ void Application::Initialize() {
     // Add state change listeners
     state_machine_.AddStateChangeListener([this](DeviceState old_state, DeviceState new_state) {
         xEventGroupSetBits(event_group_, MAIN_EVENT_STATE_CHANGED);
-        if (new_state == kDeviceStateSpeaking) {
-            EyeUartLink::SendState(GetEyeStateFromEmotion(GetCurrentEmotion().c_str()));
-        } else {
-            ClearCurrentEmotion();
-            EyeUartLink::SendState(GetEyeState(new_state));
-        }
     });
 
     // Start the clock timer to update the status bar
@@ -343,6 +254,21 @@ void Application::Run() {
             clock_ticks_++;
             auto display = Board::GetInstance().GetDisplay();
             display->UpdateStatusBar();
+
+            // Let the LCD idle face breathe a little instead of staying on one
+            // neutral emoji. Any real interaction changes the device state and
+            // resets this rotation.
+            if (GetDeviceState() == kDeviceStateIdle &&
+                clock_ticks_ >= 8 && clock_ticks_ % 12 == 0) {
+                static constexpr const char* kIdleEmotions[] = {
+                    "neutral", "relaxed", "happy", "winking", "sleepy", "confused"
+                };
+                idle_emotion_index_ = static_cast<uint8_t>(
+                    (idle_emotion_index_ + 1) %
+                    (sizeof(kIdleEmotions) / sizeof(kIdleEmotions[0])));
+                display->SetEmotion(kIdleEmotions[idle_emotion_index_]);
+                ESP_LOGI(TAG, "Idle emotion: %s", kIdleEmotions[idle_emotion_index_]);
+            }
         
             // Print debug info every 10 seconds
             if (clock_ticks_ % 10 == 0) {
@@ -654,10 +580,6 @@ void Application::InitializeProtocol() {
             if (cJSON_IsString(emotion)) {
                 Schedule([this, display, emotion_str = std::string(emotion->valuestring)]() {
                     display->SetEmotion(emotion_str.c_str());
-                    SetCurrentEmotion(emotion_str);
-                    if (GetDeviceState() == kDeviceStateSpeaking) {
-                        EyeUartLink::SendState(GetEyeStateFromEmotion(emotion_str.c_str()));
-                    }
                 });
             }
         } else if (strcmp(type->valuestring, "mcp") == 0) {
@@ -982,6 +904,7 @@ void Application::HandleStateChangedEvent() {
             display->SetStatus(Lang::Strings::STANDBY);
             display->ClearChatMessages();  // Clear messages first
             display->SetEmotion("neutral"); // Then set emotion (wechat mode checks child count)
+            idle_emotion_index_ = 0;
             audio_service_.EnableVoiceProcessing(false);
             audio_service_.ResetEncoder();
             audio_service_.EnableWakeWordDetection(true);

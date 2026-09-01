@@ -55,6 +55,12 @@ tts:
   timeout_s: 30
   error_text: 抱歉，服务暂时不可用。
 
+music:
+  enabled: true
+  ffmpeg_path: ffmpeg
+  max_duration_s: 300
+  search_timeout_s: 20
+
 memory:
   database_path: data/memory.db
   recent_limit: 10

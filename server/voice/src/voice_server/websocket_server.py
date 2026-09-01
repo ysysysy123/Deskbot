@@ -50,6 +50,7 @@ class VoiceWebSocketServer:
         memory: Any,
         codec_factory: Callable[[], Any],
         vad_factory: Callable[[], Any],
+        music: Any | None = None,
         session_factory: Callable[..., Any] = VoiceSession,
         id_factory: Callable[[], str] | None = None,
     ) -> None:
@@ -61,6 +62,7 @@ class VoiceWebSocketServer:
         self._memory = memory
         self._codec_factory = codec_factory
         self._vad_factory = vad_factory
+        self._music = music
         self._session_factory = session_factory
         self._id_factory = id_factory or (lambda: str(uuid.uuid4()))
         self._active_sessions: dict[int, Any] = {}
@@ -124,6 +126,8 @@ class VoiceWebSocketServer:
                 max_recording_bytes=self.config.server.max_recording_bytes,
                 max_recording_seconds=self.config.server.max_recording_seconds,
                 error_text=self.config.tts.error_text,
+                music=self._music,
+                music_search_timeout_s=self.config.music.search_timeout_s,
             )
             self._active_sessions[id(session)] = session
             await transport.send_json(make_server_hello(session_id))

@@ -8,3 +8,4 @@ funasr==1.2.7
 torch==2.2.2
 openai==2.8.1
 edge-tts==7.2.6
+yt-dlp>=2025.1.0,<2027
