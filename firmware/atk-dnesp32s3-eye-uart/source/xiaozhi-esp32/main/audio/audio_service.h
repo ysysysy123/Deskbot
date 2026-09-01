@@ -6,6 +6,7 @@
 #include <condition_variable>
 #include <chrono>
 #include <mutex>
+#include <atomic>
 
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -46,6 +47,7 @@
 
 #define AUDIO_POWER_TIMEOUT_MS 15000
 #define AUDIO_POWER_CHECK_INTERVAL_MS 1000
+#define AUDIO_INPUT_RECOVERY_ERRORS 20
 
 #define AS_EVENT_AUDIO_TESTING_RUNNING      (1 << 0)
 #define AS_EVENT_WAKE_WORD_RUNNING          (1 << 1)
@@ -182,8 +184,9 @@ private:
     bool audio_input_need_warmup_ = false;
 
     esp_timer_handle_t audio_power_timer_ = nullptr;
-    std::chrono::steady_clock::time_point last_input_time_;
-    std::chrono::steady_clock::time_point last_output_time_;
+    std::atomic<int64_t> last_input_time_us_{0};
+    std::atomic<int64_t> last_output_time_us_{0};
+    std::atomic<uint32_t> input_read_errors_{0};
 
     void AudioInputTask();
     void AudioOutputTask();

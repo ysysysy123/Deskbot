@@ -170,15 +170,26 @@ void Es8388AudioCodec::EnableInput(bool enable) {
         if (input_reference_) {
             fs.channel_mask |= ESP_CODEC_DEV_MAKE_CHANNEL_MASK(1);
         }
-        ESP_ERROR_CHECK(esp_codec_dev_open(input_dev_, &fs));
+        esp_err_t ret = esp_codec_dev_open(input_dev_, &fs);
+        if (ret != ESP_OK) {
+            ESP_LOGE(TAG, "Open microphone failed: %s", esp_err_to_name(ret));
+            return;
+        }
         if (input_reference_) {
             uint8_t gain = (11 << 4) + 0;
             ctrl_if_->write_reg(ctrl_if_, 0x09, 1, &gain, 1);
         }else{
-            ESP_ERROR_CHECK(esp_codec_dev_set_in_gain(input_dev_, input_gain_));
+            ret = esp_codec_dev_set_in_gain(input_dev_, input_gain_);
+            if (ret != ESP_OK) {
+                ESP_LOGW(TAG, "Set microphone gain failed: %s", esp_err_to_name(ret));
+            }
         }
     } else {
-        ESP_ERROR_CHECK(esp_codec_dev_close(input_dev_));
+        esp_err_t ret = esp_codec_dev_close(input_dev_);
+        if (ret != ESP_OK) {
+            ESP_LOGW(TAG, "Close microphone failed: %s", esp_err_to_name(ret));
+            return;
+        }
     }
     AudioCodec::EnableInput(enable);
 }
@@ -219,6 +230,7 @@ void Es8388AudioCodec::EnableOutput(bool enable) {
 }
 
 int Es8388AudioCodec::Read(int16_t* dest, int samples) {
+    std::lock_guard<std::mutex> lock(data_if_mutex_);
     if (!input_enabled_) {
         return 0;
     }
@@ -239,6 +251,7 @@ int Es8388AudioCodec::Read(int16_t* dest, int samples) {
 }
 
 int Es8388AudioCodec::Write(const int16_t* data, int samples) {
+    std::lock_guard<std::mutex> lock(data_if_mutex_);
     if (output_enabled_ && output_dev_ && data != nullptr) {
         ESP_ERROR_CHECK_WITHOUT_ABORT(esp_codec_dev_write(output_dev_, (void*)data, samples * sizeof(int16_t)));
     }

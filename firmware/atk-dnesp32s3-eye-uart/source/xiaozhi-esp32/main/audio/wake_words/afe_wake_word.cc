@@ -141,8 +141,12 @@ void AfeWakeWord::AudioDetectionTask() {
     while (true) {
         xEventGroupWaitBits(event_group_, DETECTION_RUNNING_EVENT, pdFALSE, pdTRUE, portMAX_DELAY);
 
-        auto res = afe_iface_->fetch_with_delay(afe_data_, portMAX_DELAY);
+        // A bounded wait keeps this task observable if the input side stalls.
+        // The audio service will reopen the codec; this loop then resumes
+        // fetching as soon as AFE receives new frames.
+        auto res = afe_iface_->fetch_with_delay(afe_data_, pdMS_TO_TICKS(1000));
         if (res == nullptr || res->ret_value == ESP_FAIL) {
+            ESP_LOGW(TAG, "AFE fetch timed out or failed");
             continue;;
         }
 

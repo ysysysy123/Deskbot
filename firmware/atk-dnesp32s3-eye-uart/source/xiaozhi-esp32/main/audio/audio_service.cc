@@ -62,6 +62,8 @@ AudioService::~AudioService() {
 void AudioService::Initialize(AudioCodec* codec) {
     codec_ = codec;
     codec_->Start();
+    last_input_time_us_.store(esp_timer_get_time());
+    last_output_time_us_.store(esp_timer_get_time());
 
     esp_opus_dec_cfg_t opus_dec_cfg = OPUS_DEC_CFG(codec->output_sample_rate(), OPUS_FRAME_DURATION_MS);
     auto ret = esp_opus_dec_open(&opus_dec_cfg, sizeof(esp_opus_dec_cfg_t), &opus_decoder_);
@@ -188,9 +190,33 @@ bool AudioService::ReadAudioData(std::vector<int16_t>& data, int sample_rate, in
         codec_->EnableInput(true);
     }
 
+    auto read_input = [this, &data]() {
+        if (codec_->InputData(data)) {
+            input_read_errors_.store(0);
+            return true;
+        }
+
+        const uint32_t errors = input_read_errors_.fetch_add(1) + 1;
+        if (errors == 1 || errors % 50 == 0) {
+            ESP_LOGW(TAG, "Microphone input read failed (%u consecutive errors)", errors);
+        }
+
+        // A failed I2S/codec read can leave the ES8388 stream stalled. Reopen
+        // it after a short run of failures so the wake-word task can recover
+        // without rebooting the whole device.
+        if (errors >= AUDIO_INPUT_RECOVERY_ERRORS) {
+            ESP_LOGW(TAG, "Restarting microphone input after %u errors", errors);
+            codec_->EnableInput(false);
+            vTaskDelay(pdMS_TO_TICKS(30));
+            codec_->EnableInput(true);
+            input_read_errors_.store(0);
+        }
+        return false;
+    };
+
     if (codec_->input_sample_rate() != sample_rate) {
         data.resize(samples * codec_->input_sample_rate() / sample_rate * codec_->input_channels());
-        if (!codec_->InputData(data)) {
+        if (!read_input()) {
             return false;
         }
         if (input_resampler_ != nullptr) {
@@ -207,13 +233,13 @@ bool AudioService::ReadAudioData(std::vector<int16_t>& data, int sample_rate, in
         }
     } else {
         data.resize(samples * codec_->input_channels());
-        if (!codec_->InputData(data)) {
+        if (!read_input()) {
             return false;
         }
     }
 
     /* Update the last input time */
-    last_input_time_ = std::chrono::steady_clock::now();
+    last_input_time_us_.store(esp_timer_get_time());
     debug_statistics_.input_count++;
 
 #if CONFIG_USE_AUDIO_DEBUGGER
@@ -309,7 +335,7 @@ void AudioService::AudioOutputTask() {
         codec_->OutputData(task->pcm);
 
         /* Update the last output time */
-        last_output_time_ = std::chrono::steady_clock::now();
+        last_output_time_us_.store(esp_timer_get_time());
         debug_statistics_.playback_count++;
 
 #if CONFIG_USE_SERVER_AEC
@@ -693,13 +719,23 @@ void AudioService::ResetDecoder() {
 }
 
 void AudioService::CheckAndUpdateAudioPowerState() {
-    auto now = std::chrono::steady_clock::now();
-    auto input_elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_input_time_).count();
-    auto output_elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_output_time_).count();
-    if (input_elapsed > AUDIO_POWER_TIMEOUT_MS && codec_->input_enabled()) {
+    const int64_t now_us = esp_timer_get_time();
+    const int64_t input_elapsed_ms = (now_us - last_input_time_us_.load()) / 1000;
+    const int64_t output_elapsed_ms = (now_us - last_output_time_us_.load()) / 1000;
+    const bool wake_word_running = (xEventGroupGetBits(event_group_) & AS_EVENT_WAKE_WORD_RUNNING) != 0;
+
+    // Wake-word detection is a permanent microphone consumer while idle.
+    // Never power its input down just because no successful frame was
+    // reported during a transient codec/I2S failure.
+    if (wake_word_running && !codec_->input_enabled()) {
+        ESP_LOGW(TAG, "Wake-word detection is running with microphone off; re-enabling input");
+        codec_->EnableInput(true);
+        last_input_time_us_.store(now_us);
+    }
+    if (!wake_word_running && input_elapsed_ms > AUDIO_POWER_TIMEOUT_MS && codec_->input_enabled()) {
         codec_->EnableInput(false);
     }
-    if (output_elapsed > AUDIO_POWER_TIMEOUT_MS && codec_->output_enabled()) {
+    if (output_elapsed_ms > AUDIO_POWER_TIMEOUT_MS && codec_->output_enabled()) {
         // Keep TX clock when duplex RX is active; otherwise RX may stall on some boards.
         if (!(codec_->duplex() && codec_->input_enabled())) {
             codec_->EnableOutput(false);
