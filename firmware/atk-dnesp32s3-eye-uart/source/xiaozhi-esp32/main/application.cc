@@ -9,6 +9,8 @@
 #include "mcp_server.h"
 #include "assets.h"
 #include "settings.h"
+#include "http.h"
+#include "ogg_demuxer.h"
 
 #include <cstring>
 #include <string>
@@ -19,6 +21,66 @@
 #include <font_awesome.h>
 
 #define TAG "Application"
+
+#ifndef CONFIG_MUSIC_SERVER_URL
+#define CONFIG_MUSIC_SERVER_URL "http://192.168.10.110:8010/music"
+#endif
+
+namespace {
+
+std::string TrimMusicQuery(std::string query) {
+    while (!query.empty() && (query.back() == ' ' || query.back() == '\t' ||
+                              query.back() == '.' || query.back() == '?' ||
+                              query.back() == '!' || query.back() == '\xEF')) {
+        query.pop_back();
+    }
+    while (!query.empty() && (query.front() == ' ' || query.front() == '\t')) {
+        query.erase(query.begin());
+    }
+    if (query.rfind("歌曲", 0) == 0) {
+        query.erase(0, strlen("歌曲"));
+    } else if (query.rfind("音乐", 0) == 0) {
+        query.erase(0, strlen("音乐"));
+    }
+    while (!query.empty() && (query.front() == ' ' || query.front() == '\t')) {
+        query.erase(query.begin());
+    }
+    return query;
+}
+
+bool ExtractMusicQuery(const std::string& text, std::string& query) {
+    static constexpr const char* prefixes[] = {
+        "请播放", "播放", "我想听", "我想要听", "我要听", "想听",
+        "听一下", "来一首", "来点", "请搜索", "搜索"
+    };
+    for (const auto* prefix : prefixes) {
+        if (text.rfind(prefix, 0) == 0) {
+            query = TrimMusicQuery(text.substr(strlen(prefix)));
+            return query.size() >= 2 && query != "一首歌";
+        }
+    }
+    return false;
+}
+
+std::string UrlEncode(const std::string& value) {
+    static constexpr char hex[] = "0123456789ABCDEF";
+    std::string encoded;
+    for (const auto ch : value) {
+        const auto c = static_cast<unsigned char>(ch);
+        if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+            (c >= '0' && c <= '9') || c == '-' || c == '_' ||
+            c == '.' || c == '~') {
+            encoded.push_back(static_cast<char>(c));
+        } else {
+            encoded.push_back('%');
+            encoded.push_back(hex[c >> 4]);
+            encoded.push_back(hex[c & 0x0F]);
+        }
+    }
+    return encoded;
+}
+
+}  // namespace
 
 Application::Application() {
     event_group_ = xEventGroupCreate();
@@ -516,7 +578,7 @@ void Application::InitializeProtocol() {
     });
     
     protocol_->OnIncomingAudio([this](std::unique_ptr<AudioStreamPacket> packet) {
-        if (GetDeviceState() == kDeviceStateSpeaking) {
+        if (GetDeviceState() == kDeviceStateSpeaking && !IsMusicPlaying()) {
             audio_service_.PushPacketToDecodeQueue(std::move(packet));
         }
     });
@@ -542,6 +604,9 @@ void Application::InitializeProtocol() {
         // Parse JSON data
         auto type = cJSON_GetObjectItem(root, "type");
         if (strcmp(type->valuestring, "tts") == 0) {
+            if (IsMusicPlaying()) {
+                return;
+            }
             auto state = cJSON_GetObjectItem(root, "state");
             if (strcmp(state->valuestring, "start") == 0) {
                 Schedule([this]() {
@@ -571,8 +636,14 @@ void Application::InitializeProtocol() {
             auto text = cJSON_GetObjectItem(root, "text");
             if (cJSON_IsString(text)) {
                 ESP_LOGI(TAG, ">> %s", text->valuestring);
-                Schedule([display, message = std::string(text->valuestring)]() {
+                std::string music_query;
+                const bool is_music_request = ExtractMusicQuery(text->valuestring, music_query);
+                Schedule([this, display, message = std::string(text->valuestring),
+                          music_query = std::move(music_query), is_music_request]() {
                     display->SetChatMessage("user", message.c_str());
+                    if (is_music_request) {
+                        StartMusicPlayback(music_query);
+                    }
                 });
             }
         } else if (strcmp(type->valuestring, "llm") == 0) {
@@ -627,6 +698,109 @@ void Application::InitializeProtocol() {
     });
     
     protocol_->Start();
+}
+
+void Application::StartMusicPlayback(const std::string& query) {
+    if (query.empty() || music_playing_.exchange(true)) {
+        ESP_LOGW(TAG, "Music request ignored: another song is already playing");
+        return;
+    }
+
+    if (protocol_ && protocol_->IsAudioChannelOpened()) {
+        // Stop a pending server TTS response before switching to local music.
+        protocol_->SendAbortSpeaking(kAbortReasonNone);
+    }
+    audio_service_.ResetDecoder();
+    auto display = Board::GetInstance().GetDisplay();
+    display->SetEmotion("happy");
+    display->SetChatMessage("system", (std::string("正在搜索并播放：") + query).c_str());
+    SetDeviceState(kDeviceStateSpeaking);
+
+    BaseType_t result = xTaskCreate([](void* arg) {
+        auto* request = static_cast<std::pair<Application*, std::string>*>(arg);
+        request->first->MusicPlaybackTask(std::move(request->second));
+        delete request;
+        vTaskDelete(nullptr);
+    }, "music_stream", 8192, new std::pair<Application*, std::string>(this, query), 4,
+       &music_task_handle_);
+    if (result != pdPASS) {
+        music_playing_.store(false);
+        ESP_LOGE(TAG, "Failed to create music streaming task");
+        display->SetChatMessage("system", "歌曲播放任务启动失败");
+        SetDeviceState(kDeviceStateIdle);
+    }
+}
+
+void Application::MusicPlaybackTask(std::string query) {
+    auto finish = [this](const std::string& message) {
+        audio_service_.WaitForPlaybackQueueEmpty();
+        music_playing_.store(false);
+        Schedule([this, message]() {
+            auto display = Board::GetInstance().GetDisplay();
+            if (!message.empty()) {
+                display->SetChatMessage("system", message.c_str());
+            } else {
+                display->SetChatMessage("system", "");
+            }
+            if (GetDeviceState() == kDeviceStateSpeaking) {
+                SetDeviceState(kDeviceStateIdle);
+            }
+        });
+    };
+
+    auto http = Board::GetInstance().GetNetwork()->CreateHttp(3);
+    http->SetTimeout(15000);
+    const std::string url = std::string(CONFIG_MUSIC_SERVER_URL) + "?q=" + UrlEncode(query);
+    ESP_LOGI(TAG, "Music request: %s", url.c_str());
+    if (!http->Open("GET", url) || http->GetStatusCode() != 200) {
+        ESP_LOGE(TAG, "Music server request failed, status=%d, error=%d",
+                 http->GetStatusCode(), http->GetLastError());
+        http->Close();
+        finish("歌曲搜索失败，请检查电脑音乐服务");
+        return;
+    }
+
+    const auto title = http->GetResponseHeader("X-Music-Title");
+    if (!title.empty()) {
+        Schedule([title]() {
+            Board::GetInstance().GetDisplay()->SetChatMessage("system", title.c_str());
+        });
+    }
+
+    OggDemuxer demuxer;
+    demuxer.OnDemuxerFinished([this](const uint8_t* data, int sample_rate, size_t size) {
+        if (!music_playing_.load()) {
+            return;
+        }
+        auto packet = std::make_unique<AudioStreamPacket>();
+        packet->sample_rate = sample_rate;
+        packet->frame_duration = OPUS_FRAME_DURATION_MS;
+        packet->payload.assign(data, data + size);
+        audio_service_.PushPacketToDecodeQueue(std::move(packet), true);
+    });
+
+    char buffer[8192];
+    size_t total_bytes = 0;
+    while (music_playing_.load()) {
+        const int read = http->Read(buffer, sizeof(buffer));
+        if (read < 0) {
+            ESP_LOGE(TAG, "Music stream read failed after %u bytes", total_bytes);
+            http->Close();
+            finish("歌曲播放中断，请检查电脑网络");
+            return;
+        }
+        if (read == 0) {
+            break;
+        }
+        total_bytes += static_cast<size_t>(read);
+        demuxer.Process(reinterpret_cast<const uint8_t*>(buffer), static_cast<size_t>(read));
+    }
+    http->Close();
+    if (total_bytes == 0) {
+        finish("没有找到这首歌");
+    } else {
+        finish("");
+    }
 }
 
 void Application::ShowActivationCode(const std::string& code, const std::string& message) {

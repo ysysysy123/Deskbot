@@ -98,6 +98,31 @@ Edge TTS 会访问微软语音服务。输出先经 FFmpeg 转为 24 kHz、16-bi
 
 ## 7. 启动与健康检查
 
+### ESP32 局域网歌曲播放
+
+固件保持官方 MQTT 对话服务不变。识别到“播放歌曲/我想听/来一首”等请求后，
+会访问电脑的 `http://192.168.10.110:8010/music?q=...`，由下面的轻量网关搜索
+YouTube 并输出 Ogg/Opus 音频。电脑和设备必须连接同一个局域网。
+
+先安装 `yt-dlp`，并确认 `ffmpeg` 命令可以在 PowerShell 中运行：
+
+```powershell
+python -m pip install -r .\requirements-music.txt
+ffmpeg -version
+python .\scripts\music_http_server.py
+```
+
+如果系统没有单独安装 FFmpeg，也可以把 `imageio-ffmpeg` 安装到同一个 Python
+环境；网关会自动使用它携带的 FFmpeg：
+
+```powershell
+python -m pip install imageio-ffmpeg
+```
+
+浏览器打开 `http://127.0.0.1:8010/health` 应返回 `ok`。若 Windows 防火墙
+弹窗，请允许 Python 在专用网络通信；设备访问地址使用电脑局域网 IP，不要使用
+`127.0.0.1`。固件中的 `MUSIC_SERVER_URL` 可在 menuconfig 中修改。
+
 先确认 `config.yaml`、模型、Opus DLL 和 `PYTHONPATH`，然后启动：
 
 ```powershell

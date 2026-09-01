@@ -11,6 +11,8 @@
 #include <deque>
 #include <memory>
 #include <functional>
+#include <atomic>
+#include <utility>
 
 #include "protocol.h"
 #include "ota.h"
@@ -114,6 +116,7 @@ public:
     AecMode GetAecMode() const { return aec_mode_; }
     void PlaySound(const std::string_view& sound);
     AudioService& GetAudioService() { return audio_service_; }
+    bool IsMusicPlaying() const { return music_playing_.load(); }
     
     /**
      * Reset protocol resources (thread-safe)
@@ -147,6 +150,8 @@ private:
     int clock_ticks_ = 0;
     uint8_t idle_emotion_index_ = 0;
     TaskHandle_t activation_task_handle_ = nullptr;
+    TaskHandle_t music_task_handle_ = nullptr;
+    std::atomic<bool> music_playing_{false};
 
 
     // Event handlers
@@ -160,6 +165,8 @@ private:
     void HandleWakeWordDetectedEvent();
     void ContinueOpenAudioChannel(ListeningMode mode);
     void ContinueWakeWordInvoke(const std::string& wake_word);
+    void StartMusicPlayback(const std::string& query);
+    void MusicPlaybackTask(std::string query);
 
     // Activation task (runs in background)
     void ActivationTask();
