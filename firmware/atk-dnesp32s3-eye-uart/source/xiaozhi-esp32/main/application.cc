@@ -606,6 +606,24 @@ void Application::InitializeProtocol() {
         DismissAlert();
     });
 
+    protocol_->OnDisconnected([this]() {
+        // MQTT can disappear while the UI is still in speaking/listening.
+        // Close the UDP audio channel and return to idle so the next wake word
+        // is accepted instead of leaving the device visibly stuck.
+        Schedule([this]() {
+            audio_service_.ResetDecoder();
+            if (protocol_) {
+                protocol_->CloseAudioChannel(false);
+            }
+            auto state = GetDeviceState();
+            if (state == kDeviceStateConnecting ||
+                state == kDeviceStateListening ||
+                state == kDeviceStateSpeaking) {
+                SetDeviceState(kDeviceStateIdle);
+            }
+        });
+    });
+
     protocol_->OnNetworkError([this](const std::string& message) {
         last_error_message_ = message;
         xEventGroupSetBits(event_group_, MAIN_EVENT_ERROR);

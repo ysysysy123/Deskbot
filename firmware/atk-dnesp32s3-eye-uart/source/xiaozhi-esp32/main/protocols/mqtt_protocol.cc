@@ -23,7 +23,11 @@ MqttProtocol::MqttProtocol() {
                 auto alive = protocol->alive_;  // Capture alive flag
                 app.Schedule([protocol, alive]() {
                     if (*alive) {
-                        protocol->StartMqttClient(false);
+                        if (!protocol->StartMqttClient(false)) {
+                            // A failed DNS/TLS attempt does not always emit a
+                            // disconnect callback, so keep the retry loop alive.
+                            esp_timer_start_once(protocol->reconnect_timer_, MQTT_RECONNECT_INTERVAL_MS * 1000);
+                        }
                     }
                 });
             }
@@ -67,7 +71,12 @@ bool MqttProtocol::StartMqttClient(bool report_error) {
     auto client_id = settings.GetString("client_id");
     auto username = settings.GetString("username");
     auto password = settings.GetString("password");
-    int keepalive_interval = settings.GetInt("keepalive", 240);
+    int keepalive_interval = settings.GetInt("keepalive", 60);
+    // Long keepalive periods are fragile on modem-sleep Wi-Fi and some cloud
+    // brokers. Clamp stale values stored by older firmware as well.
+    if (keepalive_interval < 30 || keepalive_interval > 120) {
+        keepalive_interval = 60;
+    }
     publish_topic_ = settings.GetString("publish_topic");
 
     if (endpoint.empty()) {
