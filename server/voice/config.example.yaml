@@ -60,6 +60,7 @@ music:
   ffmpeg_path: ffmpeg
   max_duration_s: 300
   search_timeout_s: 20
+  netease_api_url: https://music.163.com
 
 memory:
   database_path: data/memory.db

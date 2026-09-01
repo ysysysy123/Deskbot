@@ -102,22 +102,31 @@ Edge TTS 会访问微软语音服务。输出先经 FFmpeg 转为 24 kHz、16-bi
 
 固件保持官方 MQTT 对话服务不变。识别到“播放歌曲/我想听/来一首”等请求后，
 会访问电脑的 `http://192.168.10.110:8010/music?q=...`，由下面的轻量网关搜索
-YouTube 并输出 Ogg/Opus 音频。电脑和设备必须连接同一个局域网。
+网易云音乐并输出 Ogg/Opus 音频。电脑和设备必须连接同一个局域网。
 
-先安装 `yt-dlp`，并确认 `ffmpeg` 命令可以在 PowerShell 中运行：
+先确认 `ffmpeg` 命令可以在 PowerShell 中运行：
 
 ```powershell
-python -m pip install -r .\requirements-music.txt
 ffmpeg -version
 python .\scripts\music_http_server.py
 ```
 
-如果系统没有单独安装 FFmpeg，也可以把 `imageio-ffmpeg` 安装到同一个 Python
-环境；网关会自动使用它携带的 FFmpeg：
+如果系统没有单独安装 FFmpeg，网关会使用 `imageio-ffmpeg` 携带的版本：
 
 ```powershell
+python -m pip install -r .\requirements-music.txt
 python -m pip install imageio-ffmpeg
 ```
+
+免费歌曲不需要账号。需要会员权限的歌曲，可以在服务端进程启动前设置网易云
+Cookie；Cookie 不要提交到 GitHub：
+
+```powershell
+$env:NETEASE_COOKIE = "MUSIC_U=你的Cookie; __csrf=你的值"
+python .\scripts\music_http_server.py
+```
+
+Cookie 只会由服务端访问网易云，ESP32 不会接触账号信息。
 
 浏览器打开 `http://127.0.0.1:8010/health` 应返回 `ok`。若 Windows 防火墙
 弹窗，请允许 Python 在专用网络通信；设备访问地址使用电脑局域网 IP，不要使用

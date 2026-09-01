@@ -93,6 +93,7 @@ class MusicConfig:
     ffmpeg_path: str = "ffmpeg"
     max_duration_s: int = 300
     search_timeout_s: float = 20.0
+    netease_api_url: str = "https://music.163.com"
 
 
 @dataclass(frozen=True)
@@ -157,6 +158,9 @@ def load_config(path: Path, environ: Mapping[str, str] = os.environ) -> AppConfi
     sections["auth"] = _override(sections["auth"], "token", environ.get("VOICE_AUTH_TOKEN"))
     sections["admin_api"] = _override(
         sections["admin_api"], "token", environ.get("VOICE_MEMORY_ADMIN_TOKEN")
+    )
+    sections["music"] = _override(
+        sections["music"], "netease_api_url", environ.get("NETEASE_API_URL")
     )
 
     config = AppConfig(**sections)

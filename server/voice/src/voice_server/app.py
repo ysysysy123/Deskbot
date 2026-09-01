@@ -82,6 +82,7 @@ class ServerApplication:
         music = MusicProvider(
             ffmpeg_path=config.music.ffmpeg_path,
             max_duration_s=config.music.max_duration_s,
+            netease_api_url=config.music.netease_api_url,
         ) if config.music.enabled else None
         memory_service = MemoryService(
             memory_store,

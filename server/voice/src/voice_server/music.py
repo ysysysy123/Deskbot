@@ -3,6 +3,11 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from typing import Any
+import json
+import os
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
 
 
 class MusicError(RuntimeError):
@@ -17,11 +22,24 @@ class MusicTrack:
 
 
 class MusicProvider:
-    """Searches YouTube and streams a bounded audio preview through FFmpeg."""
+    """Searches NetEase Cloud Music and streams audio through FFmpeg.
 
-    def __init__(self, *, ffmpeg_path: str, max_duration_s: int) -> None:
+    The device never sees the account cookie. Authentication, song lookup and
+    provider-specific playback URLs stay on this server.
+    """
+
+    def __init__(
+        self,
+        *,
+        ffmpeg_path: str,
+        max_duration_s: int,
+        netease_api_url: str = "https://music.163.com",
+        netease_cookie: str | None = None,
+    ) -> None:
         self._ffmpeg_path = ffmpeg_path
         self._max_duration_s = max_duration_s
+        self._netease_api_url = netease_api_url.rstrip("/")
+        self._netease_cookie = netease_cookie or os.environ.get("NETEASE_COOKIE", "")
 
     async def close(self) -> None:
         return None
@@ -30,30 +48,53 @@ class MusicProvider:
         return await asyncio.to_thread(self._search_sync, query)
 
     def _search_sync(self, query: str) -> MusicTrack | None:
-        try:
-            from yt_dlp import YoutubeDL
-        except ImportError as error:
-            raise MusicError("music search requires the yt-dlp package") from error
-
-        options = {
-            "quiet": True,
-            "no_warnings": True,
-            "noplaylist": True,
-            "skip_download": True,
-            "extract_flat": False,
-            "format": "bestaudio/best",
-        }
-        with YoutubeDL(options) as downloader:
-            info: Any = downloader.extract_info(f"ytsearch1:{query}", download=False)
-        entries = info.get("entries") if isinstance(info, dict) else None
-        entry = next((item for item in (entries or ()) if isinstance(item, dict)), None)
-        if entry is None or not entry.get("url"):
-            return None
-        return MusicTrack(
-            title=str(entry.get("title") or query).strip(),
-            url=str(entry["url"]),
-            headers={str(k): str(v) for k, v in (entry.get("http_headers") or {}).items()},
+        search = self._netease_json(
+            "/api/search/get/web",
+            {"s": query, "type": 1, "offset": 0, "total": "true", "limit": 5},
         )
+        songs = ((search.get("result") or {}).get("songs") or []) if isinstance(search, dict) else []
+        for song in songs:
+            if not isinstance(song, dict) or not song.get("id"):
+                continue
+            song_id = int(song["id"])
+            playback = self._netease_json(
+                "/api/song/enhance/player/url/v1",
+                {"ids": json.dumps([song_id], separators=(",", ":")), "level": "standard", "encodeType": "mp3"},
+            )
+            data = playback.get("data") if isinstance(playback, dict) else None
+            item = data[0] if isinstance(data, list) and data else None
+            url = item.get("url") if isinstance(item, dict) else None
+            if not url:
+                continue
+            artists = ", ".join(
+                str(artist.get("name", "")).strip()
+                for artist in (song.get("artists") or [])
+                if isinstance(artist, dict) and artist.get("name")
+            )
+            title = str(song.get("name") or query).strip()
+            if artists:
+                title = f"{title} - {artists}"
+            return MusicTrack(title=title, url=str(url), headers={})
+        return None
+
+    def _netease_json(self, path: str, params: dict[str, Any]) -> dict[str, Any]:
+        query = urlencode(params)
+        request = Request(
+            f"{self._netease_api_url}{path}?{query}",
+            headers={
+                "Accept": "application/json",
+                "User-Agent": "Deskbot/1.0",
+                **({"Cookie": self._netease_cookie} if self._netease_cookie else {}),
+            },
+        )
+        try:
+            with urlopen(request, timeout=15) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+        except (HTTPError, URLError, TimeoutError, json.JSONDecodeError) as error:
+            raise MusicError(f"NetEase Music request failed: {error}") from error
+        if not isinstance(payload, dict):
+            raise MusicError("NetEase Music returned an invalid response")
+        return payload
 
     async def stream_pcm(self, track: MusicTrack):
         command = [

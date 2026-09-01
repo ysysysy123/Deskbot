@@ -1,8 +1,8 @@
 """Small LAN music gateway used by the ESP32 firmware.
 
-The regular voice server is intentionally not required here.  This process
-only searches YouTube with yt-dlp and transcodes the selected track to an
-Ogg/Opus stream that the firmware already knows how to decode.
+The regular voice server is intentionally not required here. This process
+searches NetEase Cloud Music and transcodes the selected track to an Ogg/Opus
+stream that the firmware already knows how to decode.
 """
 
 from __future__ import annotations
@@ -104,6 +104,7 @@ class MusicHandler(BaseHTTPRequestHandler):
             )
             self.send_response(200)
             self.send_header("Content-Type", "audio/ogg")
+            self.send_header("X-Music-Title", track.title)
             self.send_header("Cache-Control", "no-store")
             self.send_header("Connection", "close")
             self.end_headers()
@@ -146,6 +147,10 @@ def main() -> None:
     parser.add_argument("--host", default=os.environ.get("MUSIC_HOST", "0.0.0.0"))
     parser.add_argument("--port", type=int, default=int(os.environ.get("MUSIC_PORT", "8010")))
     parser.add_argument("--ffmpeg", default=os.environ.get("FFMPEG", "ffmpeg"))
+    parser.add_argument(
+        "--netease-api-url",
+        default=os.environ.get("NETEASE_API_URL", "https://music.163.com"),
+    )
     parser.add_argument("--max-duration", type=int, default=300)
     args = parser.parse_args()
 
@@ -159,7 +164,11 @@ def main() -> None:
             pass
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    provider = MusicProvider(ffmpeg_path=args.ffmpeg, max_duration_s=args.max_duration)
+    provider = MusicProvider(
+        ffmpeg_path=args.ffmpeg,
+        max_duration_s=args.max_duration,
+        netease_api_url=args.netease_api_url,
+    )
     MusicHandler.provider = provider
     server = ThreadingHTTPServer((args.host, args.port), MusicHandler)
     LOGGER.info("music gateway listening on http://%s:%d", args.host, args.port)

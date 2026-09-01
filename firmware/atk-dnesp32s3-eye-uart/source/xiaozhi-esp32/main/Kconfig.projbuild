@@ -10,7 +10,7 @@ config MUSIC_SERVER_URL
     string "LAN music streaming URL"
     default "http://192.168.10.110:8010/music"
     help
-        HTTP endpoint on the computer that searches and streams Ogg/Opus music.
+        HTTP endpoint that searches NetEase Cloud Music and streams Ogg/Opus music.
         The computer and the ESP32 must be on the same LAN.
 
 choice

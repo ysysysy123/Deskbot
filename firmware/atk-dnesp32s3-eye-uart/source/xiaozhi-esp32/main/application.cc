@@ -794,7 +794,7 @@ void Application::MusicPlaybackTask(std::string query) {
         ESP_LOGE(TAG, "Music server request failed, status=%d, error=%d",
                  http->GetStatusCode(), http->GetLastError());
         http->Close();
-        finish("歌曲搜索失败，请检查电脑音乐服务");
+        finish("歌曲搜索失败，请检查音乐服务");
         return;
     }
 
@@ -834,7 +834,7 @@ void Application::MusicPlaybackTask(std::string query) {
         if (read < 0) {
             ESP_LOGE(TAG, "Music stream read failed after %u bytes", total_bytes);
             http->Close();
-            finish("歌曲播放中断，请检查电脑网络");
+            finish("歌曲播放中断，请检查音乐服务网络");
             return;
         }
         if (read == 0) {
