@@ -35,3 +35,15 @@ __pycache__/
 # Large local assets
 models/
 recordings/
+
+# External artifacts awaiting Google Drive upload
+artifacts/
+downloads/
+
+# Credential containers
+credentials*.json
+client_secret*.json
+token*.json
+*.key
+*.p12
+*.pfx
