@@ -31,7 +31,7 @@ HELLO = json.dumps(
     }
 )
 LISTEN_START = '{"type":"listen","state":"start","mode":"manual"}'
-LISTEN_STOP = '{"type":"listen","state":"stop","mode":"manual"}'
+LISTEN_STOP = '{"type":"listen","state":"stop"}'
 ABORT = '{"type":"abort"}'
 
 

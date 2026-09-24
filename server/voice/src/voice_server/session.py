@@ -4,10 +4,12 @@ import asyncio
 import logging
 import re
 import sys
+from contextlib import aclosing
 from typing import Any
 
 from voice_server.audio.sentences import SentenceBuffer
 from voice_server.compat import wait_for
+from voice_server.dialogue import DEFAULT_SYSTEM_PROMPT, DialogueBackend, LLMDialogueBackend, TurnRequest
 from voice_server.protocol.messages import AbortMessage, ListenMessage, make_llm, make_stt, make_tts
 from voice_server.protocol.state import SessionState, SessionStateMachine
 
@@ -62,6 +64,11 @@ class VoiceSession:
         error_text: str,
         music: Any | None = None,
         music_search_timeout_s: float = 20.0,
+        dialogue_backend: DialogueBackend | None = None,
+        system_prompt: str = DEFAULT_SYSTEM_PROMPT,
+        sentence_max_chars: int = 100,
+        sentence_queue_size: int = 2,
+        local_test_turn_events: bool = False,
     ) -> None:
         self.device_id = device_id
         self.session_id = session_id
@@ -69,6 +76,11 @@ class VoiceSession:
         self._codec = codec
         self._asr = asr
         self._llm = llm
+        self._dialogue = dialogue_backend if dialogue_backend is not None else LLMDialogueBackend(llm)
+        self._system_prompt = system_prompt
+        self._sentence_max_chars = sentence_max_chars
+        self._sentence_queue_size = sentence_queue_size
+        self._local_test_turn_events = local_test_turn_events
         self._tts = tts
         self._memory = memory
         self._vad = vad
@@ -108,6 +120,9 @@ class VoiceSession:
             return
         if not isinstance(message, ListenMessage):
             return
+        if message.state == "detect" and message.text and message.text.strip():
+            await self.handle_text(message.text)
+            return
         if message.state == "start":
             if message.mode == "manual":
                 if self.state is SessionState.IDLE:
@@ -118,6 +133,19 @@ class VoiceSession:
                     await self._prepare_turn(message.mode)
         elif message.state == "stop" and self.state is SessionState.LISTENING:
             self._start_pipeline()
+
+    async def handle_text(self, text: str) -> None:
+        """Use the same dialogue/audio pipeline for wake-word or text input."""
+        if self._closed or not text.strip():
+            return
+        await self.abort()
+        if self._closed:
+            return
+        self._open_turn("auto")
+        self._state_machine.transition(SessionState.RECOGNIZING)
+        self._pipeline_task = asyncio.create_task(
+            self._run_pipeline(b"", self._turn_generation, transcript=text)
+        )
 
     async def handle_audio(self, packet: bytes) -> None:
         if self._closed or self.state is not SessionState.LISTENING:
@@ -173,25 +201,29 @@ class VoiceSession:
         if self.state is not SessionState.CLOSED:
             self._state_machine.transition(SessionState.CLOSED)
 
-    async def _run_pipeline(self, pcm: bytes, generation: int) -> None:
+    async def _run_pipeline(self, pcm: bytes, generation: int, *, transcript: str | None = None) -> None:
         tts_started = False
         tts_failed = False
+        stage = "asr"
         try:
-            text = await wait_for(
+            text = transcript if transcript is not None else await wait_for(
                 self._asr.transcribe(pcm, 16_000), self._asr_timeout_s
             )
             if not self._is_current(generation):
                 return
             text = text.strip()
-            if not text:
+            # Local ASR may return only punctuation for background noise.
+            if not text or (transcript is None and not any(char.isalnum() for char in text)):
                 return
             if not await self._send_json(generation, make_stt(self.session_id, text)):
                 return
+            stage = "memory"
             await self._memory.remember(self.device_id, self.session_id, "user", text)
             if not self._is_current(generation):
                 return
             music_query = extract_music_query(text)
             if music_query is not None and self._music is not None:
+                stage = "music"
                 _LOGGER.info("Music request from %s: %s", self.device_id, music_query)
                 track = await wait_for(
                     self._music.search(music_query), self._music_search_timeout_s
@@ -205,53 +237,27 @@ class VoiceSession:
                     )
                     self._memory.schedule_summary(self.device_id)
                 return
-            context = await self._memory.recall(self.device_id, text, self._recent_limit)
+            context = await self._memory.recall_for_turn(self.device_id, text, self._recent_limit)
             if not self._is_current(generation):
                 return
             self._state_machine.transition(SessionState.THINKING)
             messages = self._make_messages(context, text)
-            sentences = SentenceBuffer()
             assistant_chunks: list[str] = []
-            iterator = self._llm.stream(messages).__aiter__()
-            remaining_llm_s = self._llm_timeout_s
-            loop = asyncio.get_running_loop()
-            try:
-                while True:
-                    wait_started = loop.time()
+            request = TurnRequest(
+                self.device_id, self.session_id, f"{self.session_id}:{generation}", text, messages
+            )
+            stage = "dialogue"
+            async with aclosing(self._response_sentences(request, assistant_chunks, generation)) as responses:
+                async for sentence in responses:
+                    stage = "tts"
                     try:
-                        chunk = await wait_for(anext(iterator), remaining_llm_s)
-                    except StopAsyncIteration:
-                        break
-                    finally:
-                        remaining_llm_s -= loop.time() - wait_started
+                        tts_started = await self._speak_sentence(sentence, tts_started, generation, display=True)
+                    except Exception:
+                        tts_failed = True
+                        raise
                     if not self._is_current(generation):
                         return
-                    assistant_chunks.append(chunk)
-                    for sentence in sentences.feed(chunk):
-                        try:
-                            tts_started = await self._speak_sentence(sentence, tts_started, generation, display=True)
-                        except Exception:
-                            tts_failed = True
-                            raise
-                        if not self._is_current(generation):
-                            return
-            finally:
-                primary_error = sys.exc_info()[1]
-                close_iterator = getattr(iterator, "aclose", None)
-                if close_iterator is not None:
-                    try:
-                        await wait_for(close_iterator(), self._llm_timeout_s)
-                    except BaseException:
-                        if primary_error is None:
-                            raise
-            for sentence in sentences.flush():
-                try:
-                    tts_started = await self._speak_sentence(sentence, tts_started, generation, display=True)
-                except Exception:
-                    tts_failed = True
-                    raise
-                if not self._is_current(generation):
-                    return
+                    stage = "dialogue"
             assistant_text = "".join(assistant_chunks)
             if tts_started and self._is_current(generation):
                 stop_is_current = await self._send_json(generation, make_tts(self.session_id, "stop"))
@@ -261,11 +267,13 @@ class VoiceSession:
                     return
                 if not self._is_current(generation):
                     return
+                stage = "memory"
                 await self._memory.remember(self.device_id, self.session_id, "assistant", assistant_text)
                 self._memory.schedule_summary(self.device_id)
         except asyncio.CancelledError:
             raise
         except Exception:
+            _LOGGER.exception("Voice turn failed: session=%s turn=%s stage=%s", self.session_id, generation, stage)
             if not tts_failed and self._is_current(generation):
                 try:
                     if self.state is SessionState.RECOGNIZING:
@@ -290,10 +298,20 @@ class VoiceSession:
             if self._is_current(generation):
                 self._state_machine.abort()
                 self._clear_recording()
+                if self._local_test_turn_events:
+                    try:
+                        await self._send_json(
+                            generation,
+                            {"type": "session", "session_id": self.session_id, "state": "idle"},
+                        )
+                    except Exception:
+                        pass
 
     def _make_messages(self, context: Any, current_text: str) -> list[dict[str, str]]:
         summary = context.summary.strip() if context.summary else ""
-        messages = [{"role": "system", "content": summary or "No conversation summary is available."}]
+        messages = [{"role": "system", "content": self._system_prompt}]
+        if summary:
+            messages.append({"role": "system", "content": f"以下是此前对话的记忆摘要，供回答参考：\n{summary}"})
         recent = list(context.recent_messages)
         if recent and (
             recent[-1].session_id == self.session_id
@@ -304,6 +322,58 @@ class VoiceSession:
         messages.extend({"role": item.role, "content": item.content} for item in recent)
         messages.append({"role": "user", "content": current_text})
         return messages
+
+    async def _response_sentences(self, request: TurnRequest, chunks: list[str], generation: int):
+        queue: asyncio.Queue[str | Exception | None] = asyncio.Queue(self._sentence_queue_size)
+
+        async def produce() -> None:
+            try:
+                sentences = SentenceBuffer(self._sentence_max_chars)
+                iterator = self._dialogue.stream(request).__aiter__()
+                remaining = self._llm_timeout_s
+                loop = asyncio.get_running_loop()
+                try:
+                    while self._is_current(generation):
+                        started = loop.time()
+                        try:
+                            chunk = await wait_for(anext(iterator), remaining)
+                        except StopAsyncIteration:
+                            break
+                        finally:
+                            remaining -= loop.time() - started
+                        if not self._is_current(generation):
+                            return
+                        chunks.append(chunk)
+                        for sentence in sentences.feed(chunk):
+                            await queue.put(sentence)
+                    for sentence in sentences.flush():
+                        await queue.put(sentence)
+                finally:
+                    primary_error = sys.exc_info()[1]
+                    close_iterator = getattr(iterator, "aclose", None)
+                    if close_iterator is not None:
+                        try:
+                            await wait_for(close_iterator(), self._llm_timeout_s)
+                        except BaseException:
+                            if primary_error is None:
+                                raise
+            except Exception as error:
+                await queue.put(error)
+            else:
+                await queue.put(None)
+
+        producer = asyncio.create_task(produce())
+        try:
+            while True:
+                item = await queue.get()
+                if item is None:
+                    return
+                if isinstance(item, Exception):
+                    raise item
+                yield item
+        finally:
+            producer.cancel()
+            await asyncio.gather(producer, return_exceptions=True)
 
     async def _speak_sentence(self, sentence: str, started: bool, generation: int, *, display: bool) -> bool:
         if not self._is_current(generation):
@@ -337,6 +407,7 @@ class VoiceSession:
     async def _play_music(self, track: Any, generation: int) -> None:
         if not self._is_current(generation):
             return
+        self._state_machine.transition(SessionState.THINKING)
         self._state_machine.transition(SessionState.SPEAKING)
         if not await self._send_json(generation, make_llm(self.session_id, track.title, "relaxed")):
             return

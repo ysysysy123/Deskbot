@@ -4,5 +4,6 @@ __pycache__/
 .pytest_cache/
 data/
 .env
+config.yaml
 *.pyc
 .agents/

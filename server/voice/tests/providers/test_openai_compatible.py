@@ -146,3 +146,30 @@ async def test_openai_provider_propagates_cancellation_from_client_creation():
 
     with pytest.raises(asyncio.CancelledError):
         await anext(provider.stream([]))
+
+
+async def test_closing_partial_reply_closes_underlying_response():
+    closed = asyncio.Event()
+
+    class Response:
+        def __aiter__(self):
+            return self
+
+        async def __anext__(self):
+            return chunk("hello")
+
+        async def close(self):
+            closed.set()
+
+    class Completions:
+        async def create(self, **kwargs):
+            return Response()
+
+    provider = OpenAICompatibleLLMProvider(
+        base_url="http://local/v1", model="test", api_key="", temperature=0.7,
+        max_tokens=100, timeout_s=1, client=SimpleNamespace(chat=SimpleNamespace(completions=Completions())),
+    )
+    stream = provider.stream([])
+    assert await anext(stream) == "hello"
+    await stream.aclose()
+    assert closed.is_set()

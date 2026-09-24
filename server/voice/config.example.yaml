@@ -1,3 +1,6 @@
+# .env beside this file is loaded automatically.
+# Priority: exported environment > .env > this YAML > defaults.
+# Override any option with VOICE_<SECTION>_<FIELD>.
 server:
   host: 0.0.0.0
   ws_port: 8000
@@ -55,6 +58,13 @@ tts:
   timeout_s: 30
   error_text: 抱歉，服务暂时不可用。
 
+dialogue:
+  system_prompt: >-
+    你是桌面陪伴助手。默认用简洁、自然的中文口语回答，通常一到三句话。
+    避免 Markdown 和不适合朗读的格式；不确定时直接说明。
+  sentence_max_chars: 100
+  sentence_queue_size: 2
+
 music:
   enabled: true
   ffmpeg_path: ffmpeg
@@ -66,3 +76,21 @@ memory:
   database_path: data/memory.db
   recent_limit: 10
   summary_threshold: 12
+  context_limit: 64
+
+local_test:
+  host: 127.0.0.1
+  port: 8006
+
+mcp:
+  enabled: false
+  url: http://127.0.0.1:8006/mcp
+  timeout_seconds: 20
+  max_rounds: 3
+
+vision:
+  enabled: false
+  # Empty base_url uses llm.base_url; set secrets only through .env.
+  base_url: ""
+  model: glm-4v-flash
+  timeout_seconds: 60

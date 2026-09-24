@@ -11,15 +11,17 @@ import websockets
 from aiohttp import web
 
 from voice_server.admin_api import create_admin_app
-from voice_server.audio.opus import OpusCodec
 from voice_server.auth import build_authenticator
+from voice_server.camera_dialogue import CameraMcpDialogueBackend
 from voice_server.config import AppConfig
+from voice_server.dialogue import DialogueBackend
 from voice_server.memory.service import MemoryService
 from voice_server.memory.sqlite import SQLiteMemoryProvider
 from voice_server.music import MusicProvider
 from voice_server.ota import create_ota_app
 from voice_server.providers.edge_tts import EdgeTTSProvider
 from voice_server.providers.openai_compatible import OpenAICompatibleLLMProvider
+from voice_server.providers.openai_vision import OpenAICompatibleVisionProvider
 from voice_server.providers.sensevoice import SenseVoiceASRProvider
 from voice_server.providers.silero import SileroVADProvider
 from voice_server.websocket_server import VoiceWebSocketServer
@@ -61,8 +63,11 @@ class ServerApplication:
         self._shutdown_error_observed = False
 
     @classmethod
-    def from_config(cls, config: AppConfig) -> "ServerApplication":
-        memory_store = SQLiteMemoryProvider(Path(config.memory.database_path))
+    def from_config(cls, config: AppConfig, *, dialogue_backend: DialogueBackend | None = None) -> "ServerApplication":
+        # load_config must read VOICE_OPUS_DLL_DIR before the native codec imports.
+        from voice_server.audio.opus import OpusCodec
+
+        memory_store = SQLiteMemoryProvider(Path(config.memory.database_path), context_limit=config.memory.context_limit)
         asr = SenseVoiceASRProvider.from_model_path(
             config.asr.model_path, max_concurrency=config.asr.max_concurrency
         )
@@ -74,6 +79,20 @@ class ServerApplication:
             max_tokens=config.llm.max_tokens,
             timeout_s=config.llm.timeout_s,
         )
+        if dialogue_backend is None and config.mcp.enabled:
+            vision = OpenAICompatibleVisionProvider(
+                base_url=config.vision.base_url or config.llm.base_url,
+                model=config.vision.model,
+                api_key=config.vision.api_key or config.llm.api_key,
+                timeout_s=config.vision.timeout_seconds,
+            ) if config.vision.enabled else None
+            dialogue_backend = CameraMcpDialogueBackend(
+                llm,
+                mcp_url=config.mcp.url,
+                mcp_timeout_s=config.mcp.timeout_seconds,
+                max_tool_rounds=config.mcp.max_rounds,
+                vision=vision,
+            )
         tts = EdgeTTSProvider(
             voice=config.tts.voice,
             rate=config.tts.rate,
@@ -105,6 +124,7 @@ class ServerApplication:
                 silence_threshold=config.vad.silence_threshold,
             ),
             music=music,
+            dialogue_backend=dialogue_backend,
         )
         return cls(
             config=config,
@@ -123,7 +143,7 @@ class ServerApplication:
             admin_listener_factory=lambda: _start_aiohttp(
                 create_admin_app(config, memory_service), config.admin_api.host, config.admin_api.port
             ),
-            provider_resources=tuple(item for item in (asr, llm, tts, music) if item is not None),
+            provider_resources=tuple(item for item in (asr, llm, tts, music, dialogue_backend) if item is not None),
         )
 
     async def start(self) -> None:

@@ -1,4 +1,5 @@
 import asyncio
+from dataclasses import replace
 
 import pytest
 
@@ -414,7 +415,7 @@ def test_from_config_constructs_dependencies_without_loading_real_models(monkeyp
     constructed = []
 
     class Store:
-        def __init__(self, path):
+        def __init__(self, path, *, context_limit):
             constructed.append(("store", path))
 
     class ASR:
@@ -437,7 +438,100 @@ def test_from_config_constructs_dependencies_without_loading_real_models(monkeyp
     monkeypatch.setattr(app_module, "OpenAICompatibleLLMProvider", LLM)
     monkeypatch.setattr(app_module, "EdgeTTSProvider", TTS)
 
-    application = ServerApplication.from_config(AppConfig())
+    backend = object()
+    application = ServerApplication.from_config(AppConfig(), dialogue_backend=backend)
 
     assert [item[0] for item in constructed] == ["store", "asr", "llm", "tts"]
     assert application.config == AppConfig()
+    assert application._websocket_server._dialogue_backend is backend
+    assert backend in application._provider_resources
+
+
+@pytest.fixture
+def configured_provider_fakes(monkeypatch):
+    created = {}
+
+    def constructor(name):
+        class Provider:
+            def __init__(self, *args, **kwargs):
+                self.options = kwargs
+                self.close_calls = 0
+                created[name] = self
+
+            @classmethod
+            def from_model_path(cls, path, **kwargs):
+                return cls(path, **kwargs)
+
+            async def close(self):
+                self.close_calls += 1
+
+        return Provider
+
+    for attribute, name in (
+        ("SQLiteMemoryProvider", "store"), ("SenseVoiceASRProvider", "asr"),
+        ("OpenAICompatibleLLMProvider", "llm"), ("OpenAICompatibleVisionProvider", "vision"),
+        ("EdgeTTSProvider", "tts"),
+    ):
+        monkeypatch.setattr(app_module, attribute, constructor(name))
+    return created
+
+
+@pytest.mark.parametrize("separate_vision_credentials", [False, True])
+async def test_from_config_wires_camera_and_closes_shared_clients_once(configured_provider_fakes, separate_vision_credentials):
+    base = AppConfig()
+    config = replace(
+        base,
+        music=replace(base.music, enabled=False),
+        llm=replace(base.llm, base_url="http://chat/v1", api_key="test-chat-key"),
+        mcp=replace(base.mcp, enabled=True, url="http://camera/mcp", timeout_seconds=8.0, max_rounds=2),
+        vision=replace(
+            base.vision, enabled=True, model="visual-model", timeout_seconds=12.0,
+            base_url="http://vision/v1" if separate_vision_credentials else "",
+            api_key="test-vision-key" if separate_vision_credentials else "",
+        ),
+    )
+    application = ServerApplication.from_config(config)
+    backend = application._websocket_server._dialogue_backend
+    resources = configured_provider_fakes
+    assert isinstance(backend, app_module.CameraMcpDialogueBackend)
+    assert backend._llm is resources["llm"]
+    assert backend._vision is resources["vision"]
+    assert backend._mcp_url == "http://camera/mcp"
+    assert backend._timeout.total == 8.0
+    assert backend._max_tool_rounds == 2
+    assert resources["vision"].options == {
+        "base_url": "http://vision/v1" if separate_vision_credentials else "http://chat/v1",
+        "api_key": "test-vision-key" if separate_vision_credentials else "test-chat-key",
+        "model": "visual-model", "timeout_s": 12.0,
+    }
+    await application.stop()
+    await application.stop()
+    assert all(resource.close_calls == 1 for resource in resources.values())
+
+
+async def test_injected_dialogue_backend_takes_priority_over_camera_config(configured_provider_fakes):
+    base = AppConfig()
+    config = replace(
+        base, music=replace(base.music, enabled=False),
+        mcp=replace(base.mcp, enabled=True), vision=replace(base.vision, enabled=True),
+    )
+    recorder = Recorder()
+    custom_backend = FakeResource(recorder, "custom_agent")
+    application = ServerApplication.from_config(config, dialogue_backend=custom_backend)
+    assert application._websocket_server._dialogue_backend is custom_backend
+    assert "vision" not in configured_provider_fakes
+    await application.stop()
+    await application.stop()
+    assert recorder.events == ["custom_agent.close"]
+    assert all(resource.close_calls == 1 for resource in configured_provider_fakes.values())
+
+
+async def test_camera_config_allows_capture_without_visual_model(configured_provider_fakes):
+    base = AppConfig()
+    config = replace(base, music=replace(base.music, enabled=False), mcp=replace(base.mcp, enabled=True))
+    application = ServerApplication.from_config(config)
+    backend = application._websocket_server._dialogue_backend
+    assert isinstance(backend, app_module.CameraMcpDialogueBackend)
+    assert backend._vision is None
+    assert "vision" not in configured_provider_fakes
+    await application.stop()

@@ -1,6 +1,7 @@
 aiohttp==3.13.2
 websockets==14.2
 PyYAML==6.0.3
+python-dotenv==1.2.1
 numpy==1.26.4
 onnxruntime>=1.17,<2
 opuslib_next==1.1.5

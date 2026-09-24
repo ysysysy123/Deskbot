@@ -16,12 +16,13 @@ class HelloMessage:
     sample_rate: int
     channels: int
     frame_duration: int
+    local_test_turn_events: bool = False
 
 
 @dataclass(frozen=True)
 class ListenMessage:
     state: str
-    mode: str
+    mode: str | None
     text: str | None
 
 
@@ -30,13 +31,18 @@ class AbortMessage:
     pass
 
 
-ClientMessage: TypeAlias = HelloMessage | ListenMessage | AbortMessage
+@dataclass(frozen=True)
+class PingMessage:
+    nonce: str | None = None
+
+
+ClientMessage: TypeAlias = HelloMessage | ListenMessage | AbortMessage | PingMessage
 
 _HELLO_REQUIRED_FIELDS = {"type", "version", "transport", "audio_params"}
 _HELLO_OPTIONAL_FIELDS = {"features"}
 _AUDIO_PARAMS_FIELDS = {"format", "sample_rate", "channels", "frame_duration"}
-_LISTEN_REQUIRED_FIELDS = {"type", "state", "mode"}
-_LISTEN_OPTIONAL_FIELDS = {"text", "session_id"}
+_LISTEN_REQUIRED_FIELDS = {"type", "state"}
+_LISTEN_OPTIONAL_FIELDS = {"mode", "text", "session_id"}
 _ABORT_OPTIONAL_FIELDS = {"session_id", "reason"}
 _TTS_STATES = {"start", "sentence_start", "stop"}
 
@@ -59,11 +65,15 @@ def parse_client_message(raw: str) -> ClientMessage:
         _validate_optional_string(message, "session_id")
         _validate_optional_string(message, "reason")
         return AbortMessage()
+    if message_type == "ping":
+        _require_allowed_fields(message, {"type"}, {"timestamp", "nonce"})
+        _validate_optional_string(message, "nonce")
+        return PingMessage(nonce=message.get("nonce"))
     raise ProtocolError("unsupported message type")
 
 
-def make_server_hello(session_id: str) -> dict[str, object]:
-    return {
+def make_server_hello(session_id: str, *, local_test_turn_events: bool = False) -> dict[str, object]:
+    result = {
         "type": "hello",
         "version": 1,
         "transport": "websocket",
@@ -75,6 +85,9 @@ def make_server_hello(session_id: str) -> dict[str, object]:
             "frame_duration": 60,
         },
     }
+    if local_test_turn_events:
+        result["features"] = {"local_test_turn_events": True}
+    return result
 
 
 def make_stt(session_id: str, text: str) -> dict[str, str]:
@@ -99,8 +112,12 @@ def make_llm(session_id: str, text: str, emotion: str) -> dict[str, str]:
 
 def _parse_hello(message: dict[str, object]) -> HelloMessage:
     _require_allowed_fields(message, _HELLO_REQUIRED_FIELDS, _HELLO_OPTIONAL_FIELDS)
-    if "features" in message and not isinstance(message["features"], dict):
+    features = message.get("features", {})
+    if not isinstance(features, dict):
         raise ProtocolError("features must be an object")
+    local_test_turn_events = features.get("local_test_turn_events", False)
+    if not isinstance(local_test_turn_events, bool):
+        raise ProtocolError("local_test_turn_events must be a boolean")
     audio_params = message["audio_params"]
     if not isinstance(audio_params, dict):
         raise ProtocolError("audio_params must be an object")
@@ -124,19 +141,23 @@ def _parse_hello(message: dict[str, object]) -> HelloMessage:
         sample_rate=16000,
         channels=1,
         frame_duration=60,
+        local_test_turn_events=local_test_turn_events,
     )
 
 
 def _parse_listen(message: dict[str, object]) -> ListenMessage:
     _require_allowed_fields(message, _LISTEN_REQUIRED_FIELDS, _LISTEN_OPTIONAL_FIELDS)
     state = message["state"]
-    mode = message["mode"]
+    mode = message.get("mode")
     text = message.get("text")
-    if not isinstance(state, str) or not isinstance(mode, str) or text is not None and not isinstance(text, str):
+    if not isinstance(state, str) or text is not None and not isinstance(text, str):
         raise ProtocolError("invalid listen values")
     _validate_optional_string(message, "session_id")
-    if state not in {"start", "stop", "detect"} or mode not in {"manual", "auto", "realtime"}:
+    if state not in {"start", "stop", "detect"}:
         raise ProtocolError("unsupported listen state or mode")
+    if state == "start" or "mode" in message:
+        if not isinstance(mode, str) or mode not in {"manual", "auto", "realtime"}:
+            raise ProtocolError("unsupported listen mode")
     return ListenMessage(state=state, mode=mode, text=text)
 
 

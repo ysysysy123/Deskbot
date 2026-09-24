@@ -1,0 +1,10 @@
+# Offline tests use fake model providers; no Torch/model downloads are needed.
+aiohttp==3.13.2
+websockets==14.2
+PyYAML==6.0.3
+python-dotenv==1.2.1
+numpy==1.26.4
+opuslib_next==1.1.5
+pytest>=8,<9
+pytest-asyncio>=0.23,<2
+pytest-aiohttp>=1.1,<2

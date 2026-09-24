@@ -64,6 +64,19 @@ async def test_silero_keeps_last_speech_result_per_provider():
     assert await speech.is_speech(b"", 16000)
 
 
+async def test_silero_reset_discards_previous_turn_without_reloading_session():
+    session = FakeONNXSession([0.8, 0.2])
+    provider = SileroVADProvider("unused", inference_session=session)
+    assert await provider.is_speech(pcm_samples(1000, 700), 16000)
+
+    provider.reset()
+    assert not await provider.is_speech(pcm_samples(0, 511), 16000)
+    assert len(session.calls) == 1
+    assert not await provider.is_speech(pcm_samples(0, 1), 16000)
+    assert np.allclose(session.calls[1]["input"], 0.0)
+    assert np.allclose(session.calls[1]["state"], 0.0)
+
+
 async def test_silero_rejects_wrong_sample_rate():
     """Would fail if the 16 kHz VAD model received incompatible audio."""
     provider = SileroVADProvider("unused", inference_session=FakeONNXSession([]))
@@ -130,6 +143,8 @@ def test_silero_constructs_a_single_thread_onnx_session(monkeypatch):
 
     SileroVADProvider("models/vad")
 
-    assert created["model_path"].endswith("models\\vad\\src\\silero_vad\\data\\silero_vad.onnx")
+    from pathlib import Path
+
+    assert Path(created["model_path"]) == Path("models/vad/src/silero_vad/data/silero_vad.onnx")
     assert created["options"].intra_op_num_threads == 1
     assert created["options"].inter_op_num_threads == 1

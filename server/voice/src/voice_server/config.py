@@ -9,6 +9,9 @@ from typing import Any, Mapping, TypeVar
 
 import yaml
 
+from voice_server.dialogue import DEFAULT_SYSTEM_PROMPT
+from voice_server.environment import load_environment, read_environment
+
 
 class ConfigError(ValueError):
     pass
@@ -88,6 +91,13 @@ class TtsConfig:
 
 
 @dataclass(frozen=True)
+class DialogueConfig:
+    system_prompt: str = DEFAULT_SYSTEM_PROMPT
+    sentence_max_chars: int = 100
+    sentence_queue_size: int = 2
+
+
+@dataclass(frozen=True)
 class MusicConfig:
     enabled: bool = True
     ffmpeg_path: str = "ffmpeg"
@@ -101,6 +111,30 @@ class MemoryConfig:
     database_path: str = "data/memory.db"
     recent_limit: int = 10
     summary_threshold: int = 12
+    context_limit: int = 64
+
+
+@dataclass(frozen=True)
+class LocalTestConfig:
+    host: str = "127.0.0.1"
+    port: int = 8006
+
+
+@dataclass(frozen=True)
+class McpConfig:
+    enabled: bool = False
+    url: str = "http://127.0.0.1:8006/mcp"
+    timeout_seconds: float = 20.0
+    max_rounds: int = 3
+
+
+@dataclass(frozen=True)
+class VisionConfig:
+    enabled: bool = False
+    base_url: str = ""
+    api_key: str = ""
+    model: str = "glm-4v-flash"
+    timeout_seconds: float = 60.0
 
 
 @dataclass(frozen=True)
@@ -115,13 +149,25 @@ class AppConfig:
     tts: TtsConfig = field(default_factory=TtsConfig)
     music: MusicConfig = field(default_factory=MusicConfig)
     memory: MemoryConfig = field(default_factory=MemoryConfig)
+    dialogue: DialogueConfig = field(default_factory=DialogueConfig)
+    local_test: LocalTestConfig = field(default_factory=LocalTestConfig)
+    mcp: McpConfig = field(default_factory=McpConfig)
+    vision: VisionConfig = field(default_factory=VisionConfig)
 
 
 ConfigSection = TypeVar("ConfigSection")
-_SECRET_FIELDS = {("llm", "api_key"), ("auth", "token"), ("admin_api", "token")}
+_SECRET_FIELDS = {("llm", "api_key"), ("vision", "api_key"), ("auth", "token"), ("admin_api", "token")}
+_ENV_ALIASES = {
+    ("admin_api", "token"): "VOICE_MEMORY_ADMIN_TOKEN",
+    ("music", "netease_api_url"): "NETEASE_API_URL",
+    ("music", "ffmpeg_path"): "FFMPEG",
+}
 
 
-def load_config(path: Path, environ: Mapping[str, str] = os.environ) -> AppConfig:
+def load_config(path: Path, environ: Mapping[str, str] | None = None) -> AppConfig:
+    inherited = dict(os.environ if environ is None else environ)
+    env_path = path.parent / ".env"
+    local = load_environment(env_path) if environ is None else read_environment(env_path)
     try:
         raw_config = yaml.safe_load(path.read_text(encoding="utf-8"))
     except OSError as error:
@@ -145,6 +191,10 @@ def load_config(path: Path, environ: Mapping[str, str] = os.environ) -> AppConfi
         "tts": TtsConfig,
         "music": MusicConfig,
         "memory": MemoryConfig,
+        "dialogue": DialogueConfig,
+        "local_test": LocalTestConfig,
+        "mcp": McpConfig,
+        "vision": VisionConfig,
     }
     unknown_sections = set(raw_config) - set(section_types)
     if unknown_sections:
@@ -154,14 +204,20 @@ def load_config(path: Path, environ: Mapping[str, str] = os.environ) -> AppConfi
         name: _load_section(name, section_type, raw_config.get(name, {}))
         for name, section_type in section_types.items()
     }
-    sections["llm"] = _override(sections["llm"], "api_key", environ.get("VOICE_LLM_API_KEY"))
-    sections["auth"] = _override(sections["auth"], "token", environ.get("VOICE_AUTH_TOKEN"))
-    sections["admin_api"] = _override(
-        sections["admin_api"], "token", environ.get("VOICE_MEMORY_ADMIN_TOKEN")
-    )
-    sections["music"] = _override(
-        sections["music"], "netease_api_url", environ.get("NETEASE_API_URL")
-    )
+    for source in (local, inherited):
+        for name, section in sections.items():
+            values = {item.name: getattr(section, item.name) for item in fields(section)}
+            for key, current in values.items():
+                variable = f"VOICE_{name}_{key}".upper()
+                raw = source.get(variable, source.get(_ENV_ALIASES.get((name, key), "")))
+                if raw is None:
+                    continue
+                try:
+                    value = raw if isinstance(current, str) else yaml.safe_load(raw)
+                except yaml.YAMLError:
+                    raise ConfigError(f"invalid environment value for {name}.{key}") from None
+                values[key] = _coerce_value(name, key, current, value)
+            sections[name] = type(section)(**values)
 
     config = AppConfig(**sections)
     _validate(config)
@@ -214,19 +270,12 @@ def _coerce_value(section: str, key: str, default: Any, value: Any) -> Any:
     raise ConfigError(f"unsupported configuration value: {label}")
 
 
-def _override(section: ConfigSection, key: str, value: str | None) -> ConfigSection:
-    if value is None:
-        return section
-    values = {item.name: getattr(section, item.name) for item in fields(section)}
-    values[key] = value
-    return type(section)(**values)
-
-
 def _validate(config: AppConfig) -> None:
     for name, value in (
         ("server.ws_port", config.server.ws_port),
         ("server.ota_port", config.server.ota_port),
         ("admin_api.port", config.admin_api.port),
+        ("local_test.port", config.local_test.port),
     ):
         if not 1 <= value <= 65_535:
             raise ConfigError(f"{name} must be between 1 and 65535")
@@ -259,9 +308,18 @@ def _validate(config: AppConfig) -> None:
         ("music.search_timeout_s", config.music.search_timeout_s),
         ("memory.recent_limit", config.memory.recent_limit),
         ("memory.summary_threshold", config.memory.summary_threshold),
+        ("memory.context_limit", config.memory.context_limit),
+        ("dialogue.sentence_max_chars", config.dialogue.sentence_max_chars),
+        ("dialogue.sentence_queue_size", config.dialogue.sentence_queue_size),
+        ("mcp.timeout_seconds", config.mcp.timeout_seconds),
+        ("mcp.max_rounds", config.mcp.max_rounds),
+        ("vision.timeout_seconds", config.vision.timeout_seconds),
     ):
         if value <= 0:
             raise ConfigError(f"{name} must be positive")
+
+    if config.memory.context_limit < max(config.memory.recent_limit, config.memory.summary_threshold):
+        raise ConfigError("memory.context_limit must cover recent_limit and summary_threshold")
 
     for name, value in (
         ("vad.speech_threshold", config.vad.speech_threshold),
@@ -283,6 +341,10 @@ def _validate(config: AppConfig) -> None:
         raise ConfigError("llm.base_url is required")
     if not config.llm.model:
         raise ConfigError("llm.model is required")
+    if config.mcp.enabled and not config.mcp.url:
+        raise ConfigError("mcp.url is required when MCP is enabled")
+    if config.vision.enabled and not config.vision.model:
+        raise ConfigError("vision.model is required when vision is enabled")
 
     if not _is_loopback(config.admin_api.host) and not config.admin_api.token.strip():
         raise ConfigError("memory admin token is required for a non-loopback admin host")

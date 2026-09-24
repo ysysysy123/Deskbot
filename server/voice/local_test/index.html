@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Deskbot · 语音本地测试</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <main>
+    <header class="page-header">
+      <div><div class="eyebrow">DESKBOT / VOICE LAB</div><h1>语音本地测试</h1><p>文字、麦克风与音频文件，共用真实设备的语音链路。</p></div>
+      <span id="connection-status" class="badge">未连接</span>
+    </header>
+
+    <section class="card environment" aria-labelledby="environment-title">
+      <div class="section-heading"><h2 id="environment-title">运行环境</h2><button id="refresh-health" class="quiet">刷新检查</button></div>
+      <div class="address-grid"><div><span class="label">设备 WebSocket</span><code id="ws-address">读取配置中…</code></div><div><span class="label">设备 OTA</span><code id="ota-address">—</code></div></div>
+      <div id="health-status" class="health-list" aria-live="polite"></div>
+      <details><summary id="readiness-summary">检查本机依赖…</summary><div id="readiness-details" class="readiness-list"></div></details>
+      <p class="hint">麦克风请通过 <code>http://127.0.0.1:8006</code> 或 <code>localhost</code> 打开。测试页与语音服务需要分别启动。</p>
+    </section>
+
+    <div class="workspace">
+      <section class="card controls" aria-labelledby="test-title">
+        <div class="section-heading"><h2 id="test-title">交互测试</h2><span class="small">输入 16 kHz · 播放 24 kHz</span></div>
+        <div class="connection-fields"><label>设备 ID<input id="device-id" value="browser-test" autocomplete="off" maxlength="128"></label><label>设备 Token <span class="optional">可选</span><input id="token" type="password" autocomplete="off" placeholder="留空使用服务端配置"></label></div>
+        <div class="button-row"><button id="connect" class="primary">连接语音服务</button><button id="disconnect" disabled>断开</button></div>
+        <div class="divider"></div>
+        <form id="text-form"><label for="text-input">文字对话</label><textarea id="text-input" rows="3" placeholder="输入一句话，直接测试对话与语音合成…" maxlength="4000"></textarea><div class="form-footer"><span class="hint">Ctrl / ⌘ + Enter 发送 · 跳过 ASR</span><button id="send-text" type="submit" disabled>发送文字</button></div></form>
+        <div class="divider"></div>
+        <label>麦克风 / 音频文件</label>
+        <div class="button-row"><button id="record" disabled>开始录音</button><button id="stop-record" disabled>结束并发送</button><button id="upload" disabled>上传 WAV</button><input id="audio-file" class="visually-hidden" type="file" accept=".wav,audio/wav,audio/x-wav"></div>
+        <div class="button-row continuous-row"><button id="continuous" disabled>开启持续对话（VAD）</button><button id="stop-continuous" disabled>停止持续对话</button><span class="hint">停顿后自动提交；回复中直接说话即可打断，麦克风保持开启</span></div>
+        <div class="recording-status"><span id="recording-dot" class="dot"></span><span id="recording-status">手动录音，最长 30 秒</span><meter id="audio-level" min="0" max="1" value="0" aria-label="麦克风音量"></meter></div>
+        <div class="interrupt-row"><button id="abort" class="danger" disabled>打断当前回复</button><span id="playback-status" class="hint" aria-live="polite">播放就绪</span></div>
+      </section>
+
+      <section class="card dialogue" aria-labelledby="dialogue-title">
+        <div class="section-heading"><h2 id="dialogue-title">对话记录</h2><button id="clear-dialogue" class="quiet">清空</button></div>
+        <div class="metrics"><div><span>识别返回</span><strong id="metric-stt">—</strong></div><div><span>首段音频</span><strong id="metric-audio">—</strong></div><div><span>接收音频</span><strong id="metric-duration">0.00 s</strong></div></div>
+        <div id="transcript" class="transcript" aria-live="polite"><p id="empty-transcript" class="empty-state">连接后开始一次对话。<br>这里会显示识别结果与回复文字。</p></div>
+        <p class="hint metric-note">耗时从文字发送或录音结束计算；首段音频为浏览器接收时间。</p>
+      </section>
+    </div>
+
+    <section class="card camera" aria-labelledby="camera-title">
+      <div class="section-heading"><h2 id="camera-title">摄像头测试</h2><span class="small" id="camera-capability">正在检查摄像头对话能力…</span></div>
+      <div class="camera-grid"><video id="camera-preview" autoplay muted playsinline></video><div class="camera-side"><div class="button-row"><button id="camera-start">打开摄像头</button><button id="camera-shot" disabled>抓取快照</button><button id="camera-stop" disabled>关闭摄像头</button></div><canvas id="camera-canvas" class="visually-hidden"></canvas><img id="camera-snapshot" alt="最近一次摄像头快照" hidden><p id="camera-status" class="hint">浏览器会先请求摄像头权限。</p></div></div>
+    </section>
+
+    <section class="card log-card" aria-labelledby="log-title"><div class="section-heading"><h2 id="log-title">事件日志 <span class="small">最近 400 条</span></h2><div class="button-row"><button id="clear-log" class="quiet">清空</button><button id="export-log" class="quiet">导出日志</button></div></div><pre id="event-log" role="log" aria-live="off"></pre></section>
+    <footer>本地测试 · 不保存 Token · 环境配置来自 .env / config.yaml</footer>
+  </main>
+</body>
+</html>

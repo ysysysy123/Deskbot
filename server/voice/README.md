@@ -2,11 +2,21 @@
 
 这是一个从零实现的单进程 Python Server，兼容小智 WebSocket 二进制协议 v1：ESP32 上传无容器 Opus，服务端按 `VAD → SenseVoice ASR → SQLite 记忆 → OpenAI 兼容 LLM → Edge TTS → Opus` 处理。默认部署目标是可信局域网，设备以 `Device-Id` 隔离记忆。
 
+语音服务的后续演进参考 [xiaozhi-esp32-server](https://github.com/xinnan-tech/xiaozhi-esp32-server) 的消息处理、Provider 分层和 TTS 队列设计。当前默认通过 LLM 对话，也可注入 `DialogueBackend` 接入 Agent。实现边界、配置和接入示例见 [语音架构与 Agent 接口](docs/voice-agent-integration.md)。
+
+当前本机测试入口、网络地址与启动步骤见 [本地语音测试](docs/local-testing.md)，与完整上游源码的功能差别见 [功能对比](docs/upstream-voice-comparison.md)。
+
 ## 1. 架构与明确不做的事情
 
 服务包含三个独立监听器：`8000` 是语音 WebSocket，`8003` 是 OTA 配置和健康检查，`8004` 是仅供本机使用的记忆管理 API。语音、模型、记忆分别通过 Provider 接口连接；SQLite 保存消息、摘要进度并预留 `relevant_memories`，首版不引入向量数据库。
 
-首版不支持协议 v2/v3、MQTT/UDP、固件包托管、MCP/IoT 工具、视觉/声纹、多租户、Web 管理台或内置的本地 TTS 引擎。Edge TTS 需要外网；后文说明如何替换为自己的全本地 `TTSProvider`。
+`listen.start` 需要 `mode`；设备发送的 `listen.stop` 和 `listen.detect` 可以省略它。带文本的 `detect` 直接进入对话和语音回复链路，不调用 ASR。对话文本接收与 TTS 合成通过有界句子队列并行；Edge TTS 当前仍按句收齐音频后转码。
+
+本地测试页支持摄像头 MCP，并通过 `CameraMcpDialogueBackend` 把打开、关闭和拍照工具接入对话。明确的开关、拍照和观察指令直接执行；观察请求会自动开启摄像头、等待画面并拍照。启用视觉配置后，JPEG 交给独立的 `glm-4v-flash` 分析，明确观察请求的视觉描述直接交给 TTS；其他对话仍可通过模型工具循环调用摄像头，并由文字模型组织回复。摄像头属于当前连接的浏览器；使用方法和 `.env` 配置见 [本地语音测试](docs/local-testing.md#摄像头)。`AppConfig` 默认关闭 MCP 和视觉能力，可在本机 `.env` 中启用。
+
+浏览器持续对话使用 Silero VAD 分轮，回复期间检测到连续约 180 ms 语音时自动打断，停止旧播放并接收新一句。采集时请求浏览器回声消除，效果依赖设备和浏览器，可戴耳机测试。此能力在本地测试桥实现；原生 ESP32 连接的回复期间拾音逻辑未改动。
+
+语音 WebSocket 仍不承载通用设备 MCP。服务仍不包含协议 v2/v3、MQTT/UDP、固件包托管、通用 IoT 工具、声纹、多租户、Web 管理台或内置本地 TTS。Edge TTS 需要外网；后文说明如何替换为自己的全本地 `TTSProvider`。
 
 ## 2. Windows Python 3.10、Opus DLL 与 FFmpeg
 
@@ -20,7 +30,7 @@ $env:VOICE_OPUS_DLL_DIR = "$env:CONDA_PREFIX\Library\bin"
 ffmpeg -version
 ```
 
-`VOICE_OPUS_DLL_DIR` 必须指向包含 `opus.dll` 的目录。每次打开新终端都要设置；若要写入当前用户环境，可执行：
+`VOICE_OPUS_DLL_DIR` 必须指向包含 `opus.dll` 的目录。推荐把实际目录写进 `.env`，启动服务时会在加载 Opus 前读取。也可以写入当前用户环境：
 
 ```powershell
 [Environment]::SetEnvironmentVariable("VOICE_OPUS_DLL_DIR", "$env:CONDA_PREFIX\Library\bin", "User")
@@ -36,11 +46,32 @@ FFmpeg 必须在 `PATH` 中，负责把 Edge TTS 或连通性测试的媒体转�
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 python -m pip install -r requirements-dev.txt
-$env:PYTHONPATH = (Resolve-Path .\src).Path
 Copy-Item config.example.yaml config.yaml
+Copy-Item .env.example .env
 ```
 
 生产环境可以不安装 `requirements-dev.txt`。不要把 `config.yaml`、`.env`、真实 Token 或 API Key 提交到 Git。
+
+### 使用 `.env`
+
+编辑与 `config.yaml` 同目录的 `.env`，可以直接填写模型、密钥和环境路径：
+
+```dotenv
+VOICE_LLM_BASE_URL=http://127.0.0.1:11434/v1
+VOICE_LLM_MODEL=qwen2.5
+VOICE_LLM_API_KEY=
+VOICE_TTS_VOICE=zh-CN-XiaoxiaoNeural
+# Windows 按实际位置填写：
+# VOICE_OPUS_DLL_DIR='D:\Miniconda3\envs\xiaozhi-voice\Library\bin'
+```
+
+优先级为 **系统环境变量 > `.env` > `config.yaml` > 默认值**。所有 YAML 配置都支持 `VOICE_<SECTION>_<FIELD>` 形式，例如 `VOICE_SERVER_WS_PORT=8000`、`VOICE_MUSIC_ENABLED=false`。列表使用 YAML/JSON 数组，例如 `VOICE_AUTH_ALLOWED_DEVICES='[device-a, device-b]'`。
+
+兼容原有的 `VOICE_MEMORY_ADMIN_TOKEN`、`NETEASE_API_URL` 和 `FFMPEG` 变量。`FFMPEG` 可指定主服务转码、ASR 检查和音乐网关使用的程序路径。`NETEASE_COOKIE` 也可直接放入 `.env`。独立音乐网关读取 `server/voice/.env`；三个 `check_*` 脚本读取所选配置文件同目录的 `.env`。
+
+值按字面读取，不展开 `$VAR` 或 `${VAR}`；路径请填写实际位置，Windows 路径建议使用单引号。没有 `.env` 时仍可沿用现有配置。修改后重新启动相应进程生效，`.env` 已被 Git 忽略。
+
+在本目录使用 `python run.py --config config.yaml` 启动，无需手动设置 `PYTHONPATH`。原有 `python -m voice_server` 入口仍可使用，但需要先让 Python 找到 `src`。
 
 ## 4. 本地 SenseVoice 与 Silero 模型路径
 
@@ -55,9 +86,19 @@ asr:
 
 Silero 目录内必须存在 `src/silero_vad/data/silero_vad.onnx`。SenseVoice 路径由 FunASR `AutoModel` 直接加载；先在联网机器下载完整模型，再复制整个模型目录，可以避免运行时下载。服务输入固定为 16 kHz、16-bit、单声道 PCM。
 
-## 5. OpenAI 兼容 LLM 与 Ollama
+## 5. OpenAI 兼容 LLM、智谱与 Ollama
 
-连接远程 OpenAI 兼容服务时，配置端点和模型，密钥只放环境变量：
+连接远程 OpenAI 兼容服务时，端点和模型可放 YAML 或 `.env`，密钥放 `.env` 或系统环境变量：
+
+本机当前使用智谱，`.env` 对应配置如下；`VOICE_LLM_API_KEY` 填自己的密钥：
+
+```dotenv
+VOICE_LLM_BASE_URL=https://open.bigmodel.cn/api/paas/v4
+VOICE_LLM_MODEL=glm-4-flash
+VOICE_LLM_API_KEY=
+```
+
+其他兼容服务示例：
 
 ```yaml
 llm:
@@ -101,8 +142,10 @@ Edge TTS 会访问微软语音服务。输出先经 FFmpeg 转为 24 kHz、16-bi
 ### ESP32 局域网歌曲播放
 
 固件保持官方 MQTT 对话服务不变。识别到“播放歌曲/我想听/来一首”等请求后，
-会访问电脑的 `http://192.168.10.110:8010/music?q=...`，由下面的轻量网关搜索
+会访问固件中配置的电脑音乐网关地址，由下面的轻量网关搜索
 网易云音乐并输出 Ogg/Opus 音频。电脑和设备必须连接同一个局域网。
+
+本机当前网关地址应为 `http://192.168.10.111:8010/music?q=...`；修改语音服务 `.env` 不会自动修改固件里已有的网关地址。
 
 先确认 `ffmpeg` 命令可以在 PowerShell 中运行：
 
@@ -132,12 +175,10 @@ Cookie 只会由服务端访问网易云，ESP32 不会接触账号信息。
 弹窗，请允许 Python 在专用网络通信；设备访问地址使用电脑局域网 IP，不要使用
 `127.0.0.1`。固件中的 `MUSIC_SERVER_URL` 可在 menuconfig 中修改。
 
-先确认 `config.yaml`、模型、Opus DLL 和 `PYTHONPATH`，然后启动：
+先确认 `config.yaml`、`.env`、模型和 Opus DLL，然后启动：
 
 ```powershell
-$env:PYTHONPATH = (Resolve-Path .\src).Path
-$env:VOICE_OPUS_DLL_DIR = "$env:CONDA_PREFIX\Library\bin"
-python -m voice_server --config config.yaml
+python run.py --config config.yaml
 ```
 
 另开终端检查：
@@ -234,6 +275,14 @@ python scripts/check_tts.py --config config.yaml "你好" --output data\check-tt
 ASR 脚本直接读取 16 kHz/16-bit/单声道 PCM WAV；其他 FFmpeg 可读媒体会先转为 16 kHz PCM。TTS 检查文件固定为 24 kHz/16-bit/单声道 WAV。
 
 普通自动化测试不调用真实模型、外网或收费 API：
+
+只运行测试时可安装 `requirements-test.txt`，无需安装 Torch、FunASR、ONNX Runtime 或下载模型；系统仍需安装 libopus。Linux 示例：
+
+```bash
+python3.11 -m venv .venv
+.venv/bin/python -m pip install -r requirements-test.txt
+.venv/bin/python -m pytest -q
+```
 
 ```powershell
 $env:VOICE_OPUS_DLL_DIR = "$env:CONDA_PREFIX\Library\bin"

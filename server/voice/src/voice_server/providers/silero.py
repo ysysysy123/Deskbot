@@ -16,6 +16,10 @@ class SileroVADProvider:
         self._speech_threshold = speech_threshold
         self._silence_threshold = silence_threshold
         self._session = inference_session or self._create_session(model_path)
+        self.reset()
+
+    def reset(self) -> None:
+        """Clear streaming history while retaining the loaded ONNX session."""
         self._buffer = np.empty(0, dtype=np.float32)
         self._context = np.zeros(64, dtype=np.float32)
         self._state = np.zeros((2, 1, 128), dtype=np.float32)

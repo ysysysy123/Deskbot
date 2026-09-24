@@ -1,4 +1,5 @@
 import asyncio
+import os
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -12,12 +13,12 @@ class FFmpegTranscoder:
 
     def __init__(
         self,
-        ffmpeg_path: str = "ffmpeg",
+        ffmpeg_path: str | None = None,
         *,
         sample_rate: int = 24_000,
         subprocess_factory: Callable[..., Awaitable[Any]] = asyncio.create_subprocess_exec,
     ) -> None:
-        self._ffmpeg_path = ffmpeg_path
+        self._ffmpeg_path = ffmpeg_path if ffmpeg_path is not None else os.environ.get("FFMPEG", "ffmpeg")
         self._sample_rate = sample_rate
         self._subprocess_factory = subprocess_factory
 
@@ -40,7 +41,12 @@ class FFmpegTranscoder:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout, stderr = await process.communicate(media)
+        try:
+            stdout, stderr = await process.communicate(media)
+        finally:
+            if process.returncode is None:
+                process.kill()
+                await process.communicate()
         if process.returncode:
             raise TranscodeError(stderr.decode(errors="replace"))
         return stdout

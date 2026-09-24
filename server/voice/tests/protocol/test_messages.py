@@ -92,6 +92,13 @@ def test_parses_listen_and_abort():
     assert parse_client_message('{"type":"abort"}') == AbortMessage()
 
 
+def test_parses_device_stop_and_detect_without_mode():
+    assert parse_client_message('{"type":"listen","state":"stop","session_id":"s1"}') == ListenMessage("stop", None, None)
+    assert parse_client_message('{"type":"listen","state":"detect","text":"你好小智"}') == ListenMessage("detect", None, "你好小智")
+    with pytest.raises(ProtocolError):
+        parse_client_message('{"type":"listen","state":"start"}')
+
+
 def test_parses_listen_with_optional_session_id():
     """Would fail if documented listen session metadata could not reach a session."""
     assert parse_client_message(

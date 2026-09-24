@@ -5,6 +5,22 @@ import pytest
 from voice_server.config import ConfigError, load_config
 
 
+def test_camera_and_vision_settings_load_from_dotenv(tmp_path: Path):
+    path = tmp_path / "config.yaml"
+    path.write_text("{}", encoding="utf-8")
+    (tmp_path / ".env").write_text(
+        "VOICE_MCP_ENABLED=true\nVOICE_MCP_URL=http://127.0.0.1:9006/mcp\n"
+        "VOICE_VISION_ENABLED=true\nVOICE_VISION_MODEL=glm-4v-flash\n"
+        "VOICE_VISION_API_KEY=test-vision-secret\n", encoding="utf-8",
+    )
+    config = load_config(path, {})
+    assert config.mcp.enabled is True
+    assert config.mcp.url == "http://127.0.0.1:9006/mcp"
+    assert config.vision.enabled is True
+    assert config.vision.model == "glm-4v-flash"
+    assert config.vision.api_key == "test-vision-secret"
+
+
 def test_environment_overrides_llm_secret(tmp_path: Path):
     path = tmp_path / "config.yaml"
     path.write_text("llm:\n  base_url: http://127.0.0.1:11434/v1\n  model: qwen2.5\n", encoding="utf-8")
@@ -91,6 +107,22 @@ def test_empty_llm_model_is_rejected(tmp_path: Path):
     path.write_text("llm:\n  model: ''\n", encoding="utf-8")
 
     with pytest.raises(ConfigError, match="llm.model"):
+        load_config(path, {})
+
+
+def test_dialogue_settings_and_memory_window_load_from_yaml(tmp_path):
+    path = tmp_path / "config.yaml"
+    path.write_text("dialogue:\n  system_prompt: 你是小桌\n  sentence_queue_size: 3\nmemory:\n  context_limit: 32\n", encoding="utf-8")
+    config = load_config(path, {})
+    assert config.dialogue.system_prompt == "你是小桌"
+    assert config.dialogue.sentence_queue_size == 3
+    assert config.memory.context_limit == 32
+
+
+def test_context_cap_cannot_drop_messages_before_summary_threshold(tmp_path):
+    path = tmp_path / "config.yaml"
+    path.write_text("memory:\n  context_limit: 10\n", encoding="utf-8")
+    with pytest.raises(ConfigError, match="context_limit"):
         load_config(path, {})
 
 

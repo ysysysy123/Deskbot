@@ -2,6 +2,7 @@ from tests.fakes import FakeASR, FakeCodec, FakeLLM, FakeMemory, FakeTTS, FakeTr
 from voice_server.memory.models import MemoryMessage
 from voice_server.protocol.messages import ListenMessage
 from voice_server.session import VoiceSession
+from voice_server.dialogue import DEFAULT_SYSTEM_PROMPT
 
 
 def make_session(**overrides):
@@ -86,7 +87,8 @@ async def test_memory_prompt_removes_only_the_recalled_current_user_row():
     await session.wait_until_idle()
 
     assert llm.messages == [[
-        {"role": "system", "content": "remember preferences"},
+        {"role": "system", "content": DEFAULT_SYSTEM_PROMPT},
+        {"role": "system", "content": "以下是此前对话的记忆摘要，供回答参考：\nremember preferences"},
         {"role": "user", "content": current},
         {"role": "user", "content": current},
     ]]

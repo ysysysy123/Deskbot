@@ -1,4 +1,5 @@
 import asyncio
+import sys
 
 import pytest
 
@@ -84,3 +85,41 @@ async def test_to_pcm_can_request_16_khz_for_asr_input():
 
     assert await transcoder.to_pcm(b"media") == b"pcm"
     assert calls[0][0][-2:] == ("16000", "pipe:1")
+
+
+async def test_cancelled_transcode_reaps_its_subprocess():
+    started = asyncio.Event()
+    process = None
+
+    async def factory(*_args, **kwargs):
+        nonlocal process
+        process = await asyncio.create_subprocess_exec(
+            sys.executable, "-c", "import sys,time; sys.stdin.buffer.read(); time.sleep(30)", **kwargs
+        )
+        started.set()
+        return process
+
+    task = asyncio.create_task(FFmpegTranscoder(subprocess_factory=factory).to_pcm(b"input"))
+    try:
+        await asyncio.wait_for(started.wait(), 2)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await asyncio.wait_for(task, 2)
+        assert process.returncode is not None
+    finally:
+        if process is not None and process.returncode is None:
+            process.kill()
+            await process.communicate()
+
+
+async def test_ffmpeg_environment_path_is_used_unless_explicitly_overridden(monkeypatch):
+    monkeypatch.setenv("FFMPEG", "/custom/ffmpeg")
+    commands = []
+
+    async def factory(*args, **kwargs):
+        commands.append(args[0])
+        return FakeProcess(b"pcm", b"", 0)
+
+    await FFmpegTranscoder(subprocess_factory=factory).to_pcm(b"media")
+    await FFmpegTranscoder("explicit-ffmpeg", subprocess_factory=factory).to_pcm(b"media")
+    assert commands == ["/custom/ffmpeg", "explicit-ffmpeg"]

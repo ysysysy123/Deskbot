@@ -170,3 +170,33 @@ async def test_clear_cannot_commit_between_summary_ownership_check_and_upsert(tm
     context = await store.recall("a", "", 10)
     assert context.summary == ""
     assert context.recent_messages == []
+
+
+async def test_turn_context_keeps_first_question_before_sixth_reply(tmp_path):
+    store = SQLiteMemoryProvider(tmp_path / "memory.db")
+    await store.initialize()
+    for index in range(11):
+        await store.remember("a", "s", "user" if index % 2 == 0 else "assistant", f"m{index}")
+    context = await store.recall_for_turn("a", "m10", 10)
+    assert context.summary == ""
+    assert [m.content for m in context.recent_messages] == [f"m{i}" for i in range(11)]
+    assert len((await store.recall("a", "", 10)).recent_messages) == 10
+    assert await store.load_summary_batch("a", 12) is None
+
+
+async def test_summary_backlog_is_batched_and_turn_context_is_bounded(tmp_path):
+    store = SQLiteMemoryProvider(tmp_path / "memory.db", context_limit=16)
+    await store.initialize()
+    for index in range(30):
+        await store.remember("a", "s", "user", f"m{index}")
+    batch = await store.load_summary_batch("a", 12)
+    assert [m.content for m in batch.messages] == [f"m{i}" for i in range(12)]
+    await store.save_summary("a", "first batch", batch.through_message_id)
+    next_batch = await store.load_summary_batch("a", 12)
+    assert [m.content for m in next_batch.messages] == [f"m{i}" for i in range(12, 24)]
+    context = await store.recall_for_turn("a", "", 10)
+    assert len(context.recent_messages) == 16
+    await store.save_summary("a", "second batch", next_batch.through_message_id)
+    context = await store.recall_for_turn("a", "", 10)
+    assert context.summary == "second batch"
+    assert [m.content for m in context.recent_messages] == [f"m{i}" for i in range(20, 30)]

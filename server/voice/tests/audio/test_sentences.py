@@ -24,3 +24,14 @@ def test_ignores_blank_completed_and_flushed_output():
 
     assert buffer.feed("  \n") == []
     assert buffer.flush() == []
+
+
+def test_long_unpunctuated_text_is_emitted_before_end_of_stream():
+    buffer = SentenceBuffer(max_chars=10)
+    assert buffer.feed("abcdefghijtail") == ["abcdefghij"]
+    assert buffer.flush() == ["tail"]
+
+
+def test_length_limit_also_applies_when_one_delta_contains_a_long_sentence():
+    buffer = SentenceBuffer(max_chars=10)
+    assert buffer.feed("abcdefghijklmnop。") == ["abcdefghij", "klmnop。"]

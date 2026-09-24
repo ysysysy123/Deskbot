@@ -22,6 +22,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from voice_server.music import MusicProvider
+from voice_server.environment import load_environment
 
 
 LOGGER = logging.getLogger("music-http")
@@ -89,6 +90,7 @@ class MusicHandler(BaseHTTPRequestHandler):
             return
 
         process: subprocess.Popen[bytes] | None = None
+        headers_sent = False
         try:
             LOGGER.info("searching music: %s", query)
             track = self.provider._search_sync(query)  # type: ignore[attr-defined]
@@ -112,6 +114,7 @@ class MusicHandler(BaseHTTPRequestHandler):
             self.send_header("Cache-Control", "no-store")
             self.send_header("Connection", "close")
             self.end_headers()
+            headers_sent = True
             assert process.stdout is not None
             while True:
                 chunk = process.stdout.read(16_384)
@@ -127,7 +130,7 @@ class MusicHandler(BaseHTTPRequestHandler):
             LOGGER.info("ESP32 disconnected while streaming %s", query)
         except Exception:
             LOGGER.exception("music request failed: %s", query)
-            if not self.wfile:
+            if not headers_sent:
                 self._send_text(500, "music service failed\n")
         finally:
             if process is not None and process.poll() is None:
@@ -147,6 +150,7 @@ class MusicHandler(BaseHTTPRequestHandler):
 
 
 def main() -> None:
+    load_environment(Path(__file__).resolve().parents[1] / ".env")
     parser = argparse.ArgumentParser(description="Deskbot LAN music gateway")
     parser.add_argument("--host", default=os.environ.get("MUSIC_HOST", "0.0.0.0"))
     parser.add_argument("--port", type=int, default=int(os.environ.get("MUSIC_PORT", "8010")))

@@ -40,6 +40,9 @@ class MemoryService:
     async def recall(self, device_id: str, query: str, recent_limit: int) -> MemoryContext:
         return await self._provider.recall(device_id, query, recent_limit)
 
+    async def recall_for_turn(self, device_id: str, query: str, recent_limit: int) -> MemoryContext:
+        return await self._provider.recall_for_turn(device_id, query, recent_limit)
+
     async def clear(self, device_id: str) -> None:
         lock = self._summary_locks.setdefault(device_id, asyncio.Lock())
         self._summary_generations[device_id] = self._summary_generations.get(device_id, 0) + 1

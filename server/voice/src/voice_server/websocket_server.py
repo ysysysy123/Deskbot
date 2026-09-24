@@ -10,8 +10,9 @@ from typing import Any
 from websockets.exceptions import ConnectionClosed
 
 from voice_server.config import AppConfig
+from voice_server.dialogue import DialogueBackend
 from voice_server.compat import wait_for
-from voice_server.protocol.messages import HelloMessage, ProtocolError, make_server_hello, parse_client_message
+from voice_server.protocol.messages import HelloMessage, PingMessage, ProtocolError, make_server_hello, parse_client_message
 from voice_server.session import SessionLimitError, VoiceSession
 
 
@@ -51,6 +52,7 @@ class VoiceWebSocketServer:
         codec_factory: Callable[[], Any],
         vad_factory: Callable[[], Any],
         music: Any | None = None,
+        dialogue_backend: DialogueBackend | None = None,
         session_factory: Callable[..., Any] = VoiceSession,
         id_factory: Callable[[], str] | None = None,
     ) -> None:
@@ -63,6 +65,7 @@ class VoiceWebSocketServer:
         self._codec_factory = codec_factory
         self._vad_factory = vad_factory
         self._music = music
+        self._dialogue_backend = dialogue_backend
         self._session_factory = session_factory
         self._id_factory = id_factory or (lambda: str(uuid.uuid4()))
         self._active_sessions: dict[int, Any] = {}
@@ -105,6 +108,9 @@ class VoiceWebSocketServer:
 
         session: Any | None = None
         try:
+            # Keep this feature opt-in.  It is used by the local browser bridge and
+            # is ignored by normal device clients.
+            local_test_turn_events = hello.local_test_turn_events
             transport = WebSocketTransport(connection)
             session_id = self._id_factory()
             session = self._session_factory(
@@ -128,10 +134,15 @@ class VoiceWebSocketServer:
                 error_text=self.config.tts.error_text,
                 music=self._music,
                 music_search_timeout_s=self.config.music.search_timeout_s,
+                dialogue_backend=self._dialogue_backend,
+                system_prompt=self.config.dialogue.system_prompt,
+                sentence_max_chars=self.config.dialogue.sentence_max_chars,
+                sentence_queue_size=self.config.dialogue.sentence_queue_size,
+                local_test_turn_events=local_test_turn_events,
             )
             self._active_sessions[id(session)] = session
-            await transport.send_json(make_server_hello(session_id))
-            await self._serve_messages(connection, session)
+            await transport.send_json(make_server_hello(session_id, local_test_turn_events=local_test_turn_events))
+            await self._serve_messages(connection, session, transport)
         except _CloseConnection as error:
             await connection.close(code=error.code)
         except ConnectionClosed:
@@ -173,7 +184,8 @@ class VoiceWebSocketServer:
             raise _CloseConnection(1002)
         return message
 
-    async def _serve_messages(self, connection: Any, session: Any) -> None:
+    async def _serve_messages(self, connection: Any, session: Any, transport: WebSocketTransport | None = None) -> None:
+        transport = transport or WebSocketTransport(connection)
         while True:
             try:
                 raw = await wait_for(
@@ -192,6 +204,12 @@ class VoiceWebSocketServer:
             message = self._parse_text(raw)
             if isinstance(message, HelloMessage):
                 raise _CloseConnection(1002)
+            if isinstance(message, PingMessage):
+                pong = {"type": "pong"}
+                if message.nonce is not None:
+                    pong["nonce"] = message.nonce
+                await transport.send_json(pong)
+                continue
             try:
                 await session.handle_message(message)
             except SessionLimitError as error:

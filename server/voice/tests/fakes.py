@@ -233,6 +233,9 @@ class FakeMemory:
         self.recall_calls.append((device_id, query, recent_limit))
         return self._context
 
+    async def recall_for_turn(self, device_id: str, query: str, recent_limit: int) -> MemoryContext:
+        return await self.recall(device_id, query, recent_limit)
+
     async def clear(self, device_id: str) -> None:
         self.clear_calls.append(device_id)
 

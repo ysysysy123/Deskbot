@@ -1,14 +1,18 @@
 import asyncio
+import logging
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
 from voice_server.memory.models import MemoryContext, MemoryMessage, SummaryBatch
 
+_LOGGER = logging.getLogger(__name__)
+
 
 class SQLiteMemoryProvider:
-    def __init__(self, path: Path | str) -> None:
+    def __init__(self, path: Path | str, *, context_limit: int = 64) -> None:
         self._path = Path(path)
+        self._context_limit = context_limit
 
     async def initialize(self) -> None:
         await asyncio.to_thread(self._initialize)
@@ -29,6 +33,10 @@ class SQLiteMemoryProvider:
         if recent_limit < 0:
             raise ValueError("recent_limit must not be negative")
         return await asyncio.to_thread(self._recall, device_id, recent_limit)
+
+    async def recall_for_turn(self, device_id: str, query: str, recent_limit: int) -> MemoryContext:
+        """Include pending summary messages without changing admin pagination."""
+        return await asyncio.to_thread(self._recall, device_id, recent_limit, True)
 
     async def clear(self, device_id: str) -> None:
         _require_nonblank("device_id", device_id)
@@ -98,12 +106,23 @@ class SQLiteMemoryProvider:
         finally:
             connection.close()
 
-    def _recall(self, device_id: str, recent_limit: int) -> MemoryContext:
+    def _recall(self, device_id: str, recent_limit: int, for_turn: bool = False) -> MemoryContext:
         connection = self._connect()
         try:
+            connection.execute("BEGIN")
             summary_row = connection.execute(
-                "SELECT summary FROM memory_summaries WHERE device_id = ?", (device_id,)
+                "SELECT summary, summarized_through_message_id FROM memory_summaries WHERE device_id = ?", (device_id,)
             ).fetchone()
+            limit = recent_limit
+            if for_turn:
+                checkpoint = 0 if summary_row is None else summary_row[1]
+                pending = connection.execute(
+                    "SELECT COUNT(*) FROM memory_messages WHERE device_id = ? AND id > ?",
+                    (device_id, checkpoint),
+                ).fetchone()[0]
+                limit = min(max(recent_limit, pending), self._context_limit)
+                if pending > self._context_limit:
+                    _LOGGER.warning("Unsummarized context truncated: device=%s messages=%s limit=%s", device_id, pending, self._context_limit)
             rows = connection.execute(
                 """
                 SELECT id, device_id, session_id, role, content, created_at
@@ -112,7 +131,7 @@ class SQLiteMemoryProvider:
                 ORDER BY id DESC
                 LIMIT ?
                 """,
-                (device_id, recent_limit),
+                (device_id, limit),
             ).fetchall()
         finally:
             connection.close()
@@ -148,8 +167,9 @@ class SQLiteMemoryProvider:
                 FROM memory_messages
                 WHERE device_id = ? AND id > ?
                 ORDER BY id ASC
+                LIMIT ?
                 """,
-                (device_id, checkpoint),
+                (device_id, checkpoint, threshold),
             ).fetchall()
         finally:
             connection.close()
