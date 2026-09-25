@@ -1,19 +1,20 @@
-"""Command line entry point for the Deskbot static vision service."""
+"""Command line entry point for the Deskbot vision service."""
 
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
-from .analyzer import StaticImageAnalyzer, VisionError
-from .config import load_config
-from .zhipu_adapter import ZhipuVisionAnalyzer
+from .analyzer import VisionError
+from .camera import capture_camera_image, scan_camera_indexes
+from .providers import build_analyzer
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Analyze one static image.")
-    parser.add_argument("image", help="Path to the image file.")
+    parser.add_argument("image", nargs="?", help="Path to the image file.")
     parser.add_argument(
         "--prompt",
         default="Describe the image for a desktop companion robot.",
@@ -40,6 +41,21 @@ def build_parser() -> argparse.ArgumentParser:
         default=5.0,
         help="Seconds to wait between cloud-provider retries.",
     )
+    parser.add_argument(
+        "--capture-camera",
+        help="Capture one PC camera frame to this image path before analysis.",
+    )
+    parser.add_argument("--camera-index", type=int, default=0, help="PC camera index for --capture-camera.")
+    parser.add_argument(
+        "--camera-warmup-frames",
+        type=int,
+        default=5,
+        help="Frames to discard before saving the captured frame.",
+    )
+    parser.add_argument("--camera-width", type=int, help="Optional requested camera frame width.")
+    parser.add_argument("--camera-height", type=int, help="Optional requested camera frame height.")
+    parser.add_argument("--list-cameras", action="store_true", help="List PC camera indexes and exit.")
+    parser.add_argument("--camera-scan-max", type=int, default=5, help="Highest camera index for --list-cameras.")
     return parser
 
 
@@ -48,8 +64,16 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
-        analyzer = _build_analyzer(args.provider, args.env_file, args.retries, args.retry_delay)
-        result = analyzer.analyze(args.image, prompt=args.prompt)
+        if args.list_cameras:
+            payload = {
+                "schema_version": "deskbot.vision.camera_scan.v0",
+                "cameras": scan_camera_indexes(args.camera_scan_max),
+            }
+            print(json.dumps(payload, ensure_ascii=False, indent=2 if args.pretty else None))
+            return 0
+        image_path = _image_path_from_args(args, parser)
+        analyzer = build_analyzer(args.provider, args.env_file, args.retries, args.retry_delay)
+        result = analyzer.analyze(str(image_path), prompt=args.prompt)
     except VisionError as exc:
         print(f"vision error: {exc}", file=sys.stderr)
         return 2
@@ -64,17 +88,18 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-def _build_analyzer(provider: str, env_file: str | None, retries: int = 0, retry_delay: float = 5.0):
-    if provider == "local":
-        return StaticImageAnalyzer()
-
-    config = load_config(env_file)
-    selected_provider = config.provider if provider == "auto" else provider
-    if selected_provider == "local":
-        return StaticImageAnalyzer()
-    if selected_provider == "zhipu":
-        return ZhipuVisionAnalyzer.from_config(config, retries=retries, retry_delay_seconds=retry_delay)
-    raise VisionError(f"Unsupported vision provider: {selected_provider}")
+def _image_path_from_args(args: argparse.Namespace, parser: argparse.ArgumentParser) -> Path:
+    if args.capture_camera:
+        return capture_camera_image(
+            args.capture_camera,
+            camera_index=args.camera_index,
+            warmup_frames=args.camera_warmup_frames,
+            width=args.camera_width,
+            height=args.camera_height,
+        )
+    if args.image:
+        return Path(args.image)
+    parser.error("image is required unless --capture-camera is provided.")
 
 
 if __name__ == "__main__":

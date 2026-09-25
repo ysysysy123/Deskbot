@@ -24,6 +24,10 @@
 
 当前 schema 只冻结信封，不冻结具体命令集合。命令白名单在第一次固件/服务端联合评审后单独加入。
 
+## 视觉事件
+
+视觉服务保留自己的 HTTP 响应契约，同时将结果包装成共享信封中的 `type: "vision.event"`。调度层读取 `payload.name`，其值为 `vision.analysis.completed` 或 `vision.analysis.failed`；它可更新显示状态或请求另一个已经白名单化的动作，但视觉服务绝不直接驱动电机。
+
 ## 兼容规则
 
 - 接收端必须拒绝不支持的主版本。
@@ -35,4 +39,5 @@
 
 - [设备命令](examples/device-command.json)
 - [设备事件](examples/device-event.json)
+- [视觉分析事件](examples/vision-analysis-event.json)
 - [JSON Schema](schema/envelope.schema.json)

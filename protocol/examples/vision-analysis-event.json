@@ -1,0 +1,20 @@
+{
+  "version": "0.1",
+  "type": "vision.event",
+  "id": "vision-pc-test-001",
+  "timestamp_ms": 1785945600450,
+  "correlation_id": "pc-test-001",
+  "payload": {
+    "name": "vision.analysis.completed",
+    "source": "vision-service",
+    "target": "dispatcher",
+    "device_id": "atk-device-1",
+    "session_id": "local-demo",
+    "result": {
+      "schema_version": "deskbot.vision.result.v0",
+      "adapter": "local-static-image-v0",
+      "summary": "Accepted JPEG image, 640x480, landscape",
+      "tags": ["jpeg", "landscape"]
+    }
+  }
+}
