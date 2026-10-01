@@ -57,6 +57,7 @@ list(APPEND SOURCES
     "boards/common/backlight.cc"
     "boards/common/button.cc"
     "boards/common/i2c_device.cc"
+    "boards/common/pca9685.cc"
     "boards/common/knob.cc"
     "boards/common/power_save_timer.cc"
     "boards/common/press_to_talk_mcp_tool.cc"

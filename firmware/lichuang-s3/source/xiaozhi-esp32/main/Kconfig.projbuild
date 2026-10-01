@@ -631,6 +631,15 @@ choice BOARD_TYPE
         depends on IDF_TARGET_ESP32S3
 endchoice
 
+config DESKBOT_MOTION_PCA9685
+    bool "Enable Deskbot PCA9685 dual-wheel motion"
+    default n
+    depends on BOARD_TYPE_LICHUANG_DEV_S3
+    help
+        Enable the optional PCA9685 continuous-rotation dual-wheel controller.
+        Keep disabled until the PCA9685 power rail, I2C address, and servo
+        neutral pulses have been verified on the physical hardware.
+
 choice XIAOZHI_NETWORK_TYPE
     prompt "Network Type"
     depends on BOARD_TYPE_WAVESHARE_ESP32_P4_NANO

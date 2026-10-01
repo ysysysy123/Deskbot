@@ -9,6 +9,10 @@
 #include "esp32_camera.h"
 #include "mcp_server.h"
 #include "press_to_talk_mcp_tool.h"
+#if CONFIG_DESKBOT_MOTION_PCA9685
+#include "dual_wheel_controller.h"
+#include "servo_control_ui.h"
+#endif
 
 #include <esp_log.h>
 #include <esp_lcd_panel_vendor.h>
@@ -17,6 +21,7 @@
 #include <esp_lcd_touch_ft5x06.h>
 #include <esp_lvgl_port.h>
 #include <lvgl.h>
+#include <memory>
 
 #define TAG "LichuangDevBoard"
 
@@ -59,6 +64,29 @@ public:
     }
 };
 
+#if CONFIG_DESKBOT_MOTION_PCA9685
+class LichuangLcdDisplay : public SpiLcdDisplay {
+private:
+    DualWheelController* motion_controller_ = nullptr;
+    std::unique_ptr<ServoControlUi> servo_ui_;
+
+public:
+    LichuangLcdDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_handle_t panel,
+                       int width, int height, int offset_x, int offset_y, bool mirror_x,
+                       bool mirror_y, bool swap_xy, DualWheelController* motion)
+        : SpiLcdDisplay(panel_io, panel, width, height, offset_x, offset_y, mirror_x, mirror_y, swap_xy),
+          motion_controller_(motion) {}
+
+    virtual void SetupUI() override {
+        SpiLcdDisplay::SetupUI();
+        if (motion_controller_ != nullptr) {
+            servo_ui_ = std::make_unique<ServoControlUi>(motion_controller_);
+            servo_ui_->SetupUI();
+        }
+    }
+};
+#endif
+
 class LichuangDevBoard : public WifiBoard {
 private:
     i2c_master_bus_handle_t i2c_bus_;
@@ -68,6 +96,9 @@ private:
     Pca9557* pca9557_;
     Esp32Camera* camera_;
     PressToTalkMcpTool* press_to_talk_tool_ = nullptr;
+#if CONFIG_DESKBOT_MOTION_PCA9685
+    std::unique_ptr<DualWheelController> motion_controller_;
+#endif
 
     void InitializeI2c() {
         // Initialize I2C peripheral
@@ -169,6 +200,10 @@ private:
 
 #if CONFIG_USE_EMOTE_MESSAGE_STYLE
         display_ = new emote::EmoteDisplay(panel, panel_io, DISPLAY_WIDTH, DISPLAY_HEIGHT);
+#elif CONFIG_DESKBOT_MOTION_PCA9685
+        display_ = new LichuangLcdDisplay(panel_io, panel,
+            DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_OFFSET_X, DISPLAY_OFFSET_Y, DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y, DISPLAY_SWAP_XY,
+            motion_controller_.get());
 #else
         display_ = new SpiLcdDisplay(panel_io, panel,
             DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_OFFSET_X, DISPLAY_OFFSET_Y, DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y, DISPLAY_SWAP_XY);
@@ -264,6 +299,16 @@ private:
         camera_ = new Esp32Camera(config);
     }
 
+#if CONFIG_DESKBOT_MOTION_PCA9685
+    void InitializeMotion() {
+        motion_controller_ = DualWheelController::Create(i2c_bus_);
+        if (motion_controller_ == nullptr || !motion_controller_->Initialize()) {
+            motion_controller_.reset();
+            ESP_LOGW(TAG, "PCA9685 motion disabled because the controller is unavailable");
+        }
+    }
+#endif
+
     void InitializeTools() {
         auto &mcp_server = McpServer::GetInstance();
         mcp_server.AddTool("self.system.reconfigure_wifi",
@@ -277,11 +322,19 @@ private:
         // Allow switching between press-to-talk (长按说话) and click-to-talk (单击唤醒)
         press_to_talk_tool_ = new PressToTalkMcpTool();
         press_to_talk_tool_->Initialize();
+#if CONFIG_DESKBOT_MOTION_PCA9685
+        if (motion_controller_) {
+            motion_controller_->RegisterMcpTools(mcp_server);
+        }
+#endif
     }
 
 public:
     LichuangDevBoard() : boot_button_(BOOT_BUTTON_GPIO) {
         InitializeI2c();
+#if CONFIG_DESKBOT_MOTION_PCA9685
+        InitializeMotion();
+#endif
         InitializeSpi();
         InitializeSt7789Display();
         InitializeTouch();
