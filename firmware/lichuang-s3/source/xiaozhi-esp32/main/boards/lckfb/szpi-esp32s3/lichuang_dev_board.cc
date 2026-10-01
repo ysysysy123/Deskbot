@@ -9,6 +9,7 @@
 #include "esp32_camera.h"
 #include "mcp_server.h"
 #include "press_to_talk_mcp_tool.h"
+#include "qmi8658.h"
 #if CONFIG_DESKBOT_MOTION_PCA9685
 #include "dual_wheel_controller.h"
 #include "servo_control_ui.h"
@@ -68,21 +69,22 @@ public:
 class LichuangLcdDisplay : public SpiLcdDisplay {
 private:
     DualWheelController* motion_controller_ = nullptr;
+    Qmi8658* imu_ = nullptr;
+    Esp32Camera* camera_ = nullptr;
     std::unique_ptr<ServoControlUi> servo_ui_;
 
 public:
     LichuangLcdDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_handle_t panel,
                        int width, int height, int offset_x, int offset_y, bool mirror_x,
-                       bool mirror_y, bool swap_xy, DualWheelController* motion)
+                       bool mirror_y, bool swap_xy, DualWheelController* motion,
+                       Qmi8658* imu, Esp32Camera* camera)
         : SpiLcdDisplay(panel_io, panel, width, height, offset_x, offset_y, mirror_x, mirror_y, swap_xy),
-          motion_controller_(motion) {}
+          motion_controller_(motion), imu_(imu), camera_(camera) {}
 
     virtual void SetupUI() override {
         SpiLcdDisplay::SetupUI();
-        if (motion_controller_ != nullptr) {
-            servo_ui_ = std::make_unique<ServoControlUi>(motion_controller_);
-            servo_ui_->SetupUI();
-        }
+        servo_ui_ = std::make_unique<ServoControlUi>(motion_controller_, imu_, camera_);
+        servo_ui_->SetupUI();
     }
 };
 #endif
@@ -96,6 +98,7 @@ private:
     Pca9557* pca9557_;
     Esp32Camera* camera_;
     PressToTalkMcpTool* press_to_talk_tool_ = nullptr;
+    std::unique_ptr<Qmi8658> imu_;
 #if CONFIG_DESKBOT_MOTION_PCA9685
     std::unique_ptr<DualWheelController> motion_controller_;
 #endif
@@ -118,6 +121,18 @@ private:
 
         // Initialize PCA9557
         pca9557_ = new Pca9557(i2c_bus_, 0x19);
+    }
+
+    void InitializeImu() {
+        if (Qmi8658::Probe(i2c_bus_, Qmi8658::kDefaultAddress) == ESP_OK) {
+            imu_ = std::make_unique<Qmi8658>(i2c_bus_, Qmi8658::kDefaultAddress);
+        } else if (Qmi8658::Probe(i2c_bus_, Qmi8658::kAltAddress) == ESP_OK) {
+            imu_ = std::make_unique<Qmi8658>(i2c_bus_, Qmi8658::kAltAddress);
+        }
+        if (imu_ != nullptr && imu_->Initialize() != ESP_OK) {
+            imu_.reset();
+            ESP_LOGW(TAG, "QMI8658 probed but failed to initialize");
+        }
     }
 
     void InitializeSpi() {
@@ -203,7 +218,7 @@ private:
 #elif CONFIG_DESKBOT_MOTION_PCA9685
         display_ = new LichuangLcdDisplay(panel_io, panel,
             DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_OFFSET_X, DISPLAY_OFFSET_Y, DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y, DISPLAY_SWAP_XY,
-            motion_controller_.get());
+            motion_controller_.get(), imu_.get(), camera_);
 #else
         display_ = new SpiLcdDisplay(panel_io, panel,
             DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_OFFSET_X, DISPLAY_OFFSET_Y, DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y, DISPLAY_SWAP_XY);
@@ -327,19 +342,34 @@ private:
             motion_controller_->RegisterMcpTools(mcp_server);
         }
 #endif
+        if (imu_) {
+            mcp_server.AddTool("self.sensor.get_imu", "Read live 6-axis IMU (accel in g, gyro in dps, tilt pitch/roll)",
+                PropertyList(), [this](const PropertyList&) -> ToolResult {
+                    ImuData d;
+                    if (imu_->ReadData(d) != ESP_OK) {
+                        return std::unexpected("Failed to read IMU data");
+                    }
+                    char buf[128];
+                    snprintf(buf, sizeof(buf),
+                        "{\"ax\": %.2f, \"ay\": %.2f, \"az\": %.2f, \"gx\": %.1f, \"gy\": %.1f, \"gz\": %.1f, \"pitch\": %.1f, \"roll\": %.1f}",
+                        d.ax, d.ay, d.az, d.gx, d.gy, d.gz, d.pitch, d.roll);
+                    return std::string(buf);
+                });
+        }
     }
 
 public:
     LichuangDevBoard() : boot_button_(BOOT_BUTTON_GPIO) {
         InitializeI2c();
+        InitializeImu();
 #if CONFIG_DESKBOT_MOTION_PCA9685
         InitializeMotion();
 #endif
+        InitializeCamera();
         InitializeSpi();
         InitializeSt7789Display();
         InitializeTouch();
         InitializeButtons();
-        InitializeCamera();
         InitializeTools();
 
         GetBacklight()->RestoreBrightness();

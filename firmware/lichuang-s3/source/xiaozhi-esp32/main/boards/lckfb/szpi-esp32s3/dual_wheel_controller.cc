@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <sstream>
 
 #include <esp_log.h>
 
@@ -131,8 +132,16 @@ esp_err_t DualWheelController::SetWheelSpeeds(int left_percent, int right_percen
     return SetWheelSpeed(kRightChannel, right_percent, right_reverse_);
 }
 
-esp_err_t DualWheelController::SetWheelSpeedsForDuration(int left_percent, int right_percent,
-                                                          int duration_ms) {
+esp_err_t DualWheelController::Drive(int linear_speed, int angular_turn) {
+    linear_speed = std::clamp(linear_speed, -100, 100);
+    angular_turn = std::clamp(angular_turn, -100, 100);
+    int left = std::clamp(linear_speed + angular_turn, -100, 100);
+    int right = std::clamp(linear_speed - angular_turn, -100, 100);
+    return SetWheelSpeeds(left, right);
+}
+
+esp_err_t DualWheelController::DriveForDuration(int left_percent, int right_percent,
+                                                 int duration_ms) {
     if (duration_ms <= 0 || duration_ms > kMaxDriveDurationMs) {
         return ESP_ERR_INVALID_ARG;
     }
@@ -149,6 +158,11 @@ esp_err_t DualWheelController::SetWheelSpeedsForDuration(int left_percent, int r
         Stop();
     }
     return result;
+}
+
+esp_err_t DualWheelController::TurnForDuration(int angular_turn, int duration_ms) {
+    angular_turn = std::clamp(angular_turn, -100, 100);
+    return DriveForDuration(angular_turn, -angular_turn, duration_ms);
 }
 
 esp_err_t DualWheelController::Stop() {
@@ -170,27 +184,54 @@ esp_err_t DualWheelController::Stop() {
 void DualWheelController::RegisterMcpTools(McpServer& server) {
     server.AddTool(
         "self.motion.drive",
-        "Drive the two continuous-rotation wheels for a limited duration. Values are -100..100.",
-        PropertyList({Property("left", kPropertyTypeInteger, -100, 100),
-                      Property("right", kPropertyTypeInteger, -100, 100),
+        "Drive Deskbot with linear speed (-100..100) and turn angle (-100..100) for duration_ms.",
+        PropertyList({Property("linear", kPropertyTypeInteger, 0, -100, 100),
+                      Property("angular", kPropertyTypeInteger, 0, -100, 100),
                       Property("duration_ms", kPropertyTypeInteger, kDefaultDriveDurationMs, 1,
                                kMaxDriveDurationMs)}),
         [this](const PropertyList& properties) -> ToolResult {
-            const int left = properties["left"].value<int>();
-            const int right = properties["right"].value<int>();
+            const int linear = properties["linear"].value<int>();
+            const int angular = properties["angular"].value<int>();
             const int duration_ms = properties["duration_ms"].value<int>();
-            if (esp_err_t result = SetWheelSpeedsForDuration(left, right, duration_ms);
+            int left = std::clamp(linear + angular, -100, 100);
+            int right = std::clamp(linear - angular, -100, 100);
+            if (esp_err_t result = DriveForDuration(left, right, duration_ms);
                 result != ESP_OK) {
                 return std::unexpected(esp_err_to_name(result));
             }
             return true;
         });
 
-    server.AddTool("self.motion.stop", "Stop both wheels immediately", PropertyList(),
+    server.AddTool(
+        "self.motion.turn",
+        "Turn Deskbot in place with angular speed (-100..100, positive=right, negative=left).",
+        PropertyList({Property("angular", kPropertyTypeInteger, 25, -100, 100),
+                      Property("duration_ms", kPropertyTypeInteger, 500, 1, kMaxDriveDurationMs)}),
+        [this](const PropertyList& properties) -> ToolResult {
+            const int angular = properties["angular"].value<int>();
+            const int duration_ms = properties["duration_ms"].value<int>();
+            if (esp_err_t result = TurnForDuration(angular, duration_ms); result != ESP_OK) {
+                return std::unexpected(esp_err_to_name(result));
+            }
+            return true;
+        });
+
+    server.AddTool("self.motion.stop", "Stop all wheels immediately", PropertyList(),
                    [this](const PropertyList&) -> ToolResult {
                        if (esp_err_t result = Stop(); result != ESP_OK) {
                            return std::unexpected(esp_err_to_name(result));
                        }
                        return true;
+                   });
+
+    server.AddTool("self.motion.get_status", "Get live hardware pulse and speed for both wheels",
+                   PropertyList(), [this](const PropertyList&) -> ToolResult {
+                       std::ostringstream ss;
+                       ss << "{\"left_speed\": " << GetLeftSpeed()
+                          << ", \"right_speed\": " << GetRightSpeed()
+                          << ", \"left_pulse_us\": " << GetLeftPulseUs()
+                          << ", \"right_pulse_us\": " << GetRightPulseUs()
+                          << ", \"neutral_us\": " << GetNeutralPulseUs() << "}";
+                       return ss.str();
                    });
 }

@@ -8,6 +8,8 @@
 #include <esp_err.h>
 #include <esp_timer.h>
 
+#include "motion_controller.h"
+
 class McpServer;
 class Pca9685;
 
@@ -15,8 +17,9 @@ class Pca9685;
  * Two-channel controller for continuous-rotation servos connected to PCA9685.
  * Speed is expressed as a signed percentage: -100..100.
  * Incorporates measured deadband compensation ([1510..1610us], neutral = 1560us).
+ * Implements the abstract MotionController interface.
  */
-class DualWheelController final {
+class DualWheelController final : public MotionController {
 public:
     static constexpr uint8_t kDefaultAddress = 0x40;
     static constexpr uint8_t kLeftChannel = 0;
@@ -24,9 +27,9 @@ public:
     static constexpr uint16_t kPwmFrequencyHz = 50;
 
     // Measured hardware characteristics: deadband is [1510us, 1610us]
-    static constexpr uint16_t kNeutralPulseUs = 1560;  // Center of [1510, 1610]
-    static constexpr uint16_t kDeadbandHalfWidthUs = 50; // (1610 - 1510) / 2
-    static constexpr uint16_t kActiveSpeedSpanUs = 400;  // 100% speed span outside deadband
+    static constexpr uint16_t kNeutralPulseUs = 1560;       // Center of [1510, 1610]
+    static constexpr uint16_t kDeadbandHalfWidthUs = 50;    // (1610 - 1510) / 2
+    static constexpr uint16_t kActiveSpeedSpanUs = 400;     // 100% speed span outside deadband
 
     static constexpr int kDefaultDriveDurationMs = 500;
     static constexpr int kMaxDriveDurationMs = 5000;
@@ -34,22 +37,29 @@ public:
     static std::unique_ptr<DualWheelController> Create(i2c_master_bus_handle_t i2c_bus,
                                                         uint8_t address = kDefaultAddress);
 
-    ~DualWheelController();
+    ~DualWheelController() override;
 
     bool Initialize();
-    esp_err_t SetWheelSpeeds(int left_percent, int right_percent);
-    esp_err_t SetWheelSpeedsForDuration(int left_percent, int right_percent,
-                                         int duration_ms);
-    esp_err_t SetLeftSpeed(int percent);
-    esp_err_t SetRightSpeed(int percent);
 
-    int GetLeftSpeed() const { return current_left_speed_; }
-    int GetRightSpeed() const { return current_right_speed_; }
-    uint16_t GetLeftPulseUs() const { return current_left_pulse_us_; }
-    uint16_t GetRightPulseUs() const { return current_right_pulse_us_; }
+    // MotionController interface implementation
+    esp_err_t SetWheelSpeeds(int left_percent, int right_percent) override;
+    esp_err_t SetLeftSpeed(int percent) override;
+    esp_err_t SetRightSpeed(int percent) override;
 
-    esp_err_t Stop();
-    void RegisterMcpTools(McpServer& server);
+    esp_err_t Drive(int linear_speed, int angular_turn) override;
+    esp_err_t DriveForDuration(int left_percent, int right_percent, int duration_ms) override;
+    esp_err_t TurnForDuration(int angular_turn, int duration_ms) override;
+
+    esp_err_t Stop() override;
+
+    int GetLeftSpeed() const override { return current_left_speed_; }
+    int GetRightSpeed() const override { return current_right_speed_; }
+    uint16_t GetLeftPulseUs() const override { return current_left_pulse_us_; }
+    uint16_t GetRightPulseUs() const override { return current_right_pulse_us_; }
+    uint16_t GetNeutralPulseUs() const override { return kNeutralPulseUs; }
+    uint16_t GetDeadbandUs() const override { return kDeadbandHalfWidthUs; }
+
+    void RegisterMcpTools(McpServer& server) override;
 
 private:
     DualWheelController(i2c_master_bus_handle_t i2c_bus, uint8_t address);
