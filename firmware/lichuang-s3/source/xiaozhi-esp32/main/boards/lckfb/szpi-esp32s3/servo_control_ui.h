@@ -28,6 +28,7 @@ public:
 
     void ShowCameraPanel();
     void HideCameraPanel();
+    bool IsCamPanelVisible() const { return cam_panel_visible_; }
 
 private:
     void CreateEntranceButtons();
@@ -81,6 +82,8 @@ private:
     lv_obj_t* img_preview_ = nullptr;
     lv_obj_t* label_cam_info_ = nullptr;
     bool cam_panel_visible_ = false;
+    uint16_t* cam_preview_buf_ = nullptr;
+    lv_image_dsc_t cam_img_dsc_{};
 
     lv_timer_t* refresh_timer_ = nullptr;
 };

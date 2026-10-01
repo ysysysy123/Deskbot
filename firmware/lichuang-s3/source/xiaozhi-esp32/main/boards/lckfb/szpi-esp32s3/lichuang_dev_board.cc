@@ -23,6 +23,7 @@
 #include <esp_lvgl_port.h>
 #include <lvgl.h>
 #include <memory>
+#include <mbedtls/base64.h>
 
 #define TAG "LichuangDevBoard"
 
@@ -85,6 +86,13 @@ public:
         SpiLcdDisplay::SetupUI();
         servo_ui_ = std::make_unique<ServoControlUi>(motion_controller_, imu_, camera_);
         servo_ui_->SetupUI();
+    }
+
+    virtual void SetPreviewImage(std::unique_ptr<LvglImage> image) override {
+        if (servo_ui_ && servo_ui_->IsCamPanelVisible()) {
+            return;
+        }
+        SpiLcdDisplay::SetPreviewImage(std::move(image));
     }
 };
 #endif
@@ -307,7 +315,7 @@ private:
         config.pixel_format = PIXFORMAT_RGB565;
         config.frame_size = FRAMESIZE_QVGA;
         config.jpeg_quality = 12;
-        config.fb_count = 1;
+        config.fb_count = 2;
         config.fb_location = CAMERA_FB_IN_PSRAM;
         config.grab_mode = CAMERA_GRAB_WHEN_EMPTY;
 
@@ -358,6 +366,56 @@ private:
         }
     }
 
+    void DumpCameraFrame() {
+        if (!camera_) {
+            printf("ERR:NO_CAM\n");
+            fflush(stdout);
+            return;
+        }
+        if (!camera_->Capture()) {
+            printf("ERR:CAP_FAIL\n");
+            fflush(stdout);
+            return;
+        }
+        camera_fb_t* fb = camera_->GetCurrentFrameBuffer();
+        if (!fb || !fb->buf) {
+            printf("ERR:NULL_BUF\n");
+            fflush(stdout);
+            return;
+        }
+        printf("===BEGIN_FRAME:W=%d,H=%d,LEN=%zu===\n", fb->width, fb->height, fb->len);
+        fflush(stdout);
+        const uint8_t* p = fb->buf;
+        size_t rem = fb->len;
+        unsigned char b64_out[2048];
+        while (rem > 0) {
+            size_t chunk = rem > 1024 ? 1024 : rem;
+            size_t olen = 0;
+            mbedtls_base64_encode(b64_out, sizeof(b64_out), &olen, p, chunk);
+            b64_out[olen] = '\0';
+            printf("%s\n", (char*)b64_out);
+            p += chunk;
+            rem -= chunk;
+        }
+        printf("===END_FRAME===\n");
+        fflush(stdout);
+    }
+
+    void StartSerialDiagnosticTask() {
+        xTaskCreate([](void* arg) {
+            auto* b = static_cast<LichuangDevBoard*>(arg);
+            char line[64];
+            while (true) {
+                if (fgets(line, sizeof(line), stdin) != nullptr) {
+                    if (strncmp(line, "DUMP_FRAME", 10) == 0) {
+                        b->DumpCameraFrame();
+                    }
+                }
+                vTaskDelay(pdMS_TO_TICKS(50));
+            }
+        }, "serial_diag", 4096, this, 3, nullptr);
+    }
+
 public:
     LichuangDevBoard() : boot_button_(BOOT_BUTTON_GPIO) {
         InitializeI2c();
@@ -371,6 +429,7 @@ public:
         InitializeTouch();
         InitializeButtons();
         InitializeTools();
+        StartSerialDiagnosticTask();
 
         GetBacklight()->RestoreBrightness();
     }

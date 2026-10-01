@@ -1,6 +1,8 @@
 #include "servo_control_ui.h"
 
 #include <cstdio>
+#include <cstring>
+#include <esp_heap_caps.h>
 #include <esp_log.h>
 
 #include "esp32_camera.h"
@@ -26,16 +28,44 @@ lv_obj_t* CreateStyledButton(lv_obj_t* parent, int w, int h, uint32_t color_hex,
     return btn;
 }
 
-static lv_image_dsc_t s_cam_dsc;
+lv_obj_t* CreateInfoCard(lv_obj_t* parent, int x, int y, int w, int h, uint32_t border_hex,
+                         const char* title, uint32_t title_hex) {
+    lv_obj_t* card = lv_obj_create(parent);
+    lv_obj_set_pos(card, x, y);
+    lv_obj_set_size(card, w, h);
+    lv_obj_set_style_bg_color(card, lv_color_hex(0x24273A), 0);
+    lv_obj_set_style_border_color(card, lv_color_hex(border_hex), 0);
+    lv_obj_set_style_border_width(card, 1, 0);
+    lv_obj_set_style_radius(card, 8, 0);
+    lv_obj_set_style_pad_all(card, 4, 0);
+    lv_obj_set_scrollbar_mode(card, LV_SCROLLBAR_MODE_OFF);
+
+    lv_obj_t* t = lv_label_create(card);
+    lv_label_set_text(t, title);
+    lv_obj_set_style_text_color(t, lv_color_hex(title_hex), 0);
+    lv_obj_align(t, LV_ALIGN_TOP_MID, 0, 0);
+    return card;
+}
 }  // namespace
 
 ServoControlUi::ServoControlUi(MotionController* motion, Qmi8658* imu, Esp32Camera* camera)
-    : motion_(motion), imu_(imu), camera_(camera) {}
+    : motion_(motion), imu_(imu), camera_(camera) {
+    cam_preview_buf_ = (uint16_t*)heap_caps_malloc(320 * 240 * sizeof(uint16_t),
+                                                   MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (cam_preview_buf_ == nullptr) {
+        ESP_LOGE(TAG, "Failed to allocate 320x240 preview buffer in PSRAM");
+    }
+    memset(&cam_img_dsc_, 0, sizeof(cam_img_dsc_));
+}
 
 ServoControlUi::~ServoControlUi() {
     if (refresh_timer_ != nullptr) {
         lv_timer_delete(refresh_timer_);
         refresh_timer_ = nullptr;
+    }
+    if (cam_preview_buf_ != nullptr) {
+        heap_caps_free(cam_preview_buf_);
+        cam_preview_buf_ = nullptr;
     }
     if (panel_servo_ != nullptr) {
         lv_obj_delete(panel_servo_);
@@ -187,45 +217,49 @@ void ServoControlUi::CreateGyroPanel() {
     lv_obj_set_pos(panel_gyro_, 0, 0);
     lv_obj_set_style_bg_color(panel_gyro_, lv_color_hex(0x181825), 0);
     lv_obj_set_style_border_width(panel_gyro_, 0, 0);
-    lv_obj_set_style_pad_all(panel_gyro_, 8, 0);
+    lv_obj_set_style_pad_all(panel_gyro_, 4, 0);
     lv_obj_set_scrollbar_mode(panel_gyro_, LV_SCROLLBAR_MODE_OFF);
     lv_obj_add_flag(panel_gyro_, LV_OBJ_FLAG_HIDDEN);
 
     // Title
     lv_obj_t* title = lv_label_create(panel_gyro_);
-    lv_label_set_text(title, "QMI8658 6-AXIS IMU & ATTITUDE");
+    lv_label_set_text(title, "QMI8658 IMU");
     lv_obj_set_style_text_color(title, lv_color_hex(0x89DCEB), 0);
-    lv_obj_align(title, LV_ALIGN_TOP_LEFT, 6, 4);
+    lv_obj_align(title, LV_ALIGN_TOP_LEFT, 8, 4);
 
     // Status label
     label_gyro_status_ = lv_label_create(panel_gyro_);
-    lv_label_set_text(label_gyro_status_, "STATUS: PROBING...");
+    lv_label_set_text(label_gyro_status_, "[ONLINE 0x6A]");
     lv_obj_set_style_text_color(label_gyro_status_, lv_color_hex(0xA6E3A1), 0);
-    lv_obj_align(label_gyro_status_, LV_ALIGN_TOP_LEFT, 6, 26);
+    lv_obj_align(label_gyro_status_, LV_ALIGN_TOP_RIGHT, -8, 4);
 
-    // Acceleration label
-    label_accel_ = lv_label_create(panel_gyro_);
-    lv_label_set_text(label_accel_, "ACCEL (g):\n  X: 0.00\n  Y: 0.00\n  Z: 0.00");
+    // 3 Cards: Accel, Gyro, Attitude (height 160, y=24)
+    // Card 1: Accel (x=6, y=24, w=98, h=160)
+    lv_obj_t* card_a = CreateInfoCard(panel_gyro_, 6, 24, 98, 160, 0xF9E2AF, "ACCEL (g)", 0xF9E2AF);
+    label_accel_ = lv_label_create(card_a);
+    lv_label_set_text(label_accel_, "X: +0.00\nY: +0.00\nZ: +0.00");
     lv_obj_set_style_text_color(label_accel_, lv_color_hex(0xF9E2AF), 0);
-    lv_obj_align(label_accel_, LV_ALIGN_TOP_LEFT, 6, 50);
+    lv_obj_align(label_accel_, LV_ALIGN_TOP_LEFT, 2, 20);
 
-    // Gyroscope label
-    label_gyro_ = lv_label_create(panel_gyro_);
-    lv_label_set_text(label_gyro_, "GYRO (dps):\n  X: 0.0\n  Y: 0.0\n  Z: 0.0");
+    // Card 2: Gyro (x=110, y=24, w=98, h=160)
+    lv_obj_t* card_g = CreateInfoCard(panel_gyro_, 110, 24, 98, 160, 0xF38BA8, "GYRO (dps)", 0xF38BA8);
+    label_gyro_ = lv_label_create(card_g);
+    lv_label_set_text(label_gyro_, "X: +0.0\nY: +0.0\nZ: +0.0");
     lv_obj_set_style_text_color(label_gyro_, lv_color_hex(0xF38BA8), 0);
-    lv_obj_align(label_gyro_, LV_ALIGN_TOP_LEFT, 160, 50);
+    lv_obj_align(label_gyro_, LV_ALIGN_TOP_LEFT, 2, 20);
 
-    // Tilt / Attitude label
-    label_tilt_ = lv_label_create(panel_gyro_);
-    lv_label_set_text(label_tilt_, "TILT ATTITUDE:\n  Pitch: 0.0 deg\n  Roll:  0.0 deg");
+    // Card 3: Attitude (x=214, y=24, w=100, h=160)
+    lv_obj_t* card_t = CreateInfoCard(panel_gyro_, 214, 24, 100, 160, 0xCBA6F7, "ATTITUDE", 0xCBA6F7);
+    label_tilt_ = lv_label_create(card_t);
+    lv_label_set_text(label_tilt_, "Pitch:\n+0.0 deg\nRoll:\n+0.0 deg");
     lv_obj_set_style_text_color(label_tilt_, lv_color_hex(0xCBA6F7), 0);
-    lv_obj_align(label_tilt_, LV_ALIGN_TOP_LEFT, 6, 126);
+    lv_obj_align(label_tilt_, LV_ALIGN_TOP_LEFT, 2, 20);
 
     // Back to Chat button
-    CreateStyledButton(panel_gyro_, 304, 34, 0x4F46E5, "< BACK TO CHAT", 0,
+    CreateStyledButton(panel_gyro_, 308, 36, 0x4F46E5, "< BACK TO CHAT", 0,
                        OnBackFromGyroClicked, this);
     lv_obj_align(lv_obj_get_child(panel_gyro_, lv_obj_get_child_count(panel_gyro_) - 1),
-                 LV_ALIGN_BOTTOM_MID, 0, -4);
+                 LV_ALIGN_BOTTOM_MID, 0, -6);
 }
 
 void ServoControlUi::CreateCameraPanel() {
@@ -233,39 +267,44 @@ void ServoControlUi::CreateCameraPanel() {
     panel_cam_ = lv_obj_create(screen);
     lv_obj_set_size(panel_cam_, 320, 240);
     lv_obj_set_pos(panel_cam_, 0, 0);
-    lv_obj_set_style_bg_color(panel_cam_, lv_color_hex(0x181825), 0);
+    lv_obj_set_style_bg_color(panel_cam_, lv_color_hex(0x000000), 0);
     lv_obj_set_style_border_width(panel_cam_, 0, 0);
-    lv_obj_set_style_pad_all(panel_cam_, 4, 0);
+    lv_obj_set_style_pad_all(panel_cam_, 0, 0);
     lv_obj_set_scrollbar_mode(panel_cam_, LV_SCROLLBAR_MODE_OFF);
     lv_obj_add_flag(panel_cam_, LV_OBJ_FLAG_HIDDEN);
 
-    // Title
-    lv_obj_t* title = lv_label_create(panel_cam_);
-    lv_label_set_text(title, "GC2145 CAMERA PREVIEW");
-    lv_obj_set_style_text_color(title, lv_color_hex(0x89DCEB), 0);
-    lv_obj_align(title, LV_ALIGN_TOP_LEFT, 6, 4);
-
-    // Snap Button
-    CreateStyledButton(panel_cam_, 96, 24, 0x059669, "SNAP FRAME", 0, OnCameraSnapClicked, this);
-    lv_obj_align(lv_obj_get_child(panel_cam_, lv_obj_get_child_count(panel_cam_) - 1),
-                 LV_ALIGN_TOP_RIGHT, -6, 2);
-
-    // Cam Info
-    label_cam_info_ = lv_label_create(panel_cam_);
-    lv_label_set_text(label_cam_info_, "Resolution: 320x240 RGB565");
-    lv_obj_set_style_text_color(label_cam_info_, lv_color_hex(0xBAC2DE), 0);
-    lv_obj_align(label_cam_info_, LV_ALIGN_TOP_LEFT, 6, 26);
-
-    // Image display object
+    // Image preview object (320x240 full screen)
     img_preview_ = lv_image_create(panel_cam_);
-    lv_obj_set_size(img_preview_, 240, 140);
-    lv_obj_align(img_preview_, LV_ALIGN_TOP_MID, 0, 50);
+    lv_obj_set_size(img_preview_, 320, 240);
+    lv_obj_set_pos(img_preview_, 0, 0);
 
-    // Back to Chat button
-    CreateStyledButton(panel_cam_, 304, 32, 0x4F46E5, "< BACK TO CHAT", 0,
-                       OnBackFromCamClicked, this);
-    lv_obj_align(lv_obj_get_child(panel_cam_, lv_obj_get_child_count(panel_cam_) - 1),
-                 LV_ALIGN_BOTTOM_MID, 0, -4);
+    // Semi-transparent top bar
+    lv_obj_t* top_bar = lv_obj_create(panel_cam_);
+    lv_obj_set_size(top_bar, 320, 28);
+    lv_obj_set_pos(top_bar, 0, 0);
+    lv_obj_set_style_bg_color(top_bar, lv_color_hex(0x181825), 0);
+    lv_obj_set_style_bg_opa(top_bar, LV_OPA_70, 0);
+    lv_obj_set_style_border_width(top_bar, 0, 0);
+    lv_obj_set_style_pad_all(top_bar, 2, 0);
+    lv_obj_set_scrollbar_mode(top_bar, LV_SCROLLBAR_MODE_OFF);
+
+    // Title
+    lv_obj_t* title = lv_label_create(top_bar);
+    lv_label_set_text(title, "GC2145 LIVE PREVIEW");
+    lv_obj_set_style_text_color(title, lv_color_hex(0x89DCEB), 0);
+    lv_obj_align(title, LV_ALIGN_LEFT_MID, 8, 0);
+
+    // Cam Info badge
+    label_cam_info_ = lv_label_create(top_bar);
+    lv_label_set_text(label_cam_info_, "320x240 LIVE");
+    lv_obj_set_style_text_color(label_cam_info_, lv_color_hex(0x10B981), 0);
+    lv_obj_align(label_cam_info_, LV_ALIGN_RIGHT_MID, -8, 0);
+
+    // Semi-transparent floating Back to Chat button at bottom
+    lv_obj_t* btn_back = CreateStyledButton(panel_cam_, 160, 32, 0x4F46E5, "< BACK TO CHAT", 0,
+                                            OnBackFromCamClicked, this);
+    lv_obj_align(btn_back, LV_ALIGN_BOTTOM_MID, 0, -8);
+    lv_obj_set_style_bg_opa(btn_back, LV_OPA_80, 0);
 }
 
 void ServoControlUi::ShowServoPanel() {
@@ -347,46 +386,48 @@ void ServoControlUi::UpdateServoLabels() {
 void ServoControlUi::UpdateGyroLabels() {
     if (imu_ == nullptr || !imu_->IsInitialized()) {
         if (label_gyro_status_ != nullptr) {
-            lv_label_set_text(label_gyro_status_, "STATUS: SENSOR NOT FOUND / PROBING");
+            lv_label_set_text(label_gyro_status_, "DISCONNECTED");
             lv_obj_set_style_text_color(label_gyro_status_, lv_color_hex(0xEF4444), 0);
         }
         return;
     }
 
     if (label_gyro_status_ != nullptr) {
-        lv_label_set_text(label_gyro_status_, "STATUS: CONNECTED (0x6A)");
+        lv_label_set_text(label_gyro_status_, "ONLINE (0x6A)");
         lv_obj_set_style_text_color(label_gyro_status_, lv_color_hex(0xA6E3A1), 0);
     }
 
     ImuData d;
     if (imu_->ReadData(d) == ESP_OK) {
-        char buf[128];
+        char buf[64];
         if (label_accel_ != nullptr) {
-            snprintf(buf, sizeof(buf), "ACCEL (g):\n  X: %+.2f\n  Y: %+.2f\n  Z: %+.2f", d.ax, d.ay, d.az);
+            snprintf(buf, sizeof(buf), "X: %+.2f\n\nY: %+.2f\n\nZ: %+.2f", d.ax, d.ay, d.az);
             lv_label_set_text(label_accel_, buf);
         }
         if (label_gyro_ != nullptr) {
-            snprintf(buf, sizeof(buf), "GYRO (dps):\n  X: %+.1f\n  Y: %+.1f\n  Z: %+.1f", d.gx, d.gy, d.gz);
+            snprintf(buf, sizeof(buf), "X: %+.1f\n\nY: %+.1f\n\nZ: %+.1f", d.gx, d.gy, d.gz);
             lv_label_set_text(label_gyro_, buf);
         }
         if (label_tilt_ != nullptr) {
-            snprintf(buf, sizeof(buf), "TILT ATTITUDE:\n  Pitch: %+.1f deg\n  Roll:  %+.1f deg", d.pitch, d.roll);
+            snprintf(buf, sizeof(buf), "Pitch:\n%+.1f deg\n\nRoll:\n%+.1f deg", d.pitch, d.roll);
             lv_label_set_text(label_tilt_, buf);
         }
     }
 }
 
 void ServoControlUi::UpdateCameraPreview() {
-    if (camera_ == nullptr) {
+    if (camera_ == nullptr || cam_preview_buf_ == nullptr) {
         if (label_cam_info_ != nullptr) {
-            lv_label_set_text(label_cam_info_, "Camera object not available");
+            lv_label_set_text(label_cam_info_, "NO CAMERA");
+            lv_obj_set_style_text_color(label_cam_info_, lv_color_hex(0xEF4444), 0);
         }
         return;
     }
 
     if (!camera_->Capture()) {
         if (label_cam_info_ != nullptr) {
-            lv_label_set_text(label_cam_info_, "Camera capture failed");
+            lv_label_set_text(label_cam_info_, "CAPTURE FAILED");
+            lv_obj_set_style_text_color(label_cam_info_, lv_color_hex(0xEF4444), 0);
         }
         return;
     }
@@ -394,24 +435,36 @@ void ServoControlUi::UpdateCameraPreview() {
     camera_fb_t* fb = camera_->GetCurrentFrameBuffer();
     if (fb == nullptr || fb->buf == nullptr) {
         if (label_cam_info_ != nullptr) {
-            lv_label_set_text(label_cam_info_, "Empty frame buffer");
+            lv_label_set_text(label_cam_info_, "EMPTY BUFFER");
+            lv_obj_set_style_text_color(label_cam_info_, lv_color_hex(0xEF4444), 0);
         }
         return;
     }
 
-    s_cam_dsc.header.cf = LV_COLOR_FORMAT_RGB565;
-    s_cam_dsc.header.w = fb->width;
-    s_cam_dsc.header.h = fb->height;
-    s_cam_dsc.data_size = fb->len;
-    s_cam_dsc.data = fb->buf;
+    // Direct 1:1 pixel mapping: 320x240 native QVGA.
+    // Convert big-endian RGB565 from DVP to little-endian RGB565 for LVGL.
+    const uint16_t* src = reinterpret_cast<const uint16_t*>(fb->buf);
+    size_t pixel_count = 320 * 240;
+    for (size_t i = 0; i < pixel_count; ++i) {
+        cam_preview_buf_[i] = __builtin_bswap16(src[i]);
+    }
+
+    cam_img_dsc_.header.magic = LV_IMAGE_HEADER_MAGIC;
+    cam_img_dsc_.header.cf = LV_COLOR_FORMAT_RGB565;
+    cam_img_dsc_.header.w = 320;
+    cam_img_dsc_.header.h = 240;
+    cam_img_dsc_.header.stride = 320 * sizeof(uint16_t);
+    cam_img_dsc_.header.flags = 0;
+    cam_img_dsc_.data_size = 320 * 240 * sizeof(uint16_t);
+    cam_img_dsc_.data = reinterpret_cast<const uint8_t*>(cam_preview_buf_);
 
     if (img_preview_ != nullptr) {
-        lv_image_set_src(img_preview_, &s_cam_dsc);
+        lv_image_set_src(img_preview_, &cam_img_dsc_);
+        lv_obj_invalidate(img_preview_);
     }
     if (label_cam_info_ != nullptr) {
-        char buf[64];
-        snprintf(buf, sizeof(buf), "Live Frame: %dx%d (%zu B)", fb->width, fb->height, fb->len);
-        lv_label_set_text(label_cam_info_, buf);
+        lv_label_set_text(label_cam_info_, "320x240 LIVE");
+        lv_obj_set_style_text_color(label_cam_info_, lv_color_hex(0x10B981), 0);
     }
 }
 
@@ -423,6 +476,8 @@ void ServoControlUi::OnPeriodicTimer(lv_timer_t* t) {
         ui->UpdateServoLabels();
     } else if (ui->gyro_panel_visible_) {
         ui->UpdateGyroLabels();
+    } else if (ui->cam_panel_visible_) {
+        ui->UpdateCameraPreview();
     }
 }
 
