@@ -7,7 +7,8 @@
             "name": "lichuang-dev",
             "sdkconfig_append": [
                 "CONFIG_USE_DEVICE_AEC=y",
-                "CONFIG_CAMERA_PSRAM_DMA=y"
+                "CONFIG_CAMERA_PSRAM_DMA=y",
+                "CONFIG_DESKBOT_MOTION_PCA9685=y"
             ]
         }
     ]
