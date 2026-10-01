@@ -24,6 +24,12 @@
 #include <lvgl.h>
 #include <memory>
 #include <mbedtls/base64.h>
+#include <soc/lcd_cam_struct.h>
+
+extern "C" {
+void cam_set_psram_mode(bool enable);
+bool cam_get_psram_mode(void);
+}
 
 #define TAG "LichuangDevBoard"
 
@@ -291,6 +297,10 @@ private:
         // Open camera power
         pca9557_->SetOutputState(2, 0);
 
+        // Turn off direct PSRAM DMA: use internal SRAM ping-pong DMA buffers
+        // to prevent external PSRAM bus contention and descriptor-boundary byte drops
+        cam_set_psram_mode(false);
+
         camera_config_t config = {};
         config.ledc_channel = LEDC_CHANNEL_2;
         config.ledc_timer = LEDC_TIMER_2;
@@ -320,6 +330,10 @@ private:
         config.grab_mode = CAMERA_GRAB_WHEN_EMPTY;
 
         camera_ = new Esp32Camera(config);
+
+        // Invert PCLK sampling edge to match sensor data eye
+        LCD_CAM.cam_ctrl1.cam_clk_inv = 1;
+        LCD_CAM.cam_ctrl.cam_update = 1;
     }
 
 #if CONFIG_DESKBOT_MOTION_PCA9685
@@ -372,6 +386,12 @@ private:
             fflush(stdout);
             return;
         }
+        sensor_t* s = esp_camera_sensor_get();
+        if (s) {
+            printf("CAM_INFO:PID=0x%04x,SLV=0x%02x,CLK_INV=%d,PSRAM_DMA=%d\n",
+                   s->id.PID, s->slv_addr, (int)LCD_CAM.cam_ctrl1.cam_clk_inv, (int)cam_get_psram_mode());
+            fflush(stdout);
+        }
         if (!camera_->Capture()) {
             printf("ERR:CAP_FAIL\n");
             fflush(stdout);
@@ -409,6 +429,17 @@ private:
                 if (fgets(line, sizeof(line), stdin) != nullptr) {
                     if (strncmp(line, "DUMP_FRAME", 10) == 0) {
                         b->DumpCameraFrame();
+                    } else if (strncmp(line, "SET_CLK_INV ", 12) == 0) {
+                        int v = atoi(line + 12);
+                        LCD_CAM.cam_ctrl1.cam_clk_inv = v ? 1 : 0;
+                        LCD_CAM.cam_ctrl.cam_update = 1;
+                        printf("ACK:CLK_INV=%d\n", (int)LCD_CAM.cam_ctrl1.cam_clk_inv);
+                        fflush(stdout);
+                    } else if (strncmp(line, "SET_PSRAM_DMA ", 14) == 0) {
+                        int v = atoi(line + 14);
+                        cam_set_psram_mode(v != 0);
+                        printf("ACK:PSRAM_DMA=%d\n", (int)cam_get_psram_mode());
+                        fflush(stdout);
                     }
                 }
                 vTaskDelay(pdMS_TO_TICKS(50));

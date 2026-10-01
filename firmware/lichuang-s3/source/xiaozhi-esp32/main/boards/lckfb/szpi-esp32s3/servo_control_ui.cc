@@ -290,7 +290,7 @@ void ServoControlUi::CreateCameraPanel() {
 
     // Title
     lv_obj_t* title = lv_label_create(top_bar);
-    lv_label_set_text(title, "GC2145 LIVE PREVIEW");
+    lv_label_set_text(title, "CAMERA LIVE PREVIEW");
     lv_obj_set_style_text_color(title, lv_color_hex(0x89DCEB), 0);
     lv_obj_align(title, LV_ALIGN_LEFT_MID, 8, 0);
 
@@ -401,15 +401,15 @@ void ServoControlUi::UpdateGyroLabels() {
     if (imu_->ReadData(d) == ESP_OK) {
         char buf[64];
         if (label_accel_ != nullptr) {
-            snprintf(buf, sizeof(buf), "X: %+.2f\n\nY: %+.2f\n\nZ: %+.2f", d.ax, d.ay, d.az);
+            snprintf(buf, sizeof(buf), "X: %+.2f\nY: %+.2f\nZ: %+.2f", d.ax, d.ay, d.az);
             lv_label_set_text(label_accel_, buf);
         }
         if (label_gyro_ != nullptr) {
-            snprintf(buf, sizeof(buf), "X: %+.1f\n\nY: %+.1f\n\nZ: %+.1f", d.gx, d.gy, d.gz);
+            snprintf(buf, sizeof(buf), "X: %+.1f\nY: %+.1f\nZ: %+.1f", d.gx, d.gy, d.gz);
             lv_label_set_text(label_gyro_, buf);
         }
         if (label_tilt_ != nullptr) {
-            snprintf(buf, sizeof(buf), "Pitch:\n%+.1f deg\n\nRoll:\n%+.1f deg", d.pitch, d.roll);
+            snprintf(buf, sizeof(buf), "Pitch:\n%+.1f deg\nRoll:\n%+.1f deg", d.pitch, d.roll);
             lv_label_set_text(label_tilt_, buf);
         }
     }
