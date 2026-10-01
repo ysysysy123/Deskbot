@@ -99,7 +99,7 @@ void ServoControlUi::SetupUI() {
     CreateGyroPanel();
     CreateCameraPanel();
 
-    refresh_timer_ = lv_timer_create(OnPeriodicTimer, 150, this);
+    refresh_timer_ = lv_timer_create(OnPeriodicTimer, 100, this);
     ESP_LOGI(TAG, "Multi-function Dashboard UI (Servo, Gyro, Cam) initialized successfully");
 }
 
