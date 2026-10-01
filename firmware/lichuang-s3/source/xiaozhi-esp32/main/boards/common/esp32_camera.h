@@ -39,4 +39,5 @@ public:
     virtual bool SetVFlip(bool enabled) override;
     virtual bool SetSwapBytes(bool enabled) override;
     virtual std::expected<std::string, std::string> Explain(const std::string& question) override;
+    camera_fb_t* GetCurrentFrameBuffer() const { return current_fb_; }
 };
