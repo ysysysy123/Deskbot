@@ -93,23 +93,23 @@ void ServoControlUi::CreatePanel() {
 
     // Title label
     lv_obj_t* title = lv_label_create(panel_);
-    lv_label_set_text(title, "DESKBOT SERVO TEST");
+    lv_label_set_text(title, "DESKBOT SERVO CONTROL");
     lv_obj_set_style_text_color(title, lv_color_hex(0x89DCEB), 0);
     lv_obj_align(title, LV_ALIGN_TOP_LEFT, 8, 4);
 
     // Header STOP ALL button
-    CreateStyledButton(panel_, 88, 24, 0xEF4444, "STOP ALL", 0, OnStopAllClicked, this);
+    CreateStyledButton(panel_, 84, 22, 0xEF4444, "STOP ALL", 0, OnStopAllClicked, this);
     lv_obj_align(lv_obj_get_child(panel_, lv_obj_get_child_count(panel_) - 1),
                  LV_ALIGN_TOP_RIGHT, -6, 2);
 
-    // Left Servo (CH0) label
+    // Left Servo (CH0) label (y = 28)
     label_left_ = lv_label_create(panel_);
     lv_obj_set_style_text_color(label_left_, lv_color_hex(0xF9E2AF), 0);
-    lv_obj_align(label_left_, LV_ALIGN_TOP_LEFT, 8, 30);
+    lv_obj_align(label_left_, LV_ALIGN_TOP_LEFT, 8, 28);
 
-    // Left Servo buttons row
+    // Left Servo buttons row (y = 48)
     lv_obj_t* row_l = lv_obj_create(panel_);
-    lv_obj_set_size(row_l, 312, 34);
+    lv_obj_set_size(row_l, 312, 32);
     lv_obj_align(row_l, LV_ALIGN_TOP_MID, 0, 48);
     lv_obj_set_style_bg_opa(row_l, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(row_l, 0, 0);
@@ -124,15 +124,15 @@ void ServoControlUi::CreatePanel() {
     CreateStyledButton(row_l, 54, 30, 0x0D9488, "+10%", 10, OnLeftSpeedClicked, this);
     CreateStyledButton(row_l, 54, 30, 0x14B8A6, "+30%", 30, OnLeftSpeedClicked, this);
 
-    // Right Servo (CH1) label
+    // Right Servo (CH1) label (y = 82)
     label_right_ = lv_label_create(panel_);
     lv_obj_set_style_text_color(label_right_, lv_color_hex(0xA6E3A1), 0);
-    lv_obj_align(label_right_, LV_ALIGN_TOP_LEFT, 8, 86);
+    lv_obj_align(label_right_, LV_ALIGN_TOP_LEFT, 8, 82);
 
-    // Right Servo buttons row
+    // Right Servo buttons row (y = 102)
     lv_obj_t* row_r = lv_obj_create(panel_);
-    lv_obj_set_size(row_r, 312, 34);
-    lv_obj_align(row_r, LV_ALIGN_TOP_MID, 0, 104);
+    lv_obj_set_size(row_r, 312, 32);
+    lv_obj_align(row_r, LV_ALIGN_TOP_MID, 0, 102);
     lv_obj_set_style_bg_opa(row_r, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(row_r, 0, 0);
     lv_obj_set_style_pad_all(row_r, 0, 0);
@@ -146,10 +146,10 @@ void ServoControlUi::CreatePanel() {
     CreateStyledButton(row_r, 54, 30, 0x0D9488, "+10%", 10, OnRightSpeedClicked, this);
     CreateStyledButton(row_r, 54, 30, 0x14B8A6, "+30%", 30, OnRightSpeedClicked, this);
 
-    // Dual Wheel Quick Actions row
+    // Dual Wheel Quick Actions row (y = 138)
     lv_obj_t* row_both = lv_obj_create(panel_);
-    lv_obj_set_size(row_both, 312, 34);
-    lv_obj_align(row_both, LV_ALIGN_TOP_MID, 0, 144);
+    lv_obj_set_size(row_both, 312, 32);
+    lv_obj_align(row_both, LV_ALIGN_TOP_MID, 0, 138);
     lv_obj_set_style_bg_opa(row_both, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(row_both, 0, 0);
     lv_obj_set_style_pad_all(row_both, 0, 0);
@@ -157,29 +157,31 @@ void ServoControlUi::CreatePanel() {
     lv_obj_set_flex_align(row_both, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER);
 
-    CreateStyledButton(row_both, 92, 30, 0x3B82F6, "FWD 30%", 30, OnBothSpeedClicked, this);
+    CreateStyledButton(row_both, 92, 30, 0x3B82F6, "FWD 20%", 20, OnBothSpeedClicked, this);
     CreateStyledButton(row_both, 92, 30, 0xEF4444, "STOP", 0, OnBothSpeedClicked, this);
-    CreateStyledButton(row_both, 92, 30, 0x8B5CF6, "REV 30%", -30, OnBothSpeedClicked, this);
+    CreateStyledButton(row_both, 92, 30, 0x8B5CF6, "REV 20%", -20, OnBothSpeedClicked, this);
 
-    // Back to Chat button
-    lv_obj_t* btn_back = CreateStyledButton(panel_, 300, 36, 0x4F46E5, "< BACK TO CHAT", 0,
-                                           OnBackClicked, this);
-    lv_obj_align(btn_back, LV_ALIGN_BOTTOM_MID, 0, -6);
+    // Back to Chat button (y = 176)
+    CreateStyledButton(panel_, 304, 34, 0x4F46E5, "< BACK TO CHAT", 0,
+                       OnBackClicked, this);
+    lv_obj_align(lv_obj_get_child(panel_, lv_obj_get_child_count(panel_) - 1),
+                 LV_ALIGN_BOTTOM_MID, 0, -4);
 }
 
 void ServoControlUi::UpdateStatusLabels() {
-    int l_spd = controller_ ? controller_->GetLeftSpeed() : 0;
-    int r_spd = controller_ ? controller_->GetRightSpeed() : 0;
-    int l_us = 1500 + (l_spd * 500) / 100;
-    int r_us = 1500 + (r_spd * 500) / 100;
+    if (controller_ == nullptr) return;
+    int l_spd = controller_->GetLeftSpeed();
+    int r_spd = controller_->GetRightSpeed();
+    uint16_t l_us = controller_->GetLeftPulseUs();
+    uint16_t r_us = controller_->GetRightPulseUs();
 
     char buf[64];
     if (label_left_ != nullptr) {
-        snprintf(buf, sizeof(buf), "LEFT (CH0): %d%% [%dus]", l_spd, l_us);
+        snprintf(buf, sizeof(buf), "L (CH0): %d%% [%uus]", l_spd, l_us);
         lv_label_set_text(label_left_, buf);
     }
     if (label_right_ != nullptr) {
-        snprintf(buf, sizeof(buf), "RIGHT (CH1): %d%% [%dus]", r_spd, r_us);
+        snprintf(buf, sizeof(buf), "R (CH1): %d%% [%uus]", r_spd, r_us);
         lv_label_set_text(label_right_, buf);
     }
 }
@@ -203,7 +205,7 @@ void ServoControlUi::OnStopAllClicked(lv_event_t* e) {
     if (ui != nullptr && ui->controller_ != nullptr) {
         ui->controller_->Stop();
         ui->UpdateStatusLabels();
-        ESP_LOGI(TAG, "STOP ALL clicked: both servos stopped (1500us)");
+        ESP_LOGI(TAG, "STOP ALL clicked: servos stopped at 1560us neutral");
     }
 }
 
@@ -214,7 +216,7 @@ void ServoControlUi::OnLeftSpeedClicked(lv_event_t* e) {
         int speed = (int)(intptr_t)lv_obj_get_user_data(btn);
         ui->controller_->SetLeftSpeed(speed);
         ui->UpdateStatusLabels();
-        ESP_LOGI(TAG, "Left servo (CH0) set to %d%% (%d us)", speed, 1500 + (speed * 500) / 100);
+        ESP_LOGI(TAG, "Left servo set to %d%% (pulse: %uus)", speed, ui->controller_->GetLeftPulseUs());
     }
 }
 
@@ -225,7 +227,7 @@ void ServoControlUi::OnRightSpeedClicked(lv_event_t* e) {
         int speed = (int)(intptr_t)lv_obj_get_user_data(btn);
         ui->controller_->SetRightSpeed(speed);
         ui->UpdateStatusLabels();
-        ESP_LOGI(TAG, "Right servo (CH1) set to %d%% (%d us)", speed, 1500 + (speed * 500) / 100);
+        ESP_LOGI(TAG, "Right servo set to %d%% (pulse: %uus)", speed, ui->controller_->GetRightPulseUs());
     }
 }
 
@@ -237,9 +239,10 @@ void ServoControlUi::OnBothSpeedClicked(lv_event_t* e) {
         if (speed == 0) {
             ui->controller_->Stop();
         } else {
-            ui->controller_->SetWheelSpeeds(speed, speed);
+            // Safety: run for 2000ms then auto-stop
+            ui->controller_->SetWheelSpeedsForDuration(speed, speed, 2000);
         }
         ui->UpdateStatusLabels();
-        ESP_LOGI(TAG, "Both servos set to %d%%", speed);
+        ESP_LOGI(TAG, "Both servos set to %d%% (safety duration 2000ms)", speed);
     }
 }

@@ -56,8 +56,8 @@ bool DualWheelController::Initialize() {
         initialized_ = false;
         return false;
     }
-    ESP_LOGI(TAG, "PCA9685 dual-wheel controller initialized at %uHz",
-             static_cast<unsigned>(kPwmFrequencyHz));
+    ESP_LOGI(TAG, "PCA9685 dual-wheel controller initialized at %uHz (Neutral: %uus, Deadband: ±%uus)",
+             static_cast<unsigned>(kPwmFrequencyHz), kNeutralPulseUs, kDeadbandHalfWidthUs);
     return true;
 }
 
@@ -79,8 +79,25 @@ esp_err_t DualWheelController::SetWheelSpeed(uint8_t channel, int percent, bool 
         percent = -percent;
     }
 
-    const int pulse_us = static_cast<int>(kNeutralPulseUs) +
-                         (percent * static_cast<int>(kSpeedRangeUs)) / 100;
+    int pulse_us;
+    if (percent == 0) {
+        pulse_us = kNeutralPulseUs;
+    } else if (percent > 0) {
+        pulse_us = kNeutralPulseUs + kDeadbandHalfWidthUs +
+                   (percent * static_cast<int>(kActiveSpeedSpanUs)) / 100;
+    } else {
+        pulse_us = kNeutralPulseUs - kDeadbandHalfWidthUs +
+                   (percent * static_cast<int>(kActiveSpeedSpanUs)) / 100;
+    }
+
+    pulse_us = std::clamp(pulse_us, 900, 2200);
+
+    if (channel == kLeftChannel) {
+        current_left_pulse_us_ = static_cast<uint16_t>(pulse_us);
+    } else {
+        current_right_pulse_us_ = static_cast<uint16_t>(pulse_us);
+    }
+
     return pwm_->SetChannelPulseUs(channel, static_cast<uint32_t>(pulse_us));
 }
 
@@ -135,10 +152,7 @@ esp_err_t DualWheelController::SetWheelSpeedsForDuration(int left_percent, int r
 }
 
 esp_err_t DualWheelController::Stop() {
-    if (pwm_ == nullptr) {
-        return ESP_ERR_INVALID_STATE;
-    }
-    if (!initialized_) {
+    if (pwm_ == nullptr || !initialized_) {
         return ESP_ERR_INVALID_STATE;
     }
     if (stop_timer_ != nullptr) {
@@ -146,11 +160,11 @@ esp_err_t DualWheelController::Stop() {
     }
     current_left_speed_ = 0;
     current_right_speed_ = 0;
-    esp_err_t result = pwm_->SetChannelPulseUs(kLeftChannel, kNeutralPulseUs);
-    if (result != ESP_OK) {
-        return result;
-    }
-    return pwm_->SetChannelPulseUs(kRightChannel, kNeutralPulseUs);
+    current_left_pulse_us_ = kNeutralPulseUs;
+    current_right_pulse_us_ = kNeutralPulseUs;
+    esp_err_t res1 = pwm_->SetChannelPulseUs(kLeftChannel, kNeutralPulseUs);
+    esp_err_t res2 = pwm_->SetChannelPulseUs(kRightChannel, kNeutralPulseUs);
+    return (res1 != ESP_OK) ? res1 : res2;
 }
 
 void DualWheelController::RegisterMcpTools(McpServer& server) {
