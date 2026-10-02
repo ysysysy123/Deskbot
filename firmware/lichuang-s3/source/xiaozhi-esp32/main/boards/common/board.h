@@ -46,6 +46,8 @@ using NetworkEventCallback = std::function<void(NetworkEvent event, const std::s
 void* create_board();
 class AudioCodec;
 class Display;
+class MotionController;
+class Qmi8658;
 class Board {
 private:
     Board(const Board&) = delete; // 禁用拷贝构造函数
@@ -73,6 +75,8 @@ public:
     virtual bool GetTemperature(float& esp32temp);
     virtual Display* GetDisplay();
     virtual Camera* GetCamera();
+    virtual MotionController* GetMotionController() { return nullptr; }
+    virtual Qmi8658* GetImu() { return nullptr; }
     virtual NetworkInterface* GetNetwork() = 0;
     virtual void StartNetwork() = 0;
     virtual void SetNetworkEventCallback(NetworkEventCallback callback) { (void)callback; }

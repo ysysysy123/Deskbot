@@ -29,6 +29,24 @@ public:
     virtual esp_err_t DriveForDuration(int left_percent, int right_percent, int duration_ms) = 0;
     virtual esp_err_t TurnForDuration(int angular_turn, int duration_ms) = 0;
 
+    // Convenient high-level actions (duration_ms > 0 enables auto-stop safety timer)
+    inline esp_err_t Forward(int speed_percent = 20, int duration_ms = 0) {
+        if (duration_ms > 0) return DriveForDuration(speed_percent, speed_percent, duration_ms);
+        return SetWheelSpeeds(speed_percent, speed_percent);
+    }
+    inline esp_err_t Backward(int speed_percent = 20, int duration_ms = 0) {
+        if (duration_ms > 0) return DriveForDuration(-speed_percent, -speed_percent, duration_ms);
+        return SetWheelSpeeds(-speed_percent, -speed_percent);
+    }
+    inline esp_err_t TurnLeft(int speed_percent = 20, int duration_ms = 0) {
+        if (duration_ms > 0) return DriveForDuration(-speed_percent, speed_percent, duration_ms);
+        return SetWheelSpeeds(-speed_percent, speed_percent);
+    }
+    inline esp_err_t TurnRight(int speed_percent = 20, int duration_ms = 0) {
+        if (duration_ms > 0) return DriveForDuration(speed_percent, -speed_percent, duration_ms);
+        return SetWheelSpeeds(speed_percent, -speed_percent);
+    }
+
     // Emergency stop
     virtual esp_err_t Stop() = 0;
 
