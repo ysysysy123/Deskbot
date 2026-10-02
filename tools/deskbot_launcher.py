@@ -644,7 +644,9 @@ class DeskbotLauncher:
             env["VOICE_VISION_BASE_URL"] = vision_base_url if vision else ""
             env["VOICE_VISION_MODEL"] = vision_model
             env["VOICE_VISION_API_KEY"] = vision_api_key if vision else ""
-            env["VOICE_MCP_ENABLED"] = "true" if vision else "false"
+            # Device and browser camera MCP tools are usable in text mode too;
+            # vision mode only controls whether captured images are analyzed.
+            env["VOICE_MCP_ENABLED"] = "true"
             warning_filter = "ignore:pkg_resources is deprecated as an API:UserWarning"
             inherited_warnings = env.get("PYTHONWARNINGS", "").strip()
             env["PYTHONWARNINGS"] = (
