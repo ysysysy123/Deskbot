@@ -90,28 +90,43 @@ public:
           motion_controller_(motion), imu_(imu), camera_(camera) {}
 
     virtual void SetupUI() override {
+        DisplayLockGuard lock(this);
         SpiLcdDisplay::SetupUI();
         servo_ui_ = std::make_unique<ServoControlUi>(motion_controller_, imu_, camera_);
         servo_ui_->SetupUI();
     }
 
     virtual void SetPreviewImage(std::unique_ptr<LvglImage> image) override {
+        DisplayLockGuard lock(this);
         if (servo_ui_ && servo_ui_->IsCamPanelVisible()) {
             return;
         }
         SpiLcdDisplay::SetPreviewImage(std::move(image));
+    }
+
+    void SetCamera(Esp32Camera* camera) {
+        camera_ = camera;
+        if (servo_ui_) servo_ui_->SetCamera(camera);
+    }
+    void SetImu(Qmi8658* imu) {
+        imu_ = imu;
+        if (servo_ui_) servo_ui_->SetImu(imu);
+    }
+    void SetMotion(DualWheelController* motion) {
+        motion_controller_ = motion;
+        if (servo_ui_) servo_ui_->SetMotion(motion);
     }
 };
 #endif
 
 class LichuangDevBoard : public WifiBoard {
 private:
-    i2c_master_bus_handle_t i2c_bus_;
-    i2c_master_dev_handle_t pca9557_handle_;
+    i2c_master_bus_handle_t i2c_bus_ = nullptr;
+    i2c_master_dev_handle_t pca9557_handle_ = nullptr;
     Button boot_button_;
-    Display* display_;
-    Pca9557* pca9557_;
-    Esp32Camera* camera_;
+    Display* display_ = nullptr;
+    Pca9557* pca9557_ = nullptr;
+    Esp32Camera* camera_ = nullptr;
     PressToTalkMcpTool* press_to_talk_tool_ = nullptr;
     std::unique_ptr<Qmi8658> imu_;
 #if CONFIG_DESKBOT_MOTION_PCA9685
@@ -330,11 +345,13 @@ private:
         config.fb_location = CAMERA_FB_IN_PSRAM;
         config.grab_mode = CAMERA_GRAB_WHEN_EMPTY;
 
-        camera_ = new Esp32Camera(config);
+        auto* cam = new Esp32Camera(config);
 
         // Invert PCLK sampling edge to match sensor data eye
         LCD_CAM.cam_ctrl1.cam_clk_inv = 1;
         LCD_CAM.cam_ctrl.cam_update = 1;
+
+        camera_ = cam;
     }
 
 #if CONFIG_DESKBOT_MOTION_PCA9685
@@ -360,6 +377,10 @@ private:
         // Allow switching between press-to-talk (长按说话) and click-to-talk (单击唤醒)
         press_to_talk_tool_ = new PressToTalkMcpTool();
         press_to_talk_tool_->Initialize();
+    }
+
+    void RegisterDeferredTools() {
+        auto &mcp_server = McpServer::GetInstance();
 #if CONFIG_DESKBOT_MOTION_PCA9685
         if (motion_controller_) {
             motion_controller_->RegisterMcpTools(mcp_server);
@@ -448,42 +469,77 @@ private:
         }, "serial_diag", 4096, this, 3, nullptr);
     }
 
+    void StartDeferredInitializationTask() {
+        xTaskCreate([](void* arg) {
+            auto* b = static_cast<LichuangDevBoard*>(arg);
+            // Wait 3.0s until Wi-Fi association and main UI are fully stable
+            vTaskDelay(pdMS_TO_TICKS(3000));
+            ESP_LOGI(TAG, "Starting deferred peripheral initialization (battery-safe schedule)...");
+
+            // 1. Initialize QMI8658 IMU
+            b->InitializeImu();
+            if (b->imu_) {
+#if CONFIG_DESKBOT_MOTION_PCA9685
+                auto* disp = static_cast<LichuangLcdDisplay*>(b->display_);
+                if (disp) disp->SetImu(b->imu_.get());
+#endif
+                ESP_LOGI(TAG, "Deferred: QMI8658 IMU attached");
+            }
+            vTaskDelay(pdMS_TO_TICKS(60));
+
+            // 2. Initialize PCA9685 Motion Controller (if present)
+#if CONFIG_DESKBOT_MOTION_PCA9685
+            b->InitializeMotion();
+            if (b->motion_controller_) {
+                auto* disp = static_cast<LichuangLcdDisplay*>(b->display_);
+                if (disp) disp->SetMotion(b->motion_controller_.get());
+                ESP_LOGI(TAG, "Deferred: PCA9685 motion attached");
+            }
+            vTaskDelay(pdMS_TO_TICKS(60));
+#endif
+
+            // 3. Power on and Initialize GC2145 Camera
+            b->pca9557_->SetOutputState(2, 0); // Power on camera
+            vTaskDelay(pdMS_TO_TICKS(80));
+            b->InitializeCamera();
+            if (b->camera_) {
+#if CONFIG_DESKBOT_MOTION_PCA9685
+                auto* disp = static_cast<LichuangLcdDisplay*>(b->display_);
+                if (disp) disp->SetCamera(b->camera_);
+#endif
+                ESP_LOGI(TAG, "Deferred: GC2145 camera attached");
+            }
+            vTaskDelay(pdMS_TO_TICKS(60));
+
+            // 4. Register MCP tools and serial diagnostic task
+            b->RegisterDeferredTools();
+            b->StartSerialDiagnosticTask();
+
+            // 5. Restore backlight to full user setting smoothly
+            b->GetBacklight()->RestoreBrightness();
+
+            ESP_LOGI(TAG, "Deferred peripheral initialization complete.");
+            vTaskDelete(nullptr);
+        }, "deferred_init", 4096, this, 2, nullptr);
+    }
+
 public:
     LichuangDevBoard() : boot_button_(BOOT_BUTTON_GPIO) {
         InitializeI2c();
-        InitializeImu();
-#if CONFIG_DESKBOT_MOTION_PCA9685
-        InitializeMotion();
-#endif
-        vTaskDelay(pdMS_TO_TICKS(40));
-        InitializeCamera();
-        vTaskDelay(pdMS_TO_TICKS(40));
+        // Camera power initially forced OFF during boot to keep inrush current minimal (<120mA)
+        pca9557_->SetOutputState(2, 1);
+
         InitializeSpi();
         InitializeSt7789Display();
         InitializeTouch();
         InitializeButtons();
         InitializeTools();
-        StartSerialDiagnosticTask();
 
-        // Soft start backlight at 10% to prevent inrush current on battery supplies.
-        // Smoothly restore full brightness after 2.0s when Wi-Fi calibration is finished.
-        GetBacklight()->SetBrightness(10, false);
-        esp_timer_handle_t bl_timer;
-        const esp_timer_create_args_t bl_args = {
-            .callback = [](void* arg) {
-                auto* b = static_cast<LichuangDevBoard*>(arg);
-                b->GetBacklight()->RestoreBrightness();
-            },
-            .arg = this,
-            .dispatch_method = ESP_TIMER_TASK,
-            .name = "bl_soft_start",
-            .skip_unhandled_events = true,
-        };
-        if (esp_timer_create(&bl_args, &bl_timer) == ESP_OK) {
-            esp_timer_start_once(bl_timer, 2000000); // 2.0s
-        } else {
-            GetBacklight()->RestoreBrightness();
-        }
+        // Moderate steady backlight (45%) on boot without blinking or inrush surge
+        GetBacklight()->SetBrightness(45, false);
+
+        // Start deferred peripheral initialization task (runs 3.0s after boot)
+        StartDeferredInitializationTask();
     }
 
     virtual AudioCodec* GetAudioCodec() override {

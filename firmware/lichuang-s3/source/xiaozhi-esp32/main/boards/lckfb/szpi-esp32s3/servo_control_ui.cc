@@ -4,6 +4,7 @@
 #include <cstring>
 #include <esp_heap_caps.h>
 #include <esp_log.h>
+#include <esp_lvgl_port.h>
 
 #include "esp32_camera.h"
 #include "motion_controller.h"
@@ -22,6 +23,7 @@ lv_obj_t* CreateStyledButton(lv_obj_t* parent, int w, int h, uint32_t color_hex,
 
     lv_obj_t* lbl = lv_label_create(btn);
     lv_label_set_text(lbl, text);
+    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_14, 0);
     lv_obj_center(lbl);
 
     lv_obj_add_event_cb(btn, cb, LV_EVENT_CLICKED, user_data);
@@ -42,6 +44,7 @@ lv_obj_t* CreateInfoCard(lv_obj_t* parent, int x, int y, int w, int h, uint32_t 
 
     lv_obj_t* t = lv_label_create(card);
     lv_label_set_text(t, title);
+    lv_obj_set_style_text_font(t, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(t, lv_color_hex(title_hex), 0);
     lv_obj_align(t, LV_ALIGN_TOP_MID, 0, 0);
     return card;
@@ -59,13 +62,10 @@ ServoControlUi::ServoControlUi(MotionController* motion, Qmi8658* imu, Esp32Came
 }
 
 ServoControlUi::~ServoControlUi() {
+    lvgl_port_lock(0);
     if (refresh_timer_ != nullptr) {
         lv_timer_delete(refresh_timer_);
         refresh_timer_ = nullptr;
-    }
-    if (cam_preview_buf_ != nullptr) {
-        heap_caps_free(cam_preview_buf_);
-        cam_preview_buf_ = nullptr;
     }
     if (panel_servo_ != nullptr) {
         lv_obj_delete(panel_servo_);
@@ -90,6 +90,12 @@ ServoControlUi::~ServoControlUi() {
     if (btn_cam_ != nullptr) {
         lv_obj_delete(btn_cam_);
         btn_cam_ = nullptr;
+    }
+    lvgl_port_unlock();
+
+    if (cam_preview_buf_ != nullptr) {
+        heap_caps_free(cam_preview_buf_);
+        cam_preview_buf_ = nullptr;
     }
 }
 
@@ -136,6 +142,7 @@ void ServoControlUi::CreateServoPanel() {
     // Title label
     lv_obj_t* title = lv_label_create(panel_servo_);
     lv_label_set_text(title, "DESKBOT SERVO CONTROL");
+    lv_obj_set_style_text_font(title, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(title, lv_color_hex(0x89DCEB), 0);
     lv_obj_align(title, LV_ALIGN_TOP_LEFT, 8, 4);
 
@@ -146,6 +153,7 @@ void ServoControlUi::CreateServoPanel() {
 
     // Left Servo (CH0) label
     label_left_ = lv_label_create(panel_servo_);
+    lv_obj_set_style_text_font(label_left_, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(label_left_, lv_color_hex(0xF9E2AF), 0);
     lv_obj_align(label_left_, LV_ALIGN_TOP_LEFT, 8, 28);
 
@@ -168,6 +176,7 @@ void ServoControlUi::CreateServoPanel() {
 
     // Right Servo (CH1) label
     label_right_ = lv_label_create(panel_servo_);
+    lv_obj_set_style_text_font(label_right_, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(label_right_, lv_color_hex(0xA6E3A1), 0);
     lv_obj_align(label_right_, LV_ALIGN_TOP_LEFT, 8, 82);
 
@@ -223,43 +232,48 @@ void ServoControlUi::CreateGyroPanel() {
 
     // Title
     lv_obj_t* title = lv_label_create(panel_gyro_);
-    lv_label_set_text(title, "QMI8658 IMU");
+    lv_label_set_text(title, "IMU (QMI8658)");
+    lv_obj_set_style_text_font(title, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(title, lv_color_hex(0x89DCEB), 0);
     lv_obj_align(title, LV_ALIGN_TOP_LEFT, 8, 4);
 
     // Status label
     label_gyro_status_ = lv_label_create(panel_gyro_);
     lv_label_set_text(label_gyro_status_, "[ONLINE 0x6A]");
+    lv_obj_set_style_text_font(label_gyro_status_, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(label_gyro_status_, lv_color_hex(0xA6E3A1), 0);
     lv_obj_align(label_gyro_status_, LV_ALIGN_TOP_RIGHT, -8, 4);
 
-    // 3 Cards: Accel, Gyro, Attitude (height 160, y=24)
-    // Card 1: Accel (x=6, y=24, w=98, h=160)
-    lv_obj_t* card_a = CreateInfoCard(panel_gyro_, 6, 24, 98, 160, 0xF9E2AF, "ACCEL (g)", 0xF9E2AF);
+    // 3 Cards: Accel, Gyro, Attitude (height 164, y=24)
+    // Card 1: Accel (x=6, y=24, w=98, h=164)
+    lv_obj_t* card_a = CreateInfoCard(panel_gyro_, 6, 24, 98, 164, 0xF9E2AF, "ACCEL (g)", 0xF9E2AF);
     label_accel_ = lv_label_create(card_a);
     lv_label_set_text(label_accel_, "X: +0.00\nY: +0.00\nZ: +0.00");
+    lv_obj_set_style_text_font(label_accel_, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(label_accel_, lv_color_hex(0xF9E2AF), 0);
-    lv_obj_align(label_accel_, LV_ALIGN_TOP_LEFT, 2, 20);
+    lv_obj_align(label_accel_, LV_ALIGN_TOP_LEFT, 4, 22);
 
-    // Card 2: Gyro (x=110, y=24, w=98, h=160)
-    lv_obj_t* card_g = CreateInfoCard(panel_gyro_, 110, 24, 98, 160, 0xF38BA8, "GYRO (dps)", 0xF38BA8);
+    // Card 2: Gyro (x=110, y=24, w=98, h=164)
+    lv_obj_t* card_g = CreateInfoCard(panel_gyro_, 110, 24, 98, 164, 0xF38BA8, "GYRO (dps)", 0xF38BA8);
     label_gyro_ = lv_label_create(card_g);
     lv_label_set_text(label_gyro_, "X: +0.0\nY: +0.0\nZ: +0.0");
+    lv_obj_set_style_text_font(label_gyro_, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(label_gyro_, lv_color_hex(0xF38BA8), 0);
-    lv_obj_align(label_gyro_, LV_ALIGN_TOP_LEFT, 2, 20);
+    lv_obj_align(label_gyro_, LV_ALIGN_TOP_LEFT, 4, 22);
 
-    // Card 3: Attitude (x=214, y=24, w=100, h=160)
-    lv_obj_t* card_t = CreateInfoCard(panel_gyro_, 214, 24, 100, 160, 0xCBA6F7, "ATTITUDE", 0xCBA6F7);
+    // Card 3: Attitude (x=214, y=24, w=100, h=164)
+    lv_obj_t* card_t = CreateInfoCard(panel_gyro_, 214, 24, 100, 164, 0xCBA6F7, "ATTITUDE", 0xCBA6F7);
     label_tilt_ = lv_label_create(card_t);
-    lv_label_set_text(label_tilt_, "Pitch:\n+0.0 deg\nRoll:\n+0.0 deg");
+    lv_label_set_text(label_tilt_, "Pitch:\n+0.0 deg\n\nRoll:\n+0.0 deg");
+    lv_obj_set_style_text_font(label_tilt_, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(label_tilt_, lv_color_hex(0xCBA6F7), 0);
-    lv_obj_align(label_tilt_, LV_ALIGN_TOP_LEFT, 2, 20);
+    lv_obj_align(label_tilt_, LV_ALIGN_TOP_LEFT, 4, 22);
 
     // Back to Chat button
     CreateStyledButton(panel_gyro_, 308, 36, 0x4F46E5, "< BACK TO CHAT", 0,
                        OnBackFromGyroClicked, this);
     lv_obj_align(lv_obj_get_child(panel_gyro_, lv_obj_get_child_count(panel_gyro_) - 1),
-                 LV_ALIGN_BOTTOM_MID, 0, -6);
+                 LV_ALIGN_BOTTOM_MID, 0, -4);
 }
 
 void ServoControlUi::CreateCameraPanel() {
@@ -291,12 +305,14 @@ void ServoControlUi::CreateCameraPanel() {
     // Title
     lv_obj_t* title = lv_label_create(top_bar);
     lv_label_set_text(title, "CAMERA LIVE PREVIEW");
+    lv_obj_set_style_text_font(title, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(title, lv_color_hex(0x89DCEB), 0);
     lv_obj_align(title, LV_ALIGN_LEFT_MID, 8, 0);
 
     // Cam Info badge
     label_cam_info_ = lv_label_create(top_bar);
     lv_label_set_text(label_cam_info_, "320x240 LIVE");
+    lv_obj_set_style_text_font(label_cam_info_, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(label_cam_info_, lv_color_hex(0x10B981), 0);
     lv_obj_align(label_cam_info_, LV_ALIGN_RIGHT_MID, -8, 0);
 
@@ -409,7 +425,7 @@ void ServoControlUi::UpdateGyroLabels() {
             lv_label_set_text(label_gyro_, buf);
         }
         if (label_tilt_ != nullptr) {
-            snprintf(buf, sizeof(buf), "Pitch:\n%+.1f deg\nRoll:\n%+.1f deg", d.pitch, d.roll);
+            snprintf(buf, sizeof(buf), "Pitch:\n%+.1f deg\n\nRoll:\n%+.1f deg", d.pitch, d.roll);
             lv_label_set_text(label_tilt_, buf);
         }
     }
