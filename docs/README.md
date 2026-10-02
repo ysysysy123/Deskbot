@@ -13,6 +13,13 @@
   - 视觉摄像头图像读取与大模型问答接口 (`Esp32Camera`, `Capture`, `GetCurrentFrameBuffer`, `Explain`)
   - 大模型 MCP 工具调用协议 (`self.motion.*`, `self.sensor.*`, `self.camera.*`)
   - 极简二次开发 C++ 示例代码
+- **[MCP 服务端开发与外设控制接手指南 (MCP Developer Handover Guide)](mcp_server_developer_guide.md)**
+  - 专为负责服务端 MCP 接口、大模型 Function Calling 与业务编排的开发者编写
+  - 舵机运动控制 MCP 工具 (`self.motion.drive`, `self.motion.turn`, `self.motion.stop`, `self.motion.get_status`)
+  - 摄像头画面获取与视觉分析 (`self.camera.take_photo`)
+  - 麦克风控制与音频流管理（WebSocket 协议指令控制 `listen: start/stop` 与 MCP 静音扩展）
+  - 6轴陀螺仪姿态遥测 (`self.sensor.get_imu`)
+  - 本地 Python 自动化联调脚本与调试速查
 
 ### 2. 调试记忆与接手指南 (Handover & Lessons Learned)
 - **[调试记忆与接手文档 (Debugging Memory & Handover Guide)](debugging_and_handover.md)**
