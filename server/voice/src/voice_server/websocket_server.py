@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 import uuid
 from collections.abc import Callable
 from typing import Any
@@ -69,10 +70,30 @@ class VoiceWebSocketServer:
         self._session_factory = session_factory
         self._id_factory = id_factory or (lambda: str(uuid.uuid4()))
         self._active_sessions: dict[int, Any] = {}
+        self._session_connected_at: dict[int, float] = {}
 
     @property
     def active_session_count(self) -> int:
         return len(self._active_sessions)
+
+    def session_snapshot(self) -> list[dict[str, object]]:
+        """Return the local-only status view used by the test page."""
+        now = time.time()
+        result = []
+        for key, session in self._active_sessions.items():
+            connected_at = self._session_connected_at.get(key, now)
+            state = getattr(session, "state", None)
+            state_value = getattr(state, "value", str(state or "unknown"))
+            result.append(
+                {
+                    "device_id": session.device_id,
+                    "session_id": session.session_id,
+                    "state": state_value,
+                    "connected_at": connected_at,
+                    "duration_s": max(0.0, round(now - connected_at, 1)),
+                }
+            )
+        return sorted(result, key=lambda item: (str(item["device_id"]), str(item["session_id"])))
 
     async def handle_connection(self, connection: Any) -> None:
         if connection.request.path != _VOICE_PATH:
@@ -139,8 +160,15 @@ class VoiceWebSocketServer:
                 sentence_max_chars=self.config.dialogue.sentence_max_chars,
                 sentence_queue_size=self.config.dialogue.sentence_queue_size,
                 local_test_turn_events=local_test_turn_events,
+                # The browser bridge schedules PCM locally; physical devices
+                # need paced packets so their small playback queue does not
+                # overflow on long replies.
+                audio_packet_interval_s=(
+                    0.0 if local_test_turn_events else self.config.audio.frame_duration_ms / 1000.0
+                ),
             )
             self._active_sessions[id(session)] = session
+            self._session_connected_at[id(session)] = time.time()
             await transport.send_json(make_server_hello(session_id, local_test_turn_events=local_test_turn_events))
             await self._serve_messages(connection, session, transport)
         except _CloseConnection as error:
@@ -156,6 +184,7 @@ class VoiceWebSocketServer:
         finally:
             if session is not None:
                 self._active_sessions.pop(id(session), None)
+                self._session_connected_at.pop(id(session), None)
                 try:
                     await session.close()
                 except Exception:
@@ -164,6 +193,7 @@ class VoiceWebSocketServer:
     async def close_active_sessions(self) -> None:
         sessions = tuple(self._active_sessions.values())
         self._active_sessions.clear()
+        self._session_connected_at.clear()
         results = await asyncio.gather(*(session.close() for session in sessions), return_exceptions=True)
         for result in results:
             if isinstance(result, Exception):

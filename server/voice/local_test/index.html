@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Deskbot · 语音本地测试</title>
   <link rel="stylesheet" href="styles.css">
-  <script src="app.js" defer></script>
+  <script src="app.js?v=devices-20261002" defer></script>
 </head>
 <body>
   <main>
@@ -20,6 +20,12 @@
       <div id="health-status" class="health-list" aria-live="polite"></div>
       <details><summary id="readiness-summary">检查本机依赖…</summary><div id="readiness-details" class="readiness-list"></div></details>
       <p class="hint">麦克风请通过 <code>http://127.0.0.1:8006</code> 或 <code>localhost</code> 打开。测试页与语音服务需要分别启动。</p>
+    </section>
+
+    <section class="card devices" aria-labelledby="devices-title">
+      <div class="section-heading"><h2 id="devices-title">在线设备 <span id="device-count" class="count-badge">0</span></h2><button id="refresh-devices" class="quiet">刷新</button></div>
+      <div id="device-list" class="device-list" aria-live="polite"><p class="empty-state">正在读取设备状态…</p></div>
+      <p id="device-status" class="hint">每 2 秒刷新一次；设备断开后会从列表移除。</p>
     </section>
 
     <div class="workspace">
@@ -38,9 +44,10 @@
       </section>
 
       <section class="card dialogue" aria-labelledby="dialogue-title">
-        <div class="section-heading"><h2 id="dialogue-title">对话记录</h2><button id="clear-dialogue" class="quiet">清空</button></div>
+        <div class="section-heading"><h2 id="dialogue-title">对话记录</h2><div class="button-row"><button id="load-history" class="quiet">加载历史</button><button id="clear-dialogue" class="quiet">清空</button></div></div>
         <div class="metrics"><div><span>识别返回</span><strong id="metric-stt">—</strong></div><div><span>首段音频</span><strong id="metric-audio">—</strong></div><div><span>接收音频</span><strong id="metric-duration">0.00 s</strong></div></div>
         <div id="transcript" class="transcript" aria-live="polite"><p id="empty-transcript" class="empty-state">连接后开始一次对话。<br>这里会显示识别结果与回复文字。</p></div>
+        <p id="history-status" class="hint metric-note">历史记录按设备 ID 保存；当前设备：未选择。</p>
         <p class="hint metric-note">耗时从文字发送或录音结束计算；首段音频为浏览器接收时间。</p>
       </section>
     </div>

@@ -8,8 +8,8 @@ from voice_server.providers.base import LLMProvider
 
 
 DEFAULT_SYSTEM_PROMPT = (
-    "你是桌面陪伴助手。默认用简洁、自然的中文口语回答，通常一到三句话。"
-    "避免 Markdown 和不适合朗读的格式；不确定时直接说明。"
+    "你是桌面陪伴助手。默认用简洁、自然的中文口语回答，每次最多三句话，每句话尽量不超过六十个汉字。"
+    "不要使用 Markdown、编号列表、代码块或连续长段；不确定时直接说明。"
 )
 
 

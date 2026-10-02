@@ -87,6 +87,7 @@ def create_local_test_app(
     assets = Path(__file__).resolve().parents[2] / "local_test"
     voice_url = f"ws://{_local_host(config.server.host)}:{config.server.ws_port}/xiaozhi/v1/"
     ota_url = f"http://{_local_host(config.server.ota_host)}:{config.server.ota_port}"
+    admin_url = f"http://{_local_host(config.admin_api.host)}:{config.admin_api.port}"
     connections: set[web.WebSocketResponse] = set()
     camera_connections: set[web.WebSocketResponse] = set()
     camera_mcp = CameraMCPBridge()
@@ -115,12 +116,13 @@ def create_local_test_app(
 
     async def health(request: web.Request) -> web.Response:
         async def probe_voice():
+            headers = {"Device-Id": "deskbot-health-probe", "Client-Id": "deskbot-local-test"}
+            if config.auth.mode == "bearer" and config.auth.token:
+                headers["Authorization"] = f"Bearer {config.auth.token}"
             try:
-                _, writer = await wait_for(
-                    asyncio.open_connection(_local_host(config.server.host).strip("[]"), config.server.ws_port), 2
-                )
-                writer.close()
-                await writer.wait_closed()
+                async with ClientSession(timeout=ClientTimeout(total=2)) as client:
+                    async with client.ws_connect(voice_url, headers=headers, max_msg_size=65536):
+                        pass
                 return {"ok": True, "detail": "语音端口可连接；模型效果需发起对话验证"}
             except (OSError, TimeoutError):
                 return {"ok": False, "detail": "语音服务未启动或端口不可达"}
@@ -152,6 +154,65 @@ def create_local_test_app(
 
         voice, ota, llm = await asyncio.gather(probe_voice(), probe_ota(), probe_llm())
         return web.json_response({"voice": voice, "ota": ota, "llm": llm})
+
+    async def devices(request: web.Request) -> web.Response:
+        headers = {}
+        if config.admin_api.token:
+            headers["Authorization"] = f"Bearer {config.admin_api.token}"
+        try:
+            async with ClientSession(timeout=ClientTimeout(total=2)) as client:
+                async with client.get(admin_url + "/api/v1/sessions", headers=headers) as response:
+                    if response.status != 200:
+                        raise RuntimeError("设备状态接口不可用")
+                    payload = await response.json()
+            return web.json_response({
+                "ok": True,
+                "sessions": payload.get("sessions", []),
+                "active_count": payload.get("active_count", 0),
+            })
+        except Exception:
+            return web.json_response({
+                "ok": False,
+                "sessions": [],
+                "active_count": 0,
+                "detail": "语音服务未启动或设备状态暂不可用",
+            })
+
+    async def history(request: web.Request) -> web.Response:
+        device_id = request.query.get("device_id", "").strip()
+        if not device_id:
+            return web.json_response({"ok": False, "detail": "缺少 device_id", "messages": []}, status=400)
+        try:
+            limit = max(1, min(100, int(request.query.get("limit", "50"))))
+        except (TypeError, ValueError):
+            return web.json_response({"ok": False, "detail": "limit 必须是 1 到 100 的整数", "messages": []}, status=400)
+        headers = {}
+        if config.admin_api.token:
+            headers["Authorization"] = f"Bearer {config.admin_api.token}"
+        try:
+            async with ClientSession(timeout=ClientTimeout(total=2)) as client:
+                async with client.get(
+                    admin_url + f"/api/v1/memory/{device_id}",
+                    params={"limit": str(limit)},
+                    headers=headers,
+                ) as response:
+                    if response.status != 200:
+                        raise RuntimeError("历史记录接口不可用")
+                    payload = await response.json()
+            return web.json_response({
+                "ok": True,
+                "device_id": payload.get("device_id", device_id),
+                "summary": payload.get("summary", ""),
+                "messages": payload.get("recent_messages", []),
+            })
+        except Exception:
+            return web.json_response({
+                "ok": False,
+                "device_id": device_id,
+                "summary": "",
+                "messages": [],
+                "detail": "语音服务未启动或历史记录暂不可用",
+            })
 
     async def bridge(request: web.Request) -> web.WebSocketResponse:
         # A local test page may use the configured device token, so reject cross-origin use.
@@ -516,6 +577,8 @@ def create_local_test_app(
     app.router.add_get("/", index)
     app.router.add_get("/api/info", info)
     app.router.add_get("/api/health", health)
+    app.router.add_get("/api/devices", devices)
+    app.router.add_get("/api/history", history)
     app.router.add_get("/ws", bridge)
     app.router.add_get("/camera-mcp", camera_bridge)
     app.router.add_post("/mcp", mcp)

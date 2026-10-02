@@ -10,7 +10,7 @@
 
 服务包含三个独立监听器：`8000` 是语音 WebSocket，`8003` 是 OTA 配置和健康检查，`8004` 是仅供本机使用的记忆管理 API。语音、模型、记忆分别通过 Provider 接口连接；SQLite 保存消息、摘要进度并预留 `relevant_memories`，首版不引入向量数据库。
 
-`listen.start` 需要 `mode`；设备发送的 `listen.stop` 和 `listen.detect` 可以省略它。带文本的 `detect` 直接进入对话和语音回复链路，不调用 ASR。对话文本接收与 TTS 合成通过有界句子队列并行；Edge TTS 当前仍按句收齐音频后转码。
+`listen.start` 需要 `mode`；设备发送的 `listen.stop` 和 `listen.detect` 可以省略它。带文本的 `detect` 直接进入对话和语音回复链路，不调用 ASR。对话文本接收与 TTS 合成通过有界句子队列并行；Edge TTS 当前仍按句收齐音频后转码，下行 Opus 包按音频帧时长节奏发送，避免实机播放队列在长回复时溢出丢包。
 
 本地测试页支持摄像头 MCP，并通过 `CameraMcpDialogueBackend` 把打开、关闭和拍照工具接入对话。明确的开关、拍照和观察指令直接执行；观察请求会自动开启摄像头、等待画面并拍照。启用视觉配置后，JPEG 交给独立的 `glm-4v-flash` 分析，明确观察请求的视觉描述直接交给 TTS；其他对话仍可通过模型工具循环调用摄像头，并由文字模型组织回复。摄像头属于当前连接的浏览器；使用方法和 `.env` 配置见 [本地语音测试](docs/local-testing.md#摄像头)。`AppConfig` 默认关闭 MCP 和视觉能力，可在本机 `.env` 中启用。
 

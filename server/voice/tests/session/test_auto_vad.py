@@ -52,3 +52,27 @@ async def test_manual_does_not_call_vad_or_submit_before_stop():
 
     assert asr.inputs == []
     assert vad.inputs == []
+
+
+async def test_auto_turn_rearms_listening_for_the_next_utterance():
+    asr = FakeASR("hello")
+    vad = FakeVAD([True, False, False, True, False, False])
+    session = make_session(
+        asr=asr,
+        vad=vad,
+        min_silence_duration_ms=120,
+        codec=FakeCodec(decoded=FRAME_60MS),
+        llm=FakeLLM(["reply."]),
+        tts=FakeTTS({"reply.": [b"pcm"]}),
+    )
+
+    await session.handle_message(ListenMessage("start", "auto", None))
+    for packet in (b"speech-1", b"silence-1", b"silence-2"):
+        await session.handle_audio(packet)
+    await session.wait_until_idle()
+    assert session.state.value == "listening"
+
+    for packet in (b"speech-2", b"silence-3", b"silence-4"):
+        await session.handle_audio(packet)
+    await session.wait_until_idle()
+    assert len(asr.inputs) == 2
