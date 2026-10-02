@@ -20,6 +20,7 @@ from voice_server.providers.openai_vision import OpenAICompatibleVisionProvider
 _CAMERA_TOOLS = {
     "self_camera_start", "self_camera_take_photo", "self_camera_stop", "self_camera_status",
 }
+_DEVICE_TOOL_PREFIXES = ("self.motion.", "self.sensor.", "self.camera.")
 _CAMERA_SWITCH_COMMANDS = (
     re.compile(r"(?:(?:请(?:帮我)?|帮我|麻烦(?:你)?|可以)\s*)?(打开|开启|关闭|关掉)\s*(?:摄像头|相机)(?:一下|吗)?[。.!！?？]?"),
     re.compile(r"(?:请)?(?:帮我)?把\s*(?:摄像头|相机)\s*(打开|开启|关闭|关掉)(?:一下)?[。.!！]?"),
@@ -31,6 +32,11 @@ _TOOL_INSTRUCTIONS = (
     "不能编造画面。拍照成功后，用 vision_description 中的视觉分析回答用户的问题，"
     "不要复述拍照参数 question 或把浏览器的状态消息当作画面描述。"
     "拍照结果没有视觉描述时，说明已拍照但尚不能解读图像。"
+)
+_DEVICE_TOOL_INSTRUCTIONS = (
+    "你还可以通过工具控制当前语音连接的实机。只有用户明确要求时才执行运动；"
+    "运动必须使用短时长 duration_ms，范围不超过 5000 毫秒，不要编造执行结果。"
+    "self.motion.stop 可以随时执行；读取 self.sensor.get_imu 只在用户询问姿态或传感器时调用。"
 )
 
 
@@ -55,6 +61,26 @@ def _direct_camera_tool(text: str) -> str | None:
     )
     if photo_request or current_view_question or (observation and visible_subject):
         return "self_camera_take_photo"
+    return None
+
+
+def _device_tool_name(tool_name: str, available_names: set[str]) -> str | None:
+    if tool_name in available_names:
+        return tool_name
+    if tool_name == "self_camera_take_photo" and "self.camera.take_photo" in available_names:
+        return "self.camera.take_photo"
+    if tool_name == "self_camera_start" and "self.camera.start" in available_names:
+        return "self.camera.start"
+    if tool_name == "self_camera_stop" and "self.camera.stop" in available_names:
+        return "self.camera.stop"
+    return None
+
+
+def _direct_stop_tool(text: str, available_names: set[str]) -> str | None:
+    if "self.motion.stop" not in available_names:
+        return None
+    if re.fullmatch(r"(?:请)?(?:马上|立即|赶紧)?(?:停下|停止|停住|刹车)(?:一下)?[。.!！?？]?", text.strip()):
+        return "self.motion.stop"
     return None
 
 
@@ -92,18 +118,41 @@ class CameraMcpDialogueBackend:
     async def stream(self, request: TurnRequest) -> AsyncIterator[str]:
         messages: list[dict[str, Any]] = [dict(message) for message in request.messages]
         async with aiohttp.ClientSession(timeout=self._timeout) as client:
+            browser_tools: list[dict[str, Any]] = []
             try:
                 listed = await self._rpc(client, request.session_id, "tools/list")
-                tools = [{"type": "function", "function": {
+                browser_tools = [{"type": "function", "function": {
                     "name": tool["name"], "description": tool.get("description", ""),
                     "parameters": tool.get("inputSchema", {"type": "object", "properties": {}}),
                 }} for tool in listed.get("tools", []) if tool.get("name") in _CAMERA_TOOLS]
             except (aiohttp.ClientError, asyncio.TimeoutError, ValueError, KeyError):
-                tools = []
-            instructions = _TOOL_INSTRUCTIONS if tools else (
-                "当前对话没有可用的摄像头工具。不要声称已打开摄像头或看到了当前画面；"
-                "用户要求使用摄像头时，请说明需要打开本地测试页并连接语音服务。"
-            )
+                browser_tools = []
+            device_tools: list[dict[str, Any]] = []
+            device_tool_names: set[str] = set()
+            if request.device_mcp is not None:
+                try:
+                    device_list = await request.device_mcp.list_tools()
+                    device_tools = [{"type": "function", "function": {
+                        "name": tool["name"], "description": tool.get("description", ""),
+                        "parameters": tool.get("inputSchema", {"type": "object", "properties": {}}),
+                    }} for tool in device_list.get("tools", [])
+                    if isinstance(tool, dict) and isinstance(tool.get("name"), str)
+                    and tool["name"].startswith(_DEVICE_TOOL_PREFIXES)]
+                    device_tool_names = {tool["function"]["name"] for tool in device_tools}
+                except (asyncio.TimeoutError, ConnectionError, ValueError, KeyError, AttributeError):
+                    device_tools = []
+            tools = browser_tools + device_tools
+            if browser_tools and device_tools:
+                instructions = _TOOL_INSTRUCTIONS + " " + _DEVICE_TOOL_INSTRUCTIONS
+            elif browser_tools:
+                instructions = _TOOL_INSTRUCTIONS
+            elif device_tools:
+                instructions = _DEVICE_TOOL_INSTRUCTIONS
+            else:
+                instructions = (
+                    "当前对话没有可用的设备工具。不要声称已操作摄像头、底盘或传感器；"
+                    "用户要求操作设备时，请说明设备 MCP 尚未连接。"
+                )
             # GLM can ignore earlier system messages. Keep the dialogue prompt,
             # memory summary and current tool instructions in one system message.
             system_parts = []
@@ -112,13 +161,27 @@ class CameraMcpDialogueBackend:
             system_parts.append(instructions)
             messages.insert(0, {"role": "system", "content": "\n\n".join(system_parts)})
             available_names = {tool["function"]["name"] for tool in tools}
-            tool_name = _direct_camera_tool(request.text)
-            if tool_name is not None:
-                arguments = {"question": request.text} if tool_name == "self_camera_take_photo" else {}
+            direct_stop = _direct_stop_tool(request.text, available_names)
+            if direct_stop is not None:
                 result = json.loads(await self._execute(
-                    client, request, ToolCall(uuid.uuid4().hex, tool_name, self._text(arguments)), available_names,
+                    client, request, ToolCall(uuid.uuid4().hex, direct_stop, "{}"),
+                    available_names, device_tool_names,
                 ))
-                if tool_name == "self_camera_take_photo":
+                if result.get("success") is True:
+                    yield "设备已停止。"
+                else:
+                    reason = result.get("error") or result.get("tool_message") or "设备没有确认停止"
+                    yield f"设备停止失败：{reason}"
+                return
+            direct_camera = _direct_camera_tool(request.text)
+            tool_name = (_device_tool_name(direct_camera, available_names) or direct_camera) if direct_camera else None
+            if tool_name is not None:
+                arguments = {"question": request.text} if direct_camera == "self_camera_take_photo" else {}
+                result = json.loads(await self._execute(
+                    client, request, ToolCall(uuid.uuid4().hex, tool_name, self._text(arguments)),
+                    available_names, device_tool_names,
+                ))
+                if direct_camera == "self_camera_take_photo":
                     # This is the actual image analysis; another text-model
                     # round can replace it with an ungrounded confirmation.
                     if result.get("photo_captured") and result.get("vision_description"):
@@ -148,7 +211,7 @@ class CameraMcpDialogueBackend:
                 if not calls:
                     return
                 if not allowed_tools:
-                    yield "本轮摄像头操作已达到次数上限，请再试一次。"
+                    yield "本轮设备操作已达到次数上限，请再试一次。"
                     return
                 messages.append({
                     "role": "assistant", "content": "".join(spoken) or None,
@@ -157,24 +220,34 @@ class CameraMcpDialogueBackend:
                     }} for call in calls],
                 })
                 for call in calls:
-                    result = await self._execute(client, request, call, available_names)
+                    result = await self._execute(client, request, call, available_names, device_tool_names)
                     messages.append({"role": "tool", "tool_call_id": call.id, "content": result})
 
     async def _execute(
         self, client: aiohttp.ClientSession, request: TurnRequest, call: ToolCall,
-        available_names: set[str],
+        available_names: set[str], device_tool_names: set[str],
     ) -> str:
         try:
             if call.name not in available_names:
-                return self._text({"success": False, "error": "当前会话没有此摄像头工具"})
+                error = "当前会话没有此摄像头工具" if call.name.startswith("self_camera_") else "当前会话没有此设备工具"
+                return self._text({"success": False, "error": error})
             arguments = json.loads(call.arguments or "{}")
             if not isinstance(arguments, dict):
                 return self._text({"success": False, "error": "工具参数必须是对象"})
-            result = await self._rpc(client, request.session_id, "tools/call", {
-                "name": call.name, "arguments": arguments,
-            })
-        except (aiohttp.ClientError, asyncio.TimeoutError):
-            return self._text({"success": False, "error": "摄像头工具连接失败或响应超时"})
+            if call.name in device_tool_names:
+                if call.name.startswith("self.motion.") and call.name not in {"self.motion.stop", "self.motion.get_status"}:
+                    duration = arguments.get("duration_ms")
+                    if isinstance(duration, bool) or not isinstance(duration, int) or not 1 <= duration <= 5000:
+                        return self._text({"success": False, "error": "运动工具必须使用 1 到 5000 毫秒的 duration_ms"})
+                if request.device_mcp is None:
+                    return self._text({"success": False, "error": "实机 MCP 未连接"})
+                result = await request.device_mcp.call_tool(call.name, arguments)
+            else:
+                result = await self._rpc(client, request.session_id, "tools/call", {
+                    "name": call.name, "arguments": arguments,
+                })
+        except (aiohttp.ClientError, asyncio.TimeoutError, ConnectionError):
+            return self._text({"success": False, "error": "设备工具连接失败或响应超时"})
         except (ValueError, KeyError) as error:
             return self._text({"success": False, "error": str(error)})
         contents = result.get("content", [])

@@ -70,6 +70,7 @@ class VoiceSession:
         sentence_queue_size: int = 2,
         local_test_turn_events: bool = False,
         audio_packet_interval_s: float = 0.0,
+        device_mcp: Any | None = None,
     ) -> None:
         self.device_id = device_id
         self.session_id = session_id
@@ -83,6 +84,7 @@ class VoiceSession:
         self._sentence_queue_size = sentence_queue_size
         self._local_test_turn_events = local_test_turn_events
         self._audio_packet_interval_s = max(0.0, audio_packet_interval_s)
+        self._device_mcp = device_mcp
         self._tts = tts
         self._memory = memory
         self._vad = vad
@@ -247,7 +249,12 @@ class VoiceSession:
             messages = self._make_messages(context, text)
             assistant_chunks: list[str] = []
             request = TurnRequest(
-                self.device_id, self.session_id, f"{self.session_id}:{generation}", text, messages
+                self.device_id,
+                self.session_id,
+                f"{self.session_id}:{generation}",
+                text,
+                messages,
+                self._device_mcp,
             )
             stage = "dialogue"
             async with aclosing(self._response_sentences(request, assistant_chunks, generation)) as responses:

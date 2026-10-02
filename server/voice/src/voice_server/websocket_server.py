@@ -13,7 +13,14 @@ from websockets.exceptions import ConnectionClosed
 from voice_server.config import AppConfig
 from voice_server.dialogue import DialogueBackend
 from voice_server.compat import wait_for
-from voice_server.protocol.messages import HelloMessage, PingMessage, ProtocolError, make_server_hello, parse_client_message
+from voice_server.protocol.messages import (
+    HelloMessage,
+    PingMessage,
+    ProtocolError,
+    make_server_hello,
+    parse_client_message,
+    parse_mcp_message,
+)
 from voice_server.session import SessionLimitError, VoiceSession
 
 
@@ -38,6 +45,71 @@ class WebSocketTransport:
 
     async def close(self, code: int) -> None:
         await self._connection.close(code=code)
+
+
+class DeviceMcpBridge:
+    """Proxy JSON-RPC MCP calls over one physical device WebSocket."""
+
+    def __init__(self, transport: WebSocketTransport, session_id: str, timeout_s: float) -> None:
+        self._transport = transport
+        self._session_id = session_id
+        self._timeout_s = max(0.1, timeout_s)
+        self._next_id = 0
+        self._pending: dict[int, asyncio.Future[dict[str, Any]]] = {}
+        self._closed = False
+
+    async def list_tools(self) -> dict[str, Any]:
+        result = await self.request("tools/list", {"withUserTools": False})
+        return result if isinstance(result, dict) else {}
+
+    async def call_tool(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+        result = await self.request("tools/call", {"name": name, "arguments": arguments})
+        return result if isinstance(result, dict) else {}
+
+    async def request(self, method: str, params: dict[str, Any] | None = None) -> Any:
+        if self._closed:
+            raise ConnectionError("设备 MCP 会话已关闭")
+        self._next_id += 1
+        request_id = self._next_id
+        loop = asyncio.get_running_loop()
+        future: asyncio.Future[dict[str, Any]] = loop.create_future()
+        self._pending[request_id] = future
+        payload: dict[str, Any] = {"jsonrpc": "2.0", "id": request_id, "method": method}
+        if params is not None:
+            payload["params"] = params
+        try:
+            await self._transport.send_json(
+                {"session_id": self._session_id, "type": "mcp", "payload": payload}
+            )
+            response = await wait_for(future, self._timeout_s)
+        except Exception:
+            self._pending.pop(request_id, None)
+            raise
+        self._pending.pop(request_id, None)
+        if "error" in response:
+            error = response.get("error")
+            if isinstance(error, dict):
+                raise ValueError(str(error.get("message", "设备 MCP 调用失败")))
+            raise ValueError("设备 MCP 调用失败")
+        return response.get("result", {})
+
+    def resolve(self, payload: dict[str, Any]) -> bool:
+        request_id = payload.get("id")
+        if isinstance(request_id, bool) or not isinstance(request_id, int):
+            return False
+        future = self._pending.get(request_id)
+        if future is None or future.done():
+            return False
+        future.set_result(payload)
+        return True
+
+    async def close(self) -> None:
+        self._closed = True
+        error = ConnectionError("设备 MCP 会话已关闭")
+        for future in self._pending.values():
+            if not future.done():
+                future.set_exception(error)
+        self._pending.clear()
 
 
 class VoiceWebSocketServer:
@@ -128,12 +200,19 @@ class VoiceWebSocketServer:
             return
 
         session: Any | None = None
+        mcp_bridge: DeviceMcpBridge | None = None
         try:
             # Keep this feature opt-in.  It is used by the local browser bridge and
             # is ignored by normal device clients.
             local_test_turn_events = hello.local_test_turn_events
             transport = WebSocketTransport(connection)
             session_id = self._id_factory()
+            if hello.mcp:
+                mcp_bridge = DeviceMcpBridge(
+                    transport,
+                    session_id,
+                    self.config.mcp.timeout_seconds,
+                )
             session = self._session_factory(
                 device_id=device_id,
                 session_id=session_id,
@@ -160,6 +239,7 @@ class VoiceWebSocketServer:
                 sentence_max_chars=self.config.dialogue.sentence_max_chars,
                 sentence_queue_size=self.config.dialogue.sentence_queue_size,
                 local_test_turn_events=local_test_turn_events,
+                device_mcp=mcp_bridge,
                 # The browser bridge schedules PCM locally; physical devices
                 # need paced packets so their small playback queue does not
                 # overflow on long replies.
@@ -170,7 +250,7 @@ class VoiceWebSocketServer:
             self._active_sessions[id(session)] = session
             self._session_connected_at[id(session)] = time.time()
             await transport.send_json(make_server_hello(session_id, local_test_turn_events=local_test_turn_events))
-            await self._serve_messages(connection, session, transport)
+            await self._serve_messages(connection, session, transport, mcp_bridge)
         except _CloseConnection as error:
             await connection.close(code=error.code)
         except ConnectionClosed:
@@ -182,6 +262,8 @@ class VoiceWebSocketServer:
             except ConnectionClosed:
                 pass
         finally:
+            if mcp_bridge is not None:
+                await mcp_bridge.close()
             if session is not None:
                 self._active_sessions.pop(id(session), None)
                 self._session_connected_at.pop(id(session), None)
@@ -214,7 +296,13 @@ class VoiceWebSocketServer:
             raise _CloseConnection(1002)
         return message
 
-    async def _serve_messages(self, connection: Any, session: Any, transport: WebSocketTransport | None = None) -> None:
+    async def _serve_messages(
+        self,
+        connection: Any,
+        session: Any,
+        transport: WebSocketTransport | None = None,
+        mcp_bridge: DeviceMcpBridge | None = None,
+    ) -> None:
         transport = transport or WebSocketTransport(connection)
         while True:
             try:
@@ -231,6 +319,20 @@ class VoiceWebSocketServer:
                 except SessionLimitError as error:
                     raise _CloseConnection(1009) from error
                 continue
+            if isinstance(raw, str):
+                try:
+                    if len(raw.encode("utf-8")) > self.config.server.max_text_bytes:
+                        raise _CloseConnection(1009)
+                except UnicodeEncodeError as error:
+                    raise _CloseConnection(1002) from error
+                try:
+                    mcp_payload = parse_mcp_message(raw)
+                except ProtocolError as error:
+                    raise _CloseConnection(error.close_code) from error
+                if mcp_payload is not None:
+                    if mcp_bridge is not None and not mcp_bridge.resolve(mcp_payload):
+                        _LOGGER.warning("Ignoring unmatched device MCP response: session=%s", session.session_id)
+                    continue
             message = self._parse_text(raw)
             if isinstance(message, HelloMessage):
                 raise _CloseConnection(1002)
