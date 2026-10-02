@@ -151,6 +151,15 @@ def stop_process_group(pid: int) -> None:
             time.sleep(0.1)
 
 
+def stop_stale_deskbot_processes() -> list[int]:
+    """Stop voice/tester processes left by an earlier launcher instance."""
+    stale = deskbot_process_pids()
+    stale_pids = [pid for pids in stale.values() for pid in pids]
+    for pid in stale_pids:
+        stop_process_group(pid)
+    return stale_pids
+
+
 def running_ninfer() -> tuple[bool, bool]:
     """Return whether the known container is running and whether it has vision."""
     try:
@@ -386,8 +395,7 @@ class DeskbotLauncher:
             return process is not None and process.poll() is None
 
     def _preflight_ports(self) -> bool:
-        stale = deskbot_process_pids()
-        stale_pids = [pid for pids in stale.values() for pid in pids]
+        stale_pids = stop_stale_deskbot_processes()
         if stale_pids:
             self._log(
                 "发现上次面板遗留的 Deskbot 进程，正在停止："
@@ -754,6 +762,7 @@ def mode_name(kind: str, vision: bool) -> str:
 
 
 def main() -> None:
+    stop_stale_deskbot_processes()
     root = tk.Tk()
     DeskbotLauncher(root)
     root.mainloop()
