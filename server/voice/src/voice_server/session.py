@@ -69,6 +69,7 @@ class VoiceSession:
         sentence_max_chars: int = 100,
         sentence_queue_size: int = 2,
         local_test_turn_events: bool = False,
+        audio_packet_interval_s: float = 0.0,
     ) -> None:
         self.device_id = device_id
         self.session_id = session_id
@@ -81,6 +82,7 @@ class VoiceSession:
         self._sentence_max_chars = sentence_max_chars
         self._sentence_queue_size = sentence_queue_size
         self._local_test_turn_events = local_test_turn_events
+        self._audio_packet_interval_s = max(0.0, audio_packet_interval_s)
         self._tts = tts
         self._memory = memory
         self._vad = vad
@@ -205,6 +207,7 @@ class VoiceSession:
         tts_started = False
         tts_failed = False
         stage = "asr"
+        turn_mode = self._listen_mode
         try:
             text = transcript if transcript is not None else await wait_for(
                 self._asr.transcribe(pcm, 16_000), self._asr_timeout_s
@@ -298,6 +301,11 @@ class VoiceSession:
             if self._is_current(generation):
                 self._state_machine.abort()
                 self._clear_recording()
+                # Auto-stop and realtime devices keep their audio channel open
+                # after tts.stop. Re-arm the server for the next utterance.
+                if turn_mode in {"auto", "realtime"} and not self._closed:
+                    self._listen_mode = turn_mode
+                    self._state_machine.transition(SessionState.LISTENING)
                 if self._local_test_turn_events:
                     try:
                         await self._send_json(
@@ -400,6 +408,8 @@ class VoiceSession:
                 if not await self._send_bytes(generation, packet):
                     return started
                 sent_packets += 1
+                if self._audio_packet_interval_s:
+                    await asyncio.sleep(self._audio_packet_interval_s)
         if sent_packets == 0:
             raise RuntimeError("TTS produced no audio packets")
         return started
@@ -427,6 +437,8 @@ class VoiceSession:
                 if not await self._send_bytes(generation, packet):
                     return
                 sent_packets += 1
+                if self._audio_packet_interval_s:
+                    await asyncio.sleep(self._audio_packet_interval_s)
         if sent_packets == 0:
             raise RuntimeError("Music provider produced no audio")
         if await self._send_json(generation, make_tts(self.session_id, "stop")):

@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="tile" x1="14" y1="8" x2="112" y2="122" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1E3B70"/>
+      <stop offset="1" stop-color="#09172F"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="34" y1="88" x2="96" y2="108" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5BE0C1"/>
+      <stop offset="1" stop-color="#55A9FF"/>
+    </linearGradient>
+    <filter id="shadow" x="16" y="17" width="96" height="103" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#020916" flood-opacity=".38"/>
+    </filter>
+  </defs>
+  <rect x="4" y="4" width="120" height="120" rx="28" fill="url(#tile)"/>
+  <path d="M17 37c13-16 29-24 49-24 16 0 31 5 43 16" fill="none" stroke="#8EBBFF" stroke-linecap="round" stroke-opacity=".12" stroke-width="3"/>
+  <g filter="url(#shadow)">
+    <path d="M64 21v10" stroke="#69DCC8" stroke-linecap="round" stroke-width="5"/>
+    <circle cx="64" cy="18" r="5" fill="#69DCC8"/>
+    <rect x="27" y="30" width="74" height="61" rx="19" fill="#F4F7FC"/>
+    <path d="M44 55a5.5 5.5 0 1 0 11 0 5.5 5.5 0 0 0-11 0Zm29 0a5.5 5.5 0 1 0 11 0 5.5 5.5 0 0 0-11 0Z" fill="#19355F"/>
+    <path d="M49 71c4 4 9 6 15 6s11-2 15-6" fill="none" stroke="#35BCA9" stroke-linecap="round" stroke-width="4"/>
+    <path d="M64 91v5" stroke="#D5E4F3" stroke-linecap="round" stroke-width="6"/>
+    <rect x="32" y="94" width="64" height="21" rx="8" fill="#284A7B"/>
+    <circle cx="45" cy="104.5" r="3" fill="#67E0B9"/>
+    <path d="M54 104.5h20" stroke="url(#accent)" stroke-linecap="round" stroke-width="4"/>
+    <circle cx="84" cy="104.5" r="3" fill="#7DBAFF"/>
+  </g>
+</svg>

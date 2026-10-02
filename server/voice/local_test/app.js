@@ -8,7 +8,8 @@ const state = {
   audioSamples: 0, assistant: null, logs: [], inputKind: "audio", inputText: "",
   continuous: false, cameraStream: null, cameraStarting: false, cameraRequest: 0, cameraMcpSocket: null, continuousResumePending: false,
   continuousPhase: "started",
-  voiceSessionId: null, cameraStartPromise: null, cameraReconnectTimer: null, closing: false,
+  voiceSessionId: null, cameraStartPromise: null, cameraReconnectTimer: null, devicesTimer: null, closing: false,
+  historyDeviceId: "",
 };
 
 function log(kind, message) {
@@ -36,6 +37,40 @@ function showMessage(role, text) {
   return body;
 }
 
+function showHistoryMessage(message) {
+  const body = showMessage(message.role === "assistant" ? "assistant" : "user", message.content || "");
+  body.dataset.history = "true";
+}
+
+async function loadHistory(deviceId = state.historyDeviceId || $("device-id").value.trim()) {
+  deviceId = String(deviceId || "").trim();
+  if (!deviceId) {
+    $("history-status").textContent = "请先填写设备 ID。";
+    return;
+  }
+  state.historyDeviceId = deviceId;
+  $("history-status").textContent = `正在加载 ${deviceId} 的历史记录…`;
+  try {
+    const response = await fetch(`/api/history?device_id=${encodeURIComponent(deviceId)}&limit=50`);
+    const payload = await response.json();
+    if (!response.ok || !payload.ok) throw new Error(payload.detail || "历史记录接口响应异常");
+    $("transcript").replaceChildren();
+    const messages = Array.isArray(payload.messages) ? payload.messages : [];
+    if (payload.summary) showMessage("system", `记忆摘要：${payload.summary}`);
+    for (const message of messages) showHistoryMessage(message);
+    if (!messages.length && !payload.summary) {
+      const empty = document.createElement("p");
+      empty.className = "empty-state";
+      empty.textContent = "这个设备还没有历史对话";
+      $("transcript").append(empty);
+    }
+    $("history-status").textContent = `已加载 ${deviceId} 的 ${messages.length} 条历史消息。`;
+    $("transcript").scrollTop = $("transcript").scrollHeight;
+  } catch (error) {
+    $("history-status").textContent = error.message || "历史记录暂不可用";
+  }
+}
+
 function updateControls() {
   const inputBusy = Boolean(state.recording || state.upload || state.startingMic);
   $("connect").disabled = Boolean(state.socket);
@@ -53,6 +88,62 @@ function updateControls() {
 function connectionStatus(text, kind = "") {
   $("connection-status").textContent = text;
   $("connection-status").className = `badge ${kind}`;
+}
+
+function formatDuration(seconds) {
+  const total = Math.max(0, Math.floor(Number(seconds) || 0));
+  if (total < 60) return `${total} 秒`;
+  const minutes = Math.floor(total / 60);
+  return `${minutes} 分 ${total % 60} 秒`;
+}
+
+function renderDevices(payload) {
+  const sessions = Array.isArray(payload.sessions) ? payload.sessions : [];
+  $("device-count").textContent = String(payload.active_count ?? sessions.length);
+  const list = $("device-list");
+  list.replaceChildren();
+  if (!sessions.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty-state";
+    empty.textContent = "当前没有在线设备";
+    list.append(empty);
+    return;
+  }
+  const stateLabels = {connected: "已连接", idle: "空闲", listening: "正在听", recognizing: "识别中", thinking: "思考中", speaking: "播放中", closed: "已关闭"};
+  for (const session of sessions) {
+    const item = document.createElement("div");
+    item.className = "device-item";
+    const heading = document.createElement("div");
+    heading.className = "device-heading";
+    const name = document.createElement("strong");
+    name.textContent = session.device_id || "未知设备";
+    const badge = document.createElement("span");
+    badge.className = "device-state";
+    badge.textContent = stateLabels[session.state] || session.state || "未知";
+    heading.append(name, badge);
+    const detail = document.createElement("div");
+    detail.className = "device-detail";
+    detail.textContent = `会话 ${session.session_id || "—"} · 已连接 ${formatDuration(session.duration_s)}`;
+    const historyButton = document.createElement("button");
+    historyButton.className = "quiet device-history";
+    historyButton.textContent = "查看历史";
+    historyButton.addEventListener("click", () => void loadHistory(session.device_id));
+    item.append(heading, detail, historyButton);
+    list.append(item);
+  }
+}
+
+async function refreshDevices() {
+  try {
+    const response = await fetch("/api/devices");
+    if (!response.ok) throw new Error("设备状态接口响应异常");
+    const payload = await response.json();
+    renderDevices(payload);
+    $("device-status").textContent = payload.ok ? "每 2 秒刷新一次；设备断开后会从列表移除。" : (payload.detail || "设备状态暂不可用");
+  } catch (error) {
+    renderDevices({sessions: [], active_count: 0});
+    $("device-status").textContent = "语音服务未启动或设备状态暂不可用";
+  }
 }
 
 function send(message) {
@@ -239,6 +330,7 @@ async function connect() {
   socket.onopen = () => {
     socket.send(JSON.stringify({type: "connect", device_id: $("device-id").value.trim(), token: $("token").value}));
     log("连接", "测试桥接已连接，等待语音服务握手…");
+    void loadHistory($("device-id").value.trim());
   };
   socket.onmessage = ({data}) => {
     if (data instanceof ArrayBuffer) playPCM(data);
@@ -653,10 +745,12 @@ $("audio-file").addEventListener("change", () => {
   $("audio-file").value = "";
 });
 $("refresh-health").addEventListener("click", () => void refreshHealth());
+$("refresh-devices").addEventListener("click", () => void refreshDevices());
 $("camera-start").addEventListener("click", () => void startCamera());
 $("camera-shot").addEventListener("click", () => void captureCamera());
 $("camera-stop").addEventListener("click", stopCamera);
 $("clear-dialogue").addEventListener("click", () => { $("transcript").replaceChildren(); state.assistant = null; });
+$("load-history").addEventListener("click", () => void loadHistory());
 $("clear-log").addEventListener("click", () => { state.logs = []; $("event-log").textContent = ""; });
 $("export-log").addEventListener("click", () => {
   const url = URL.createObjectURL(new Blob([state.logs.join("\n")], {type: "text/plain;charset=utf-8"}));
@@ -668,6 +762,7 @@ $("export-log").addEventListener("click", () => {
 });
 window.addEventListener("beforeunload", () => {
   state.closing = true;
+  clearInterval(state.devicesTimer);
   clearTimeout(state.cameraReconnectTimer);
   state.recording?.stream.getTracks().forEach((track) => track.stop());
   state.cameraStream?.getTracks().forEach((track) => track.stop());
@@ -675,4 +770,6 @@ window.addEventListener("beforeunload", () => {
   state.socket?.close();
 });
 void refreshHealth();
+void refreshDevices();
+state.devicesTimer = setInterval(() => void refreshDevices(), 2000);
 connectCameraMcp();

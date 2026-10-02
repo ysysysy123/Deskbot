@@ -141,7 +141,13 @@ class ServerApplication:
                 create_ota_app(config), config.server.ota_host, config.server.ota_port
             ),
             admin_listener_factory=lambda: _start_aiohttp(
-                create_admin_app(config, memory_service), config.admin_api.host, config.admin_api.port
+                create_admin_app(
+                    config,
+                    memory_service,
+                    session_status=websocket_server.session_snapshot,
+                ),
+                config.admin_api.host,
+                config.admin_api.port,
             ),
             provider_resources=tuple(item for item in (asr, llm, tts, music, dialogue_backend) if item is not None),
         )

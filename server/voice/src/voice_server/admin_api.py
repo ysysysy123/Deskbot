@@ -9,7 +9,7 @@ from voice_server.memory.models import MemoryContext, MemoryMessage
 from voice_server.memory.service import MemoryService
 
 
-def create_admin_app(config: AppConfig, memory: MemoryService) -> web.Application:
+def create_admin_app(config: AppConfig, memory: MemoryService, *, session_status=None) -> web.Application:
     @web.middleware
     async def admin_auth(request: web.Request, handler):
         if not check_admin_token(request.headers.get("Authorization"), config.admin_api.token):
@@ -64,9 +64,14 @@ def create_admin_app(config: AppConfig, memory: MemoryService) -> web.Applicatio
         await memory.clear(device_id)
         return web.Response(status=204)
 
+    async def get_sessions(request: web.Request) -> web.Response:
+        sessions = session_status() if session_status is not None else []
+        return web.json_response({"sessions": sessions, "active_count": len(sessions)})
+
     app.router.add_get("/api/v1/memory/{device_id}", get_memory)
     app.router.add_post("/api/v1/memory/{device_id}/messages", remember_message)
     app.router.add_delete("/api/v1/memory/{device_id}", clear_memory)
+    app.router.add_get("/api/v1/sessions", get_sessions)
     return app
 
 
