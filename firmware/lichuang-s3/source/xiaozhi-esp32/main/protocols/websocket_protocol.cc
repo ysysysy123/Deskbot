@@ -207,7 +207,8 @@ std::string WebsocketProtocol::GetHelloMessage() {
 #endif
     cJSON_AddBoolToObject(features, "mcp", true);
     cJSON_AddItemToObject(root, "features", features);
-    AddTextFontCapabilities(root);
+    // Note: Omit top-level text_font for voice server protocol compatibility
+    // AddTextFontCapabilities(root);
     cJSON_AddStringToObject(root, "transport", "websocket");
     cJSON* audio_params = cJSON_CreateObject();
     cJSON_AddStringToObject(audio_params, "format", "opus");
@@ -217,6 +218,7 @@ std::string WebsocketProtocol::GetHelloMessage() {
     cJSON_AddItemToObject(root, "audio_params", audio_params);
     auto json_str = cJSON_PrintUnformatted(root);
     std::string message(json_str);
+    ESP_LOGI(TAG, "Prepared Hello JSON: %s", message.c_str());
     cJSON_free(json_str);
     cJSON_Delete(root);
     return message;
