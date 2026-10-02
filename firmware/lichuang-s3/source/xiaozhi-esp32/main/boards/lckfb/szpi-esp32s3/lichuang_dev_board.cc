@@ -25,6 +25,7 @@
 #include <memory>
 #include <mbedtls/base64.h>
 #include <soc/lcd_cam_struct.h>
+#include <esp_timer.h>
 
 extern "C" {
 void cam_set_psram_mode(bool enable);
@@ -325,7 +326,7 @@ private:
         config.pixel_format = PIXFORMAT_RGB565;
         config.frame_size = FRAMESIZE_QVGA;
         config.jpeg_quality = 12;
-        config.fb_count = 2;
+        config.fb_count = 1;
         config.fb_location = CAMERA_FB_IN_PSRAM;
         config.grab_mode = CAMERA_GRAB_WHEN_EMPTY;
 
@@ -454,7 +455,9 @@ public:
 #if CONFIG_DESKBOT_MOTION_PCA9685
         InitializeMotion();
 #endif
+        vTaskDelay(pdMS_TO_TICKS(40));
         InitializeCamera();
+        vTaskDelay(pdMS_TO_TICKS(40));
         InitializeSpi();
         InitializeSt7789Display();
         InitializeTouch();
@@ -462,7 +465,25 @@ public:
         InitializeTools();
         StartSerialDiagnosticTask();
 
-        GetBacklight()->RestoreBrightness();
+        // Soft start backlight at 10% to prevent inrush current on battery supplies.
+        // Smoothly restore full brightness after 2.0s when Wi-Fi calibration is finished.
+        GetBacklight()->SetBrightness(10, false);
+        esp_timer_handle_t bl_timer;
+        const esp_timer_create_args_t bl_args = {
+            .callback = [](void* arg) {
+                auto* b = static_cast<LichuangDevBoard*>(arg);
+                b->GetBacklight()->RestoreBrightness();
+            },
+            .arg = this,
+            .dispatch_method = ESP_TIMER_TASK,
+            .name = "bl_soft_start",
+            .skip_unhandled_events = true,
+        };
+        if (esp_timer_create(&bl_args, &bl_timer) == ESP_OK) {
+            esp_timer_start_once(bl_timer, 2000000); // 2.0s
+        } else {
+            GetBacklight()->RestoreBrightness();
+        }
     }
 
     virtual AudioCodec* GetAudioCodec() override {
