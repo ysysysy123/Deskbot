@@ -100,6 +100,57 @@ def port_is_in_use(port: int) -> bool:
     return False
 
 
+def deskbot_process_pids() -> dict[str, list[int]]:
+    """Find Deskbot voice/tester processes left by an earlier panel instance."""
+    scripts = {
+        "voice": "server/voice/run.py",
+        "tester": "server/voice/local_test.py",
+    }
+    found = {name: [] for name in scripts}
+    proc_root = Path("/proc")
+    if not proc_root.is_dir():
+        return found
+    for entry in proc_root.iterdir():
+        if not entry.name.isdigit() or int(entry.name) == os.getpid():
+            continue
+        try:
+            command = (entry / "cmdline").read_bytes().decode(errors="ignore").split("\0")
+        except (OSError, UnicodeError):
+            continue
+        for name, script in scripts.items():
+            if script in command or str(ROOT / script) in command:
+                found[name].append(int(entry.name))
+                break
+    return found
+
+
+def stop_process_group(pid: int) -> None:
+    """Stop one known Deskbot process and its children."""
+    try:
+        process_group = os.getpgid(pid)
+    except ProcessLookupError:
+        return
+    target = process_group if process_group != os.getpgrp() else pid
+    for terminate_signal, wait_seconds in (
+        (signal.SIGINT, 3),
+        (signal.SIGTERM, 3),
+        (signal.SIGKILL, 1),
+    ):
+        try:
+            os.killpg(target, terminate_signal) if target == process_group else os.kill(target, terminate_signal)
+        except ProcessLookupError:
+            return
+        deadline = time.monotonic() + wait_seconds
+        while time.monotonic() < deadline:
+            try:
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                return
+            except PermissionError:
+                return
+            time.sleep(0.1)
+
+
 def running_ninfer() -> tuple[bool, bool]:
     """Return whether the known container is running and whether it has vision."""
     try:
@@ -335,6 +386,16 @@ class DeskbotLauncher:
             return process is not None and process.poll() is None
 
     def _preflight_ports(self) -> bool:
+        stale = deskbot_process_pids()
+        stale_pids = [pid for pids in stale.values() for pid in pids]
+        if stale_pids:
+            self._log(
+                "发现上次面板遗留的 Deskbot 进程，正在停止："
+                + ", ".join(str(pid) for pid in stale_pids)
+            )
+            for pid in stale_pids:
+                stop_process_group(pid)
+
         occupied = []
         for port, process_name in ((8000, "voice"), (8003, "voice"), (8006, "tester")):
             if port_is_in_use(port) and not self._owned_process_running(process_name):
