@@ -30,6 +30,10 @@ public:
     void HideCameraPanel();
     bool IsCamPanelVisible() const { return cam_panel_visible_; }
 
+    void SetCamera(Esp32Camera* camera) { camera_ = camera; }
+    void SetImu(Qmi8658* imu) { imu_ = imu; }
+    void SetMotion(MotionController* motion) { motion_ = motion; }
+
 private:
     void CreateEntranceButtons();
     void CreateServoPanel();
