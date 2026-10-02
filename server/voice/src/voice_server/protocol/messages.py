@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import TypeAlias
+from typing import Any, TypeAlias
 
 
 class ProtocolError(ValueError):
@@ -17,6 +17,7 @@ class HelloMessage:
     channels: int
     frame_duration: int
     local_test_turn_events: bool = False
+    mcp: bool = False
 
 
 @dataclass(frozen=True)
@@ -72,6 +73,20 @@ def parse_client_message(raw: str) -> ClientMessage:
     raise ProtocolError("unsupported message type")
 
 
+def parse_mcp_message(raw: str) -> dict[str, Any] | None:
+    """Extract the JSON-RPC payload sent by a device MCP server."""
+    try:
+        message = json.loads(raw, object_pairs_hook=_reject_duplicate_members)
+    except (TypeError, json.JSONDecodeError) as error:
+        raise ProtocolError("invalid JSON message") from error
+    if not isinstance(message, dict) or message.get("type") != "mcp":
+        return None
+    payload = message.get("payload")
+    if not isinstance(payload, dict):
+        raise ProtocolError("mcp payload must be an object")
+    return payload
+
+
 def make_server_hello(session_id: str, *, local_test_turn_events: bool = False) -> dict[str, object]:
     result = {
         "type": "hello",
@@ -118,6 +133,9 @@ def _parse_hello(message: dict[str, object]) -> HelloMessage:
     local_test_turn_events = features.get("local_test_turn_events", False)
     if not isinstance(local_test_turn_events, bool):
         raise ProtocolError("local_test_turn_events must be a boolean")
+    mcp = features.get("mcp", False)
+    if not isinstance(mcp, bool):
+        raise ProtocolError("mcp must be a boolean")
     audio_params = message["audio_params"]
     if not isinstance(audio_params, dict):
         raise ProtocolError("audio_params must be an object")
@@ -142,6 +160,7 @@ def _parse_hello(message: dict[str, object]) -> HelloMessage:
         channels=1,
         frame_duration=60,
         local_test_turn_events=local_test_turn_events,
+        mcp=mcp,
     )
 
 

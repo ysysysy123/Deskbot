@@ -84,6 +84,10 @@ VOICE_VISION_TIMEOUT_SECONDS=60
 
 MCP 服务地址为 `http://127.0.0.1:8006/mcp`，提供 `self_camera_start`、`self_camera_take_photo`、上游兼容别名 `self.camera.take_photo`、`self_camera_stop` 和 `self_camera_status`；拍照结果以 MCP image content 返回，图片不经过语音 WebSocket。外部 Agent 可使用 JSON-RPC `initialize`、`tools/list`、`tools/call` 访问它；多个测试页同时打开时，通过参数 `_meta` 中的 `deskbot/session_id` 指定语音会话。
 
+实机固件在 WebSocket hello 的 `features.mcp=true` 时，语音服务器会自动通过当前设备的同一条 WebSocket 转发 `tools/list` 和 `tools/call`。模型可使用设备声明的 `self.motion.*`、`self.sensor.*` 和 `self.camera.*` 工具，工具结果会回到模型后再生成语音。运动调用由服务端要求 `duration_ms` 在 1 到 5000 毫秒之间；设备断开时不会继续保留待处理的 MCP 请求。语音示例包括“向前走一秒”“马上停下”“现在姿态怎么样”和“看看前面有什么”。
+
+这条实机链路仍由 `VOICE_MCP_ENABLED=true` 总开关控制；它不需要把实机 MCP 当成 HTTP 地址填写，设备工具来自当前语音 WebSocket 会话。麦克风继续使用 `listen.start/stop` 协议，不作为 MCP 工具暴露。
+
 麦克风和摄像头必须使用本机 `localhost/127.0.0.1` 或 HTTPS 安全上下文；直接访问局域网 HTTP 地址可能无法取得采集权限。单轮录音最长跟随 `VOICE_SERVER_MAX_RECORDING_SECONDS`，默认 30 秒，持续对话没有总时长限制。
 
 页面发送 16 kHz 单声道 PCM，测试桥编码为设备协议的 60 ms 原始 Opus；回复按 24 kHz 解码播放。此方式验证真实协议和语音服务，但不会测试 ESP32 的拾音、回声、喇叭或 Wi-Fi 稳定性。
@@ -114,7 +118,7 @@ python performance_tester.py all --audio samples/speech.wav --json data/performa
 
 同日通过真实浏览器验证对话打开摄像头、拍照后视觉回答及关闭释放设备；两页同时连接时工具只发送给绑定会话。结果摘要在 `data/camera-dialogue-acceptance.json`，不含照片。
 
-随后针对组合指令补充验收：摄像头关闭时上传“打开摄像头看看看到了什么”的语音样本，实际 ASR 正确转写、直接拍照工具自动开启摄像头并返回画面描述，首段回复约 4.49 秒；持续麦克风模式也实际转写了“你打开摄像头看看有什么。”并完成同样流程。结果记录于 `data/camera-combined-acceptance.json`，不含图像。当前离线测试为 306 项 Python 与 10 项浏览器逻辑测试通过。
+随后针对组合指令补充验收：摄像头关闭时上传“打开摄像头看看看到了什么”的语音样本，实际 ASR 正确转写、直接拍照工具自动开启摄像头并返回画面描述，首段回复约 4.49 秒；持续麦克风模式也实际转写了“你打开摄像头看看有什么。”并完成同样流程。结果记录于 `data/camera-combined-acceptance.json`，不含图像。当前离线测试为 309 项 Python 与 10 项浏览器逻辑测试通过。
 
 ```bash
 .venv/bin/python -m pytest -q

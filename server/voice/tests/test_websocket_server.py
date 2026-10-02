@@ -24,6 +24,20 @@ HELLO = json.dumps(
         },
     }
 )
+HELLO_MCP = json.dumps(
+    {
+        "type": "hello",
+        "version": 1,
+        "transport": "websocket",
+        "features": {"mcp": True},
+        "audio_params": {
+            "format": "opus",
+            "sample_rate": 16000,
+            "channels": 1,
+            "frame_duration": 60,
+        },
+    }
+)
 
 
 class FakeSession:
@@ -33,6 +47,7 @@ class FakeSession:
         self.messages = []
         self.audio = []
         self.closed = False
+        self.device_mcp = kwargs.get("device_mcp")
 
     async def handle_message(self, message):
         self.messages.append(message)
@@ -135,6 +150,30 @@ async def test_client_id_is_accepted_but_device_id_remains_session_memory_key():
             await client.send(HELLO)
             assert json.loads(await client.recv()) == make_server_hello("session-1")
             assert sessions[0].device_id == "device-a"
+    finally:
+        listener.close()
+        await listener.wait_closed()
+
+
+async def test_device_mcp_bridge_round_trips_jsonrpc_over_voice_socket():
+    sessions = []
+    server = _server(sessions=sessions)
+    listener, url = await _listen(server)
+    try:
+        async with websockets.connect(url, additional_headers={"Device-Id": "device-mcp"}) as client:
+            await client.send(HELLO_MCP)
+            assert json.loads(await client.recv())["type"] == "hello"
+            request_task = asyncio.create_task(sessions[0].device_mcp.list_tools())
+            outgoing = json.loads(await client.recv())
+            assert outgoing["type"] == "mcp"
+            assert outgoing["payload"]["method"] == "tools/list"
+            request_id = outgoing["payload"]["id"]
+            await client.send(json.dumps({
+                "session_id": "session-1",
+                "type": "mcp",
+                "payload": {"jsonrpc": "2.0", "id": request_id, "result": {"tools": []}},
+            }))
+            assert await request_task == {"tools": []}
     finally:
         listener.close()
         await listener.wait_closed()

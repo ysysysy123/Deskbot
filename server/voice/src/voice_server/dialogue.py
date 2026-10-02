@@ -2,7 +2,7 @@
 
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Any, Protocol
 
 from voice_server.providers.base import LLMProvider
 
@@ -20,6 +20,7 @@ class TurnRequest:
     turn_id: str
     text: str
     messages: list[dict[str, str]]
+    device_mcp: Any | None = None
 
 
 class DialogueBackend(Protocol):

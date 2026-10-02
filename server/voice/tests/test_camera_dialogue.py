@@ -56,6 +56,28 @@ def request(text="请继续。"):
     return TurnRequest("device", "browser-session", "turn", text, [{"role": "user", "content": text}])
 
 
+class FakeDeviceMcp:
+    def __init__(self):
+        self.calls = []
+
+    async def list_tools(self):
+        return {"tools": [
+            {"name": "self.motion.drive", "description": "驱动底盘", "inputSchema": {
+                "type": "object", "properties": {
+                    "linear": {"type": "integer"}, "angular": {"type": "integer"},
+                    "duration_ms": {"type": "integer"},
+                }, "required": ["duration_ms"],
+            }},
+            {"name": "self.sensor.get_imu", "description": "读取姿态", "inputSchema": {
+                "type": "object", "properties": {},
+            }},
+        ]}
+
+    async def call_tool(self, name, arguments):
+        self.calls.append((name, arguments))
+        return {"structuredContent": {"success": True, "message": "已执行"}, "content": [{"type": "text", "text": "已执行"}]}
+
+
 async def mcp_server(aiohttp_client, results, *, tools=None):
     calls = []
     tools = tools if tools is not None else [
@@ -124,6 +146,37 @@ async def test_camera_tool_rounds_aggregate_args_route_session_and_keep_images_o
     assert vision_calls[0]["model"] == "vision-model"
     assert vision_calls[0]["messages"][1]["content"][1]["image_url"]["url"] == "data:image/jpeg;base64,PHOTO_BYTES"
     assert completions.closed == 3
+
+
+async def test_device_mcp_tools_are_exposed_to_model_and_called_over_session(aiohttp_client):
+    url, _ = await mcp_server(aiohttp_client, [], tools=[])
+    device_mcp = FakeDeviceMcp()
+    llm, completions = provider([
+        [chunk(name="self.motion.drive", arguments='{"linear":30,"angular":0,"duration_ms":1000}', call_id="drive")],
+        [chunk("已经向前走了一秒。")],
+    ])
+    backend = CameraMcpDialogueBackend(llm, mcp_url=url)
+    turn = request("向前走一秒")
+    turn = TurnRequest(turn.device_id, turn.session_id, turn.turn_id, turn.text, turn.messages, device_mcp)
+    assert [part async for part in backend.stream(turn)] == ["已经向前走了一秒。"]
+    assert device_mcp.calls == [("self.motion.drive", {"linear": 30, "angular": 0, "duration_ms": 1000})]
+    assert {tool["function"]["name"] for tool in completions.calls[0]["tools"]} == {
+        "self.motion.drive", "self.sensor.get_imu",
+    }
+
+
+async def test_device_motion_requires_bounded_duration(aiohttp_client):
+    url, _ = await mcp_server(aiohttp_client, [], tools=[])
+    device_mcp = FakeDeviceMcp()
+    llm, completions = provider([
+        [chunk(name="self.motion.drive", arguments='{"linear":30,"angular":0,"duration_ms":6000}', call_id="drive")],
+        [chunk("这次运动请求超过了安全时长。")],
+    ])
+    backend = CameraMcpDialogueBackend(llm, mcp_url=url)
+    turn = request("向前走六秒")
+    turn = TurnRequest(turn.device_id, turn.session_id, turn.turn_id, turn.text, turn.messages, device_mcp)
+    assert [part async for part in backend.stream(turn)] == ["这次运动请求超过了安全时长。"]
+    assert device_mcp.calls == []
 
 
 @pytest.mark.parametrize("result, expected", [
