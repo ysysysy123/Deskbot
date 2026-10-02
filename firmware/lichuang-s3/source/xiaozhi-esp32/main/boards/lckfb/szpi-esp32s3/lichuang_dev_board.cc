@@ -561,6 +561,18 @@ public:
     virtual Camera* GetCamera() override {
         return camera_;
     }
+
+    virtual MotionController* GetMotionController() override {
+#if CONFIG_DESKBOT_MOTION_PCA9685
+        return motion_controller_.get();
+#else
+        return nullptr;
+#endif
+    }
+
+    virtual Qmi8658* GetImu() override {
+        return imu_.get();
+    }
 };
 
 DECLARE_BOARD(LichuangDevBoard);
