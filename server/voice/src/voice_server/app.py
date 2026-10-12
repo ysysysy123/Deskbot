@@ -20,6 +20,7 @@ from voice_server.memory.sqlite import SQLiteMemoryProvider
 from voice_server.music import MusicProvider
 from voice_server.ota import create_ota_app
 from voice_server.providers.edge_tts import EdgeTTSProvider
+from voice_server.providers.local_tts import LocalCommandTTSProvider
 from voice_server.providers.openai_compatible import OpenAICompatibleLLMProvider
 from voice_server.providers.openai_vision import OpenAICompatibleVisionProvider
 from voice_server.providers.sensevoice import SenseVoiceASRProvider
@@ -43,6 +44,7 @@ class ServerApplication:
         ota_listener_factory: ListenerFactory,
         admin_listener_factory: ListenerFactory,
         provider_resources: Sequence[Any] = (),
+        readiness_state: dict[str, object] | None = None,
     ) -> None:
         self.config = config
         self._memory_store = memory_store
@@ -54,6 +56,7 @@ class ServerApplication:
             admin_listener_factory,
         )
         self._provider_resources = tuple(provider_resources)
+        self._readiness_state = readiness_state
         self._listeners: list[Any] = []
         self._lifecycle_lock = asyncio.Lock()
         self._started = False
@@ -67,9 +70,13 @@ class ServerApplication:
         # load_config must read VOICE_OPUS_DLL_DIR before the native codec imports.
         from voice_server.audio.opus import OpusCodec
 
-        memory_store = SQLiteMemoryProvider(Path(config.memory.database_path), context_limit=config.memory.context_limit)
+        memory_store = SQLiteMemoryProvider(
+            Path(config.memory.database_path),
+            context_limit=config.memory.context_limit,
+            max_messages_per_device=config.memory.max_messages_per_device,
+        )
         asr = SenseVoiceASRProvider.from_model_path(
-            config.asr.model_path, max_concurrency=config.asr.max_concurrency
+            config.asr.model_path, max_concurrency=config.asr.max_concurrency, language=config.asr.language
         )
         llm = OpenAICompatibleLLMProvider(
             base_url=config.llm.base_url,
@@ -78,14 +85,15 @@ class ServerApplication:
             temperature=config.llm.temperature,
             max_tokens=config.llm.max_tokens,
             timeout_s=config.llm.timeout_s,
+            max_retries=config.llm.max_retries,
         )
+        vision = OpenAICompatibleVisionProvider(
+            base_url=config.vision.base_url or config.llm.base_url,
+            model=config.vision.model,
+            api_key=config.vision.api_key or config.llm.api_key,
+            timeout_s=config.vision.timeout_seconds,
+        ) if dialogue_backend is None and config.mcp.enabled and config.vision.enabled else None
         if dialogue_backend is None and config.mcp.enabled:
-            vision = OpenAICompatibleVisionProvider(
-                base_url=config.vision.base_url or config.llm.base_url,
-                model=config.vision.model,
-                api_key=config.vision.api_key or config.llm.api_key,
-                timeout_s=config.vision.timeout_seconds,
-            ) if config.vision.enabled else None
             dialogue_backend = CameraMcpDialogueBackend(
                 llm,
                 mcp_url=config.mcp.url,
@@ -93,11 +101,14 @@ class ServerApplication:
                 max_tool_rounds=config.mcp.max_rounds,
                 vision=vision,
             )
-        tts = EdgeTTSProvider(
-            voice=config.tts.voice,
-            rate=config.tts.rate,
-            volume=config.tts.volume,
-        )
+        if config.tts.provider == "command":
+            tts = LocalCommandTTSProvider(config.tts.command)
+        else:
+            tts = EdgeTTSProvider(
+                voice=config.tts.voice,
+                rate=config.tts.rate,
+                volume=config.tts.volume,
+            )
         music = MusicProvider(
             ffmpeg_path=config.music.ffmpeg_path,
             max_duration_s=config.music.max_duration_s,
@@ -126,6 +137,14 @@ class ServerApplication:
             music=music,
             dialogue_backend=dialogue_backend,
         )
+        readiness_state: dict[str, object] = {
+            "status": "starting",
+            "providers": {
+                "asr": "loaded",
+                "llm": "configured",
+                "tts": config.tts.provider,
+            },
+        }
         return cls(
             config=config,
             memory_store=memory_store,
@@ -135,21 +154,25 @@ class ServerApplication:
                 websocket_server.handle_connection,
                 config.server.host,
                 config.server.ws_port,
-                max_size=None,
+                max_size=max(config.server.max_text_bytes, config.server.max_binary_bytes),
             ),
             ota_listener_factory=lambda: _start_aiohttp(
-                create_ota_app(config), config.server.ota_host, config.server.ota_port
+                create_ota_app(config, vision=vision, readiness=lambda: readiness_state),
+                config.server.ota_host,
+                config.server.ota_port,
             ),
             admin_listener_factory=lambda: _start_aiohttp(
                 create_admin_app(
                     config,
                     memory_service,
                     session_status=websocket_server.session_snapshot,
+                    device_tool_call=websocket_server.call_device_tool,
                 ),
                 config.admin_api.host,
                 config.admin_api.port,
             ),
             provider_resources=tuple(item for item in (asr, llm, tts, music, dialogue_backend) if item is not None),
+            readiness_state=readiness_state,
         )
 
     async def start(self) -> None:
@@ -166,6 +189,8 @@ class ServerApplication:
                 await asyncio.shield(self._begin_shutdown())
                 raise
             self._started = True
+            if self._readiness_state is not None:
+                self._readiness_state["status"] = "ready"
 
     async def stop(self) -> None:
         async with self._lifecycle_lock:
@@ -191,6 +216,8 @@ class ServerApplication:
 
     async def _shutdown(self) -> Exception | None:
         self._started = False
+        if self._readiness_state is not None:
+            self._readiness_state["status"] = "stopping"
         first_error: Exception | None = None
 
         async def close(item: Any) -> None:

@@ -1,4 +1,5 @@
 from collections.abc import AsyncIterator, Callable
+from contextlib import aclosing
 from typing import Any
 
 from voice_server.audio.transcoder import FFmpegTranscoder
@@ -35,18 +36,25 @@ class EdgeTTSProvider:
             rate=self._rate,
             volume=self._volume,
         )
-        audio_parts = []
-        async for event in communicator.stream():
-            if event.get("type") == "audio":
-                audio_parts.append(event["data"])
-        media = b"".join(audio_parts)
-        if not media:
-            raise ValueError("Edge TTS returned no audio")
 
-        pcm = await self._transcoder.to_pcm(media)
-        if not pcm:
+        async def audio_stream() -> AsyncIterator[bytes]:
+            received_audio = False
+            async with aclosing(communicator.stream()) as events:
+                async for event in events:
+                    if event.get("type") == "audio" and event["data"]:
+                        received_audio = True
+                        yield event["data"]
+            if not received_audio:
+                raise ValueError("Edge TTS returned no audio")
+
+        received_pcm = False
+        async with aclosing(audio_stream()) as media:
+            async with aclosing(self._transcoder.stream_mp3_to_pcm(media, chunk_size=self._chunk_size)) as pcm_stream:
+                async for pcm in pcm_stream:
+                    if len(pcm) % 2:
+                        raise ValueError("Edge TTS PCM must contain an even number of bytes")
+                    if pcm:
+                        received_pcm = True
+                        yield pcm
+        if not received_pcm:
             raise ValueError("Edge TTS transcoder returned no PCM audio")
-        if len(pcm) % 2:
-            raise ValueError("Edge TTS PCM must contain an even number of bytes")
-        for offset in range(0, len(pcm), self._chunk_size):
-            yield pcm[offset : offset + self._chunk_size]

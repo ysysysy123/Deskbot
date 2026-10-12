@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import re
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -10,9 +11,14 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class SQLiteMemoryProvider:
-    def __init__(self, path: Path | str, *, context_limit: int = 64) -> None:
+    def __init__(
+        self, path: Path | str, *, context_limit: int = 64, max_messages_per_device: int = 5000
+    ) -> None:
         self._path = Path(path)
         self._context_limit = context_limit
+        if max_messages_per_device <= 0:
+            raise ValueError("max_messages_per_device must be positive")
+        self._max_messages_per_device = max_messages_per_device
 
     async def initialize(self) -> None:
         await asyncio.to_thread(self._initialize)
@@ -24,19 +30,17 @@ class SQLiteMemoryProvider:
         if role not in {"user", "assistant"}:
             raise ValueError("role must be user or assistant")
         created_at = datetime.now(timezone.utc).isoformat()
-        await asyncio.to_thread(
-            self._remember, device_id, session_id, role, content, created_at
-        )
+        await asyncio.to_thread(self._remember, device_id, session_id, role, content, created_at)
 
     async def recall(self, device_id: str, query: str, recent_limit: int) -> MemoryContext:
         _require_nonblank("device_id", device_id)
         if recent_limit < 0:
             raise ValueError("recent_limit must not be negative")
-        return await asyncio.to_thread(self._recall, device_id, recent_limit)
+        return await asyncio.to_thread(self._recall, device_id, recent_limit, False, query)
 
     async def recall_for_turn(self, device_id: str, query: str, recent_limit: int) -> MemoryContext:
         """Include pending summary messages without changing admin pagination."""
-        return await asyncio.to_thread(self._recall, device_id, recent_limit, True)
+        return await asyncio.to_thread(self._recall, device_id, recent_limit, True, query)
 
     async def clear(self, device_id: str) -> None:
         _require_nonblank("device_id", device_id)
@@ -66,6 +70,8 @@ class SQLiteMemoryProvider:
         self._path.parent.mkdir(parents=True, exist_ok=True)
         connection = self._connect()
         try:
+            connection.execute("PRAGMA journal_mode=WAL")
+            connection.execute("PRAGMA synchronous=NORMAL")
             connection.executescript(
                 """
                 CREATE TABLE IF NOT EXISTS memory_messages (
@@ -103,10 +109,24 @@ class SQLiteMemoryProvider:
                     """,
                     (device_id, session_id, role, content, created_at),
                 )
+                connection.execute(
+                    """
+                    DELETE FROM memory_messages
+                    WHERE device_id = ?
+                      AND id NOT IN (
+                          SELECT id FROM memory_messages
+                          WHERE device_id = ?
+                          ORDER BY id DESC LIMIT ?
+                      )
+                    """,
+                    (device_id, device_id, self._max_messages_per_device),
+                )
         finally:
             connection.close()
 
-    def _recall(self, device_id: str, recent_limit: int, for_turn: bool = False) -> MemoryContext:
+    def _recall(
+        self, device_id: str, recent_limit: int, for_turn: bool = False, query: str = ""
+    ) -> MemoryContext:
         connection = self._connect()
         try:
             connection.execute("BEGIN")
@@ -133,11 +153,27 @@ class SQLiteMemoryProvider:
                 """,
                 (device_id, limit),
             ).fetchall()
+            relevant_rows = []
+            if query and query.strip():
+                terms = _memory_terms(query)
+                if terms:
+                    clauses = " OR ".join("content LIKE ?" for _ in terms)
+                    relevant_rows = connection.execute(
+                        f"""
+                        SELECT id, device_id, session_id, role, content, created_at
+                        FROM memory_messages
+                        WHERE device_id = ? AND ({clauses})
+                        ORDER BY id DESC
+                        LIMIT 5
+                        """,
+                        (device_id, *(f"%{term}%" for term in terms)),
+                    ).fetchall()
         finally:
             connection.close()
         messages = [_message_from_row(row) for row in reversed(rows)]
+        relevant = [_message_from_row(row) for row in reversed(relevant_rows)]
         summary = "" if summary_row is None else summary_row[0]
-        return MemoryContext(summary=summary, recent_messages=messages, relevant_memories=[])
+        return MemoryContext(summary=summary, recent_messages=messages, relevant_memories=relevant)
 
     def _clear(self, device_id: str) -> None:
         connection = self._connect()
@@ -225,7 +261,7 @@ class SQLiteMemoryProvider:
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self._path)
-        connection.execute("PRAGMA journal_mode=WAL")
+        connection.execute("PRAGMA busy_timeout=5000")
         connection.execute("PRAGMA foreign_keys=ON")
         return connection
 
@@ -244,3 +280,16 @@ def _message_from_row(row: tuple[object, ...]) -> MemoryMessage:
 def _require_nonblank(name: str, value: str) -> None:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{name} must not be blank")
+
+
+def _memory_terms(query: str) -> list[str]:
+    normalized = re.sub(r"[\s，。！？、,.!?；;：:]+", "", query.strip())
+    if not normalized:
+        return []
+    terms = [normalized]
+    for run in re.findall(r"[\u4e00-\u9fff]{2,}", normalized):
+        terms.extend(run[index:index + 2] for index in range(len(run) - 1))
+    for token in re.findall(r"[A-Za-z0-9_]{2,}", normalized):
+        terms.append(token)
+    unique = list(dict.fromkeys(terms))
+    return unique[:8]

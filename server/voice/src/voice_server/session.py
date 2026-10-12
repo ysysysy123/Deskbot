@@ -4,6 +4,7 @@ import asyncio
 import logging
 import re
 import sys
+import time
 from contextlib import aclosing
 from typing import Any
 
@@ -111,6 +112,8 @@ class VoiceSession:
         self._tts_started = False
         self._turn_generation = 0
         self._closed = False
+        self.last_turn: dict[str, Any] | None = None
+        self._turn_started_at = 0.0
 
     @property
     def state(self) -> SessionState:
@@ -184,6 +187,7 @@ class VoiceSession:
     async def abort(self) -> None:
         self._turn_generation += 1
         await self._cancel_pipeline()
+        await self._stop_cancelled_motion()
         self._clear_recording()
         self._state_machine.abort()
         if not self._closed:
@@ -201,11 +205,15 @@ class VoiceSession:
         self._turn_generation += 1
         self._tts_started = False
         await self._cancel_pipeline()
+        await self._stop_cancelled_motion()
         self._clear_recording()
         if self.state is not SessionState.CLOSED:
             self._state_machine.transition(SessionState.CLOSED)
 
     async def _run_pipeline(self, pcm: bytes, generation: int, *, transcript: str | None = None) -> None:
+        self._turn_started_at = time.monotonic()
+        metrics: dict[str, Any] = {"status": "running"}
+        self.last_turn = metrics
         tts_started = False
         tts_failed = False
         stage = "asr"
@@ -214,15 +222,18 @@ class VoiceSession:
             text = transcript if transcript is not None else await wait_for(
                 self._asr.transcribe(pcm, 16_000), self._asr_timeout_s
             )
+            metrics["asr_ms"] = 0.0 if transcript is not None else self._turn_elapsed_ms()
             if not self._is_current(generation):
                 return
             text = text.strip()
+            metrics["input_text"] = text
             # Local ASR may return only punctuation for background noise.
             if not text or (transcript is None and not any(char.isalnum() for char in text)):
                 return
             if not await self._send_json(generation, make_stt(self.session_id, text)):
                 return
             stage = "memory"
+            memory_started = time.monotonic()
             await self._memory.remember(self.device_id, self.session_id, "user", text)
             if not self._is_current(generation):
                 return
@@ -245,6 +256,7 @@ class VoiceSession:
             context = await self._memory.recall_for_turn(self.device_id, text, self._recent_limit)
             if not self._is_current(generation):
                 return
+            metrics["memory_ms"] = round((time.monotonic() - memory_started) * 1000, 1)
             self._state_machine.transition(SessionState.THINKING)
             messages = self._make_messages(context, text)
             assistant_chunks: list[str] = []
@@ -255,20 +267,25 @@ class VoiceSession:
                 text,
                 messages,
                 self._device_mcp,
+                metrics,
             )
             stage = "dialogue"
             async with aclosing(self._response_sentences(request, assistant_chunks, generation)) as responses:
                 async for sentence in responses:
                     stage = "tts"
+                    tts_started_at = time.monotonic()
                     try:
                         tts_started = await self._speak_sentence(sentence, tts_started, generation, display=True)
                     except Exception:
                         tts_failed = True
                         raise
+                    metrics["tts_ms"] = round(metrics.get("tts_ms", 0.0) + (time.monotonic() - tts_started_at) * 1000, 1)
                     if not self._is_current(generation):
                         return
                     stage = "dialogue"
             assistant_text = "".join(assistant_chunks)
+            if not assistant_text.strip():
+                raise RuntimeError("dialogue backend returned no text")
             if tts_started and self._is_current(generation):
                 stop_is_current = await self._send_json(generation, make_tts(self.session_id, "stop"))
                 self._tts_started = False
@@ -281,8 +298,10 @@ class VoiceSession:
                 await self._memory.remember(self.device_id, self.session_id, "assistant", assistant_text)
                 self._memory.schedule_summary(self.device_id)
         except asyncio.CancelledError:
+            metrics["status"] = "cancelled"
             raise
-        except Exception:
+        except Exception as error:
+            metrics.update(status="error", error_stage=stage, error=type(error).__name__)
             _LOGGER.exception("Voice turn failed: session=%s turn=%s stage=%s", self.session_id, generation, stage)
             if not tts_failed and self._is_current(generation):
                 try:
@@ -298,6 +317,15 @@ class VoiceSession:
                 except Exception:
                     pass
         finally:
+            metrics["total_ms"] = self._turn_elapsed_ms()
+            if metrics["status"] == "running":
+                failed_tool = next((call for call in metrics.get("tool_calls", []) if call["status"] == "error"), None)
+                if failed_tool:
+                    metrics.update(status="error", error_stage="tool", error=failed_tool["error"])
+                else:
+                    metrics["status"] = "success"
+            _LOGGER.info("Voice turn timings: session=%s turn=%s metrics=%s", self.session_id, generation,
+                         {key: value for key, value in metrics.items() if key != "input_text"})
             if self._tts_started and self._is_current(generation):
                 try:
                     await self._send_json(generation, make_tts(self.session_id, "stop"))
@@ -327,6 +355,11 @@ class VoiceSession:
         messages = [{"role": "system", "content": self._system_prompt}]
         if summary:
             messages.append({"role": "system", "content": f"以下是此前对话的记忆摘要，供回答参考：\n{summary}"})
+        relevant = [item for item in (getattr(context, "relevant_memories", []) or [])
+                    if item.content != current_text]
+        if relevant:
+            memory_lines = "\n".join(f"- {item.role}: {item.content}" for item in relevant)
+            messages.append({"role": "system", "content": f"以下是与当前问题相关的历史记录，仅供参考：\n{memory_lines}"})
         recent = list(context.recent_messages)
         if recent and (
             recent[-1].session_id == self.session_id
@@ -337,6 +370,9 @@ class VoiceSession:
         messages.extend({"role": item.role, "content": item.content} for item in recent)
         messages.append({"role": "user", "content": current_text})
         return messages
+
+    def _turn_elapsed_ms(self) -> float:
+        return round((time.monotonic() - self._turn_started_at) * 1000, 1)
 
     async def _response_sentences(self, request: TurnRequest, chunks: list[str], generation: int):
         queue: asyncio.Queue[str | Exception | None] = asyncio.Queue(self._sentence_queue_size)
@@ -358,6 +394,8 @@ class VoiceSession:
                             remaining -= loop.time() - started
                         if not self._is_current(generation):
                             return
+                        if chunk and self.last_turn is not None and "first_text_ms" not in self.last_turn:
+                            self.last_turn["first_text_ms"] = self._turn_elapsed_ms()
                         chunks.append(chunk)
                         for sentence in sentences.feed(chunk):
                             await queue.put(sentence)
@@ -405,18 +443,20 @@ class VoiceSession:
         if not await self._send_json(generation, make_tts(self.session_id, "sentence_start", sentence)):
             return started
         sent_packets = 0
-        iterator = self._tts.synthesize(sentence).__aiter__()
-        while True:
-            try:
-                pcm = await wait_for(anext(iterator), self._tts_timeout_s)
-            except StopAsyncIteration:
-                break
-            for packet in self._codec.encode_output(pcm):
-                if not await self._send_bytes(generation, packet):
-                    return started
-                sent_packets += 1
-                if self._audio_packet_interval_s:
-                    await asyncio.sleep(self._audio_packet_interval_s)
+        async with aclosing(self._tts.synthesize(sentence).__aiter__()) as iterator:
+            while True:
+                try:
+                    pcm = await wait_for(anext(iterator), self._tts_timeout_s)
+                except StopAsyncIteration:
+                    break
+                for packet in self._codec.encode_output(pcm):
+                    if not await self._send_bytes(generation, packet):
+                        return started
+                    if self.last_turn is not None and "first_audio_ms" not in self.last_turn:
+                        self.last_turn["first_audio_ms"] = self._turn_elapsed_ms()
+                    sent_packets += 1
+                    if self._audio_packet_interval_s:
+                        await asyncio.sleep(self._audio_packet_interval_s)
         if sent_packets == 0:
             raise RuntimeError("TTS produced no audio packets")
         return started
@@ -456,6 +496,17 @@ class VoiceSession:
         if task is not None and not task.done():
             task.cancel()
             await asyncio.gather(task, return_exceptions=True)
+
+    async def _stop_cancelled_motion(self) -> None:
+        stop = getattr(self._device_mcp, "stop_active_motion", None)
+        if stop is None:
+            return
+        try:
+            await stop()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            _LOGGER.debug("Unable to stop cancelled device motion: session=%s", self.session_id, exc_info=True)
 
     def _clear_recording(self) -> None:
         self._pcm.clear()

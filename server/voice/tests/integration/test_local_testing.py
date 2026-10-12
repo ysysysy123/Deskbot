@@ -402,3 +402,25 @@ def test_browser_pcm_frames_match_device_opus():
     assert len(device.decode_input(packets[0])) == 1920
     encoder = opuslib_next.Encoder(24000, 1, opuslib_next.APPLICATION_AUDIO)
     assert len(codec.decode(encoder.encode(b"\0" * 2880, 1440))) == 2880
+
+
+async def test_device_diagnostics_proxy_preserves_session_and_errors(aiohttp_client, unused_tcp_port):
+    received = []
+
+    async def diagnostic(request):
+        received.append((request.match_info['session'], await request.json()))
+        return web.json_response({'ok': False, 'detail': '设备会话已断开'}, status=409)
+
+    admin = web.Application()
+    admin.router.add_post('/api/v1/sessions/{session}/tools', diagnostic)
+    admin_client = await aiohttp_client(admin)
+    base = AppConfig()
+    config = replace(base, admin_api=replace(base.admin_api, host='127.0.0.1', port=admin_client.server.port))
+    client = await aiohttp_client(create_local_test_app(config, vad_factory=LevelVAD))
+    response = await client.post('/api/devices/exact-session/tools', json={'name':'self.sensor.get_imu', 'arguments': {}})
+    assert response.status == 409
+    assert await response.json() == {'ok': False, 'detail': '设备会话已断开'}
+    assert received == [('exact-session', {'name':'self.sensor.get_imu', 'arguments': {}})]
+    rejected = await client.post('/api/devices/exact-session/tools', json={'name':'self.sensor.get_imu'}, headers={'Origin':'https://unrelated.example'})
+    assert rejected.status == 403
+    assert len(received) == 1

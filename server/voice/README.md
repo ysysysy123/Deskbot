@@ -8,15 +8,15 @@
 
 ## 1. 架构与明确不做的事情
 
-服务包含三个独立监听器：`8000` 是语音 WebSocket，`8003` 是 OTA 配置和健康检查，`8004` 是仅供本机使用的记忆管理 API。语音、模型、记忆分别通过 Provider 接口连接；SQLite 保存消息、摘要进度并预留 `relevant_memories`，首版不引入向量数据库。
+服务包含三个独立监听器：`8000` 是语音 WebSocket，`8003` 是 OTA 配置、实机照片上传分析和健康检查，`8004` 是仅供本机使用的会话、设备工具诊断和记忆管理 API。语音、模型、记忆分别通过 Provider 接口连接；SQLite 保存消息、摘要进度和简单的相关历史，首版不引入向量数据库。`/health` 只表示进程存活，`/readyz` 还会表示服务是否完成启动。
 
-`listen.start` 需要 `mode`；设备发送的 `listen.stop` 和 `listen.detect` 可以省略它。带文本的 `detect` 直接进入对话和语音回复链路，不调用 ASR。对话文本接收与 TTS 合成通过有界句子队列并行；Edge TTS 当前仍按句收齐音频后转码，下行 Opus 包按音频帧时长节奏发送，避免实机播放队列在长回复时溢出丢包。
+`listen.start` 需要 `mode`；设备发送的 `listen.stop` 和 `listen.detect` 可以省略它。带文本的 `detect` 直接进入对话和语音回复链路，不调用 ASR。对话文本接收与 TTS 合成通过有界句子队列并行；Edge TTS 边接收 MP3 边转码输出 PCM，下行 Opus 包按音频帧时长节奏发送，避免实机播放队列在长回复时溢出丢包。
 
-本地测试页支持摄像头 MCP，并通过 `CameraMcpDialogueBackend` 把打开、关闭和拍照工具接入对话。明确的开关、拍照和观察指令直接执行；观察请求会自动开启摄像头、等待画面并拍照。启用视觉配置后，JPEG 交给独立的 `glm-4v-flash` 分析，明确观察请求的视觉描述直接交给 TTS；其他对话仍可通过模型工具循环调用摄像头，并由文字模型组织回复。摄像头属于当前连接的浏览器；使用方法和 `.env` 配置见 [本地语音测试](docs/local-testing.md#摄像头)。`AppConfig` 默认关闭 MCP 和视觉能力，可在本机 `.env` 中启用。
+本地测试页支持摄像头 MCP，并通过 `CameraMcpDialogueBackend` 把打开、关闭和拍照工具接入对话。明确的开关、拍照和观察指令直接执行；观察请求会自动开启摄像头、等待画面并拍照。启用视觉配置后，JPEG 交给独立的 `glm-4v-flash` 分析，明确观察请求的视觉描述直接交给 TTS；其他对话仍可通过模型工具循环调用摄像头，并由文字模型组织回复。浏览器摄像头与实机摄像头分别绑定各自会话；使用方法和 `.env` 配置见 [本地语音测试](docs/local-testing.md#摄像头)。`AppConfig` 默认关闭 MCP 和视觉能力，可在本机 `.env` 中启用。
 
 浏览器持续对话使用 Silero VAD 分轮，回复期间检测到连续约 180 ms 语音时自动打断，停止旧播放并接收新一句。采集时请求浏览器回声消除，效果依赖设备和浏览器，可戴耳机测试。此能力在本地测试桥实现；原生 ESP32 连接的回复期间拾音逻辑未改动。
 
-语音 WebSocket 仍不承载通用设备 MCP。服务仍不包含协议 v2/v3、MQTT/UDP、固件包托管、通用 IoT 工具、声纹、多租户、Web 管理台或内置本地 TTS。Edge TTS 需要外网；后文说明如何替换为自己的全本地 `TTSProvider`。
+语音 WebSocket 支持设备 MCP 初始化、工具发现和调用；工具与当前实机会话绑定，默认只把配置白名单内的设备工具交给模型，照片通过初始化下发的 HTTP 地址上传分析。服务仍不包含协议 v2/v3、MQTT/UDP、固件包托管、通用 IoT 工具、声纹、多租户或 Web 管理台。Edge TTS 需要外网；也可以使用 `tts.provider: command` 接入本地命令。
 
 ## 2. Windows Python 3.10、Opus DLL 与 FFmpeg
 
@@ -125,10 +125,11 @@ llm:
 
 本地 Ollama 不需要真实 API Key，代码会使用不具权限意义的本地占位值完成 OpenAI SDK 初始化。
 
-## 6. Edge TTS
+## 6. TTS
 
 ```yaml
 tts:
+  provider: edge
   voice: zh-CN-XiaoxiaoNeural
   rate: +0%
   volume: +0%
@@ -136,6 +137,16 @@ tts:
 ```
 
 Edge TTS 会访问微软语音服务。输出先经 FFmpeg 转为 24 kHz、16-bit、单声道 PCM，再按 60 ms 编码为 Opus。可用 `edge-tts --list-voices` 查看当前可用音色。
+
+若要完全在本机合成，设置 `tts.provider: command` 和 `tts.command`。命令不经过 shell，接收 UTF-8 文本 stdin，并向 stdout 输出 24 kHz、单声道、little-endian s16le 原始 PCM，例如：
+
+```yaml
+tts:
+  provider: command
+  command: "my-local-tts --raw --sample-rate 24000 --channels 1"
+```
+
+命令输出为空或不是偶数个 PCM 字节时，本轮会失败并播报错误提示。
 
 ## 7. 启动与健康检查
 
@@ -190,6 +201,8 @@ Invoke-RestMethod -Method Post http://127.0.0.1:8003/xiaozhi/ota/
 
 健康响应应为 `{"status":"ok"}`，OTA 响应应包含 `version: 1` 与 `/xiaozhi/v1/` 地址。健康检查只证明 HTTP 进程存活；ASR、LLM、TTS 分别使用第 12 节脚本验证。
 
+`GET http://127.0.0.1:8003/readyz` 返回 `200` 才表示服务已经完成启动；启动中或停止时返回 `503`。
+
 ## 8. ESP32 OTA 地址与 Windows 防火墙
 
 把 ESP32 的 OTA 地址设为：
@@ -225,9 +238,9 @@ curl.exe -X POST -H "Authorization: Bearer <memory_admin_token>" -H "Content-Typ
 curl.exe -X DELETE -H "Authorization: Bearer <memory_admin_token>" "http://127.0.0.1:8004/api/v1/memory/device-a"
 ```
 
-GET 返回摘要、最近消息和当前为空的 `relevant_memories`；POST 只接受 `user`/`assistant`；DELETE 同时删除该设备消息与摘要，不能恢复。
+GET 返回摘要、最近消息和按当前问题做的简单相关历史检索；POST 只接受 `user`/`assistant`；每个设备默认最多保留 5000 条消息，DELETE 同时删除该设备消息与摘要，不能恢复。
 
-## 10. 切换到全本地 TTS Provider
+## 10. 扩展 TTS Provider
 
 实现 `src/voice_server/providers/base.py` 中的 `TTSProvider` 契约即可：`synthesize(text)` 必须异步产出 24 kHz、16-bit、单声道、little-endian PCM 字节块，不能直接产出 WAV、MP3 或 Ogg 容器。例如：
 
@@ -239,7 +252,7 @@ class LocalTTSProvider:
             yield pcm[offset:offset + 2880]
 ```
 
-然后在 `ServerApplication.from_config()` 中用 `LocalTTSProvider` 替换 `EdgeTTSProvider` 的构造；WebSocket、会话、Opus 和记忆代码不需要修改。首版没有捆绑本地语音模型或额外配置开关，避免把某个引擎硬编码进核心。
+如果需要 Python 原生引擎，也可以实现同一契约并在 `ServerApplication.from_config()` 中替换 Provider；WebSocket、会话、Opus 和记忆代码不需要修改。
 
 ## 11. 可信局域网配网与未来公网部署
 

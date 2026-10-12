@@ -152,17 +152,15 @@ async def test_device_mcp_tools_are_exposed_to_model_and_called_over_session(aio
     url, _ = await mcp_server(aiohttp_client, [], tools=[])
     device_mcp = FakeDeviceMcp()
     llm, completions = provider([
-        [chunk(name="self.motion.drive", arguments='{"linear":30,"angular":0,"duration_ms":1000}', call_id="drive")],
+        [chunk(name="device_self_motion_drive", arguments='{"linear":30,"angular":0,"duration_ms":1000}', call_id="drive")],
         [chunk("已经向前走了一秒。")],
     ])
     backend = CameraMcpDialogueBackend(llm, mcp_url=url)
     turn = request("向前走一秒")
     turn = TurnRequest(turn.device_id, turn.session_id, turn.turn_id, turn.text, turn.messages, device_mcp)
-    assert [part async for part in backend.stream(turn)] == ["已经向前走了一秒。"]
-    assert device_mcp.calls == [("self.motion.drive", {"linear": 30, "angular": 0, "duration_ms": 1000})]
-    assert {tool["function"]["name"] for tool in completions.calls[0]["tools"]} == {
-        "self.motion.drive", "self.sensor.get_imu",
-    }
+    assert [part async for part in backend.stream(turn)] == ["设备已收到移动指令。"]
+    assert device_mcp.calls == [("self.motion.drive", {"linear": 40, "angular": 0, "duration_ms": 1000})]
+    assert not completions.calls
 
 
 async def test_device_motion_requires_bounded_duration(aiohttp_client):
@@ -175,7 +173,7 @@ async def test_device_motion_requires_bounded_duration(aiohttp_client):
     backend = CameraMcpDialogueBackend(llm, mcp_url=url)
     turn = request("向前走六秒")
     turn = TurnRequest(turn.device_id, turn.session_id, turn.turn_id, turn.text, turn.messages, device_mcp)
-    assert [part async for part in backend.stream(turn)] == ["这次运动请求超过了安全时长。"]
+    assert [part async for part in backend.stream(turn)] == ["设备移动失败：运动工具必须使用 1 到 5000 毫秒的 duration_ms"]
     assert device_mcp.calls == []
 
 
@@ -371,3 +369,76 @@ async def test_explicit_observation_reports_vision_failure_without_model(aiohttp
     answer = "".join([part async for part in backend.stream(request("看看桌上有什么"))])
     assert "视觉分析失败" in answer
     assert not completions.calls
+
+class FirmwareMcp:
+    def __init__(self, tools, result):
+        self.tools = tools
+        self.result = result
+        self.calls = []
+
+    async def list_tools(self):
+        return {"tools": [{"name": name} for name in self.tools]}
+
+    async def call_tool(self, name, arguments):
+        self.calls.append((name, arguments))
+        return self.result
+
+
+def device_turn(text, device):
+    turn = request(text)
+    return TurnRequest(turn.device_id, turn.session_id, turn.turn_id, text, turn.messages, device)
+
+
+async def test_firmware_boolean_stop_reports_success_without_browser_or_model():
+    llm, completions = provider([])
+    device = FirmwareMcp(["self.motion.stop"], {"isError": False, "content": [{"type": "text", "text": "true"}]})
+    backend = CameraMcpDialogueBackend(llm, mcp_url="http://unreachable.invalid")
+    assert [part async for part in backend.stream(device_turn("马上停下", device))] == ["设备已停止。"]
+    assert device.calls == [("self.motion.stop", {})]
+    assert not completions.calls
+
+
+async def test_firmware_short_forward_command_calls_drive_without_model_confirmation():
+    llm, completions = provider([])
+    device = FirmwareMcp(["self.motion.drive"], {"isError": False, "content": [{"type": "text", "text": "true"}]})
+    backend = CameraMcpDialogueBackend(llm, mcp_url="http://unreachable.invalid")
+    assert [part async for part in backend.stream(device_turn("往前走一步", device))] == ["设备已收到移动指令。"]
+    assert device.calls == [("self.motion.drive", {"linear": 40, "angular": 0, "duration_ms": 500})]
+    assert not completions.calls
+
+
+async def test_firmware_drive_failure_is_reported_without_claiming_success():
+    llm, completions = provider([])
+    device = FirmwareMcp(["self.motion.drive"], {"isError": True, "content": [{"type": "text", "text": "ESP_ERR_INVALID_STATE"}]})
+    backend = CameraMcpDialogueBackend(llm, mcp_url="http://unreachable.invalid")
+    answer = "".join([part async for part in backend.stream(device_turn("往前走一步", device))])
+    assert "设备移动失败" in answer and "ESP_ERR_INVALID_STATE" in answer
+    assert not completions.calls
+
+
+@pytest.mark.parametrize("text", ["打开摄像头", "看看前面有什么", "拍张照"])
+async def test_firmware_camera_uses_uploaded_description_without_browser(text):
+    llm, completions = provider([])
+    result = {"success": True, "photo_captured": True, "vision_description": "桌上有一个杯子。"}
+    device = FirmwareMcp(["self.camera.take_photo"], {"isError": False, "content": [{"type": "text", "text": json.dumps(result)}]})
+    backend = CameraMcpDialogueBackend(llm, mcp_url="http://unreachable.invalid")
+    assert [part async for part in backend.stream(device_turn(text, device))] == ["桌上有一个杯子。"]
+    assert device.calls == [("self.camera.take_photo", {"question": text})]
+    assert not completions.calls
+
+
+async def test_firmware_camera_errors_do_not_look_like_description():
+    llm, _ = provider([])
+    device = FirmwareMcp(["self.camera.take_photo"], {"isError": True, "content": [{"type": "text", "text": "Failed to capture photo"}]})
+    backend = CameraMcpDialogueBackend(llm, mcp_url="http://unreachable.invalid")
+    reply = "".join([part async for part in backend.stream(device_turn("拍照", device))])
+    assert "无法查看" in reply and "Failed to capture photo" in reply
+
+
+async def test_firmware_status_and_volume_are_available():
+    llm, completions = provider([[chunk("当前工具已就绪。")]])
+    device = FirmwareMcp(["self.get_device_status", "self.audio_speaker.set_volume"], {})
+    backend = CameraMcpDialogueBackend(llm, mcp_url="http://unreachable.invalid")
+    await anext(backend.stream(device_turn("你能做什么", device)))
+    names = {tool["function"]["name"] for tool in completions.calls[0]["tools"]}
+    assert names == {"device_self_get_device_status", "device_self_audio_speaker_set_volume"}

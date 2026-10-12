@@ -9,8 +9,11 @@ const state = {
   continuous: false, cameraStream: null, cameraStarting: false, cameraRequest: 0, cameraMcpSocket: null, continuousResumePending: false,
   continuousPhase: "started",
   voiceSessionId: null, cameraStartPromise: null, cameraReconnectTimer: null, devicesTimer: null, closing: false,
-  historyDeviceId: "",
+  historyDeviceId: "", expandedDeviceTools: new Set(), deviceToolResults: new Map(), devicesLoaded: false,
+  cameraBound: false, deviceCache: new Map(),
 };
+
+function isFilePage() { return location.protocol === "file:"; }
 
 function log(kind, message) {
   const time = new Date().toLocaleTimeString("zh-CN", {hour12: false});
@@ -43,6 +46,7 @@ function showHistoryMessage(message) {
 }
 
 async function loadHistory(deviceId = state.historyDeviceId || $("device-id").value.trim()) {
+  if (isFilePage()) return;
   deviceId = String(deviceId || "").trim();
   if (!deviceId) {
     $("history-status").textContent = "请先填写设备 ID。";
@@ -73,7 +77,7 @@ async function loadHistory(deviceId = state.historyDeviceId || $("device-id").va
 
 function updateControls() {
   const inputBusy = Boolean(state.recording || state.upload || state.startingMic);
-  $("connect").disabled = Boolean(state.socket);
+  $("connect").disabled = isFilePage() || Boolean(state.socket);
   $("disconnect").disabled = !state.socket;
   $("device-id").disabled = Boolean(state.socket);
   $("token").disabled = Boolean(state.socket);
@@ -86,7 +90,7 @@ function updateControls() {
 }
 
 function connectionStatus(text, kind = "") {
-  $("connection-status").textContent = text;
+  $("connection-status").textContent = `本页${text}`;
   $("connection-status").className = `badge ${kind}`;
 }
 
@@ -97,9 +101,140 @@ function formatDuration(seconds) {
   return `${minutes} 分 ${total % 60} 秒`;
 }
 
+function deviceText(tag, className, text) {
+  const element = document.createElement(tag);
+  element.className = className;
+  element.textContent = text;
+  return element;
+}
+
+function toolResultText(result) {
+  if (Array.isArray(result?.content)) {
+    return result.content.filter(part => part.type === "text" && typeof part.text === "string")
+      .map(part => part.text).join("\n").slice(0, 1600) || "工具已返回结果";
+  }
+  return typeof result === "string" ? result.slice(0, 1600) : JSON.stringify(result ?? {}, null, 2).slice(0, 1600);
+}
+
+async function testDeviceTool(sessionId, name) {
+  if (state.deviceToolResults.get(sessionId)?.pending || state.lastDevices?.sessions.some(session => session.session_id === sessionId && session.offline)) return;
+  state.deviceToolResults.set(sessionId, {pending: true, name, text: "正在读取设备…"});
+  renderDevices(state.lastDevices);
+  try {
+    const response = await fetch(`/api/devices/${encodeURIComponent(sessionId)}/tools`, {
+      method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({name, arguments: {}}),
+    });
+    const payload = await response.json();
+    if (!response.ok || !payload.ok) {
+      const detail = payload.result ? toolResultText(payload.result) : "";
+      throw new Error([payload.detail, detail].filter(Boolean).join("\n") || "工具调用失败");
+    }
+    state.deviceToolResults.set(sessionId, {name, text: toolResultText(payload.result), error: Boolean(payload.result?.isError)});
+  } catch (error) {
+    state.deviceToolResults.set(sessionId, {name, text: error.message || "设备未响应", error: true});
+  }
+  renderDevices(state.lastDevices);
+}
+
+function renderDeviceTools(session, item) {
+  const mcp = session.mcp;
+  const tools = Array.isArray(mcp?.tools) ? mcp.tools : [];
+  const status = mcp?.status || "unknown";
+  const labels = {unsupported: "未声明 MCP 支持", initializing: "工具初始化中", ready: "工具就绪", error: "工具连接异常", closed: "工具通道已关闭", unknown: "工具状态未上报"};
+  const summary = deviceText("div", "device-tool-heading", "");
+  summary.append(deviceText("span", `tool-state ${session.offline ? "offline" : status}`, `${session.offline ? "上次状态 · " : ""}${labels[status] || "工具状态未知"}`));
+  summary.append(deviceText("span", "small", `${tools.length} 个工具`));
+  item.append(summary);
+  if (status === "unsupported" || status === "unknown") {
+    item.append(deviceText("p", "hint", session.client_type === "browser"
+      ? "本页测试会话使用下方的浏览器摄像头通道。"
+      : (status === "unsupported" ? "设备握手未声明 MCP；请检查实机固件是否启用工具。" : "服务未提供工具诊断；请更新并重启语音服务。")));
+  }
+  if (status === "initializing") item.append(deviceText("p", "hint", session.offline ? "设备断开时，工具初始化尚未完成。" : "正在与设备握手并读取工具列表…"));
+  if (status === "ready" && !tools.length) item.append(deviceText("p", "hint", "设备已响应，但没有返回可调用工具。"));
+  if (mcp?.error) item.append(deviceText("p", "device-error", mcp.error));
+  if (tools.length) {
+    const details = document.createElement("details");
+    details.className = "device-tools";
+    details.open = state.expandedDeviceTools.has(session.session_id);
+    details.addEventListener("toggle", () => {
+      if (details.open) state.expandedDeviceTools.add(session.session_id);
+      else state.expandedDeviceTools.delete(session.session_id);
+    });
+    details.append(deviceText("summary", "", "查看设备工具"));
+    const toolsList = document.createElement("ul");
+    for (const tool of tools) {
+      const row = document.createElement("li");
+      row.append(deviceText("code", "", tool.name || "未命名工具"));
+      if (tool.description) row.append(deviceText("span", "", tool.description));
+      toolsList.append(row);
+    }
+    details.append(toolsList);
+    item.append(details);
+    const readTools = [["self.motion.get_status", "读取底盘状态"], ["self.sensor.get_imu", "读取姿态"], ["self.get_device_status", "读取设备状态"]];
+    const actions = document.createElement("div");
+    actions.className = "button-row device-tool-actions";
+    for (const [name, label] of readTools) {
+      if (!tools.some(tool => tool.name === name)) continue;
+      const button = deviceText("button", "", label);
+      button.disabled = session.offline || status !== "ready" || Boolean(state.deviceToolResults.get(session.session_id)?.pending);
+      button.addEventListener("click", () => void testDeviceTool(session.session_id, name));
+      actions.append(button);
+    }
+    item.append(actions);
+  }
+  const lastCall = mcp?.last_call;
+  if (lastCall) {
+    const labels = {running: "执行中", success: "成功", error: "失败"};
+    const box = deviceText("div", `device-last-call ${lastCall.status === "error" ? "failed" : ""}`, "");
+    box.append(deviceText("div", "small", `最近调用 · ${labels[lastCall.status] || lastCall.status}`));
+    box.append(deviceText("code", "", lastCall.name || "—"));
+    if (lastCall.error || lastCall.summary) box.append(deviceText("p", "hint", lastCall.error || lastCall.summary));
+    item.append(box);
+  }
+  const testResult = state.deviceToolResults.get(session.session_id);
+  if (testResult) {
+    const box = deviceText("div", `device-test-result${testResult.error ? " failed" : ""}`, "");
+    box.append(deviceText("div", "small", `本页读取${testResult.pending ? "中" : testResult.error ? "失败" : "结果"} · ${testResult.name}`));
+    box.append(deviceText("pre", "", testResult.text));
+    item.append(box);
+  }
+}
+
+function renderDeviceTurn(turn, item) {
+  if (!turn) return;
+  const labels = {running: "进行中", success: "完成", error: "失败", cancelled: "已打断"};
+  const box = deviceText("div", "device-turn", "");
+  box.append(deviceText("div", "small", `最近一轮 · ${labels[turn.status] || turn.status || "未知"}`));
+  const metrics = document.createElement("div");
+  metrics.className = "device-turn-metrics";
+  for (const [key, label] of [["asr_ms", "ASR 识别"], ["first_text_ms", "首段文字"], ["first_audio_ms", "首段语音"], ["total_ms", "总耗时"]]) {
+    const metric = document.createElement("div");
+    const value = turn[key];
+    metric.append(deviceText("span", "small", label));
+    metric.append(deviceText("strong", "", Number.isFinite(value) ? `${(value / 1000).toFixed(2)} s` : "—"));
+    metrics.append(metric);
+  }
+  box.append(metrics);
+  box.append(deviceText("p", "hint", "ASR 为识别耗时；其余从收到本轮输入起计时。"));
+  if (turn.input_text) box.append(deviceText("p", "hint", `本轮识别 / 输入：${turn.input_text}`));
+  for (const call of turn.tool_calls || []) {
+    box.append(deviceText("p", call.status === "error" ? "device-error" : "hint",
+      `${call.name} · ${call.status === "error" ? "失败" : "成功"}${call.error ? `：${call.error}` : ""}`));
+  }
+  if (turn.error_stage || turn.error) {
+    const stages = {asr: "语音识别", dialogue: "对话 / 工具", tool: "工具调用", llm: "模型回复", tts: "语音合成", pipeline: "语音处理"};
+    const stage = stages[turn.error_stage] || turn.error_stage || "未知阶段";
+    box.append(deviceText("p", "device-error", `${stage}：${turn.error || "发生错误"}`));
+  }
+  item.append(box);
+}
+
 function renderDevices(payload) {
+  if (!payload) return;
+  state.lastDevices = payload;
   const sessions = Array.isArray(payload.sessions) ? payload.sessions : [];
-  $("device-count").textContent = String(payload.active_count ?? sessions.length);
+  $("device-count").textContent = String(payload.active_count ?? sessions.filter(session => !session.offline).length);
   const list = $("device-list");
   list.replaceChildren();
   if (!sessions.length) {
@@ -112,37 +247,72 @@ function renderDevices(payload) {
   const stateLabels = {connected: "已连接", idle: "空闲", listening: "正在听", recognizing: "识别中", thinking: "思考中", speaking: "播放中", closed: "已关闭"};
   for (const session of sessions) {
     const item = document.createElement("div");
-    item.className = "device-item";
+    item.className = `device-item${session.offline ? " offline" : ""}`;
     const heading = document.createElement("div");
     heading.className = "device-heading";
     const name = document.createElement("strong");
     name.textContent = session.device_id || "未知设备";
     const badge = document.createElement("span");
-    badge.className = "device-state";
-    badge.textContent = stateLabels[session.state] || session.state || "未知";
+    badge.className = `device-state${session.offline ? " offline" : ""}`;
+    badge.textContent = session.offline ? "离线" : stateLabels[session.state] || session.state || "未知";
     heading.append(name, badge);
     const detail = document.createElement("div");
     detail.className = "device-detail";
-    detail.textContent = `会话 ${session.session_id || "—"} · 已连接 ${formatDuration(session.duration_s)}`;
+    detail.textContent = session.offline
+      ? `${session.client_type === "browser" ? "浏览器测试" : "实机"} · 已断开，保留最后诊断 · 会话 ${session.session_id || "—"}`
+      : `${session.client_type === "browser" ? "浏览器测试" : session.client_type === "device" ? "实机" : "设备"} · 已连接 ${formatDuration(session.duration_s)} · 会话 ${session.session_id || "—"}`;
     const historyButton = document.createElement("button");
     historyButton.className = "quiet device-history";
     historyButton.textContent = "查看历史";
     historyButton.addEventListener("click", () => void loadHistory(session.device_id));
-    item.append(heading, detail, historyButton);
+    item.append(heading, detail);
+    renderDeviceTools(session, item);
+    renderDeviceTurn(session.last_turn, item);
+    item.append(historyButton);
     list.append(item);
   }
 }
 
 async function refreshDevices() {
+  if (isFilePage()) return;
   try {
     const response = await fetch("/api/devices");
     if (!response.ok) throw new Error("设备状态接口响应异常");
     const payload = await response.json();
-    renderDevices(payload);
-    $("device-status").textContent = payload.ok ? "每 2 秒刷新一次；设备断开后会从列表移除。" : (payload.detail || "设备状态暂不可用");
+    if (!payload.ok) throw new Error(payload.detail || "设备状态暂不可用");
+    const sessions = Array.isArray(payload.sessions) ? payload.sessions : [];
+    const activeIds = new Set(sessions.map(session => session.session_id));
+    const activeDevices = new Set(sessions.map(session => session.device_id));
+    for (const [sessionId, session] of state.deviceCache) {
+      // Replace a previous connection of the same device, retaining concurrent live sessions.
+      if (!activeIds.has(sessionId) && activeDevices.has(session.device_id)) {
+        state.deviceCache.delete(sessionId);
+        state.deviceToolResults.delete(sessionId);
+        state.expandedDeviceTools.delete(sessionId);
+      }
+    }
+    for (const session of sessions) {
+      state.deviceCache.delete(session.session_id);
+      state.deviceCache.set(session.session_id, session);
+    }
+    const disconnected = [...state.deviceCache.values()].reverse().filter(session => !activeIds.has(session.session_id));
+    for (const session of disconnected.slice(10)) {
+      state.deviceCache.delete(session.session_id);
+      state.deviceToolResults.delete(session.session_id);
+      state.expandedDeviceTools.delete(session.session_id);
+    }
+    const visibleSessions = [...sessions, ...disconnected.slice(0, 10).map(session => ({...session, offline: true}))];
+    renderDevices({...payload, sessions: visibleSessions, active_count: payload.active_count ?? sessions.length});
+    state.devicesLoaded = true;
+    $("device-list").classList.toggle("stale", false);
+    $("device-status").textContent = "每 2 秒刷新一次；本页保留最近 10 个离线会话的最后诊断，设备重连后更新。刷新页面会清除离线记录。";
   } catch (error) {
-    renderDevices({sessions: [], active_count: 0});
-    $("device-status").textContent = "语音服务未启动或设备状态暂不可用";
+    if (!state.devicesLoaded) {
+      $("device-count").textContent = "—";
+      $("device-list").replaceChildren(deviceText("p", "empty-state", "暂时无法读取在线设备"));
+    }
+    $("device-list").classList.toggle("stale", true);
+    $("device-status").textContent = `${error.message || "设备状态暂不可用"}${state.devicesLoaded ? "；上方保留上次状态，连接情况待确认。" : "；请检查语音服务和测试页是否已启动。"}`;
   }
 }
 
@@ -316,7 +486,7 @@ function handleEvent(message) {
 }
 
 async function connect() {
-  if (state.socket) return;
+  if (isFilePage() || state.socket) return;
   if (!$("device-id").value.trim()) {
     $("device-id").focus();
     return;
@@ -575,7 +745,7 @@ async function openCamera() {
     if (request !== state.cameraRequest) { stream.getTracks().forEach((track) => track.stop()); return false; }
     state.cameraStream = stream;
     $("camera-preview").srcObject = state.cameraStream;
-    $("camera-status").textContent = "摄像头已开启，可以抓取快照";
+    $("camera-status").textContent = "本机摄像头已开启，可以抓取快照";
     $("camera-shot").disabled = false; $("camera-stop").disabled = false; $("camera-start").disabled = true;
     log("摄像头", "摄像头预览已开启");
     return true;
@@ -664,12 +834,26 @@ async function handleCameraMcpCall(message, socket = state.cameraMcpSocket) {
 }
 
 function bindCameraSession() {
+  state.cameraBound = false;
   const socket = state.cameraMcpSocket;
   if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({type: "camera.mcp.bind", session_id: state.voiceSessionId}));
+  updateCameraCapability();
+}
+
+function updateCameraCapability() {
+  let description;
+  if (isFilePage()) description = "请从本地服务入口打开页面";
+  else if (!state.info) description = "等待服务配置…";
+  else if (!state.info.camera_tools_enabled) description = "可本地预览 · 浏览器对话工具未启用";
+  else if (state.cameraMcpSocket?.readyState !== WebSocket.OPEN) description = "浏览器工具通道未连接";
+  else if (!state.voiceSessionId || !state.cameraBound) description = "工具通道已连接 · 等待本页对话绑定";
+  else description = "本页摄像头工具就绪";
+  if (state.info) description += state.info.vision_model ? ` · 视觉模型 ${state.info.vision_model}` : " · 画面分析未启用";
+  $("camera-capability").textContent = description;
 }
 
 function connectCameraMcp() {
-  if (typeof WebSocket !== "function" || state.cameraMcpSocket) return;
+  if (isFilePage() || typeof WebSocket !== "function" || state.cameraMcpSocket) return;
   const socket = new WebSocket(`${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}/camera-mcp`);
   state.cameraMcpSocket = socket;
   socket.onopen = () => {
@@ -680,26 +864,31 @@ function connectCameraMcp() {
     try {
       const message = JSON.parse(data);
       if (message.type === "camera.mcp.call") void handleCameraMcpCall(message, socket);
-      else if (message.type === "camera.mcp.bound" && message.session_id) log("MCP", "摄像头工具已绑定当前对话");
+      else if (message.type === "camera.mcp.bound") {
+        state.cameraBound = Boolean(message.session_id && message.session_id === state.voiceSessionId);
+        updateCameraCapability();
+        if (state.cameraBound) log("MCP", "本机摄像头工具已绑定本页对话");
+      }
     } catch (error) { log("MCP", `摄像头工具消息无效：${error.message}`); }
   };
   socket.onclose = () => {
     if (state.cameraMcpSocket !== socket) return;
     state.cameraMcpSocket = null;
+    state.cameraBound = false;
+    updateCameraCapability();
     if (!state.closing) state.cameraReconnectTimer = setTimeout(connectCameraMcp, 2000);
   };
 }
 
 async function refreshHealth() {
+  if (isFilePage()) return;
   $("refresh-health").disabled = true;
   try {
     const [infoResponse, healthResponse] = await Promise.all([fetch("/api/info"), fetch("/api/health")]);
     if (!infoResponse.ok || !healthResponse.ok) throw new Error("本地测试服务响应异常");
     const [info, health] = await Promise.all([infoResponse.json(), healthResponse.json()]);
     state.info = info;
-    $("camera-capability").textContent = info.camera_tools_enabled
-      ? `对话可打开、关闭及拍照${info.vision_model ? ` · 画面分析 ${info.vision_model}` : " · 视觉模型未启用"}`
-      : "本地预览 · 对话摄像头工具尚未启用";
+    updateCameraCapability();
     $("ws-address").textContent = info.websocket_url;
     $("ota-address").textContent = info.ota_url;
     $("health-status").replaceChildren();
@@ -769,7 +958,19 @@ window.addEventListener("beforeunload", () => {
   state.cameraMcpSocket?.close();
   state.socket?.close();
 });
-void refreshHealth();
-void refreshDevices();
-state.devicesTimer = setInterval(() => void refreshDevices(), 2000);
-connectCameraMcp();
+if (isFilePage()) {
+  $("file-warning").hidden = false;
+  $("health-status").textContent = "当前为本地文件页面，尚未连接测试服务。";
+  $("ws-address").textContent = "请打开本地服务入口";
+  $("readiness-summary").textContent = "等待通过服务入口检查";
+  $("device-list").replaceChildren(deviceText("p", "empty-state", "请打开本地服务入口查看设备"));
+  $("device-status").textContent = "未发起设备状态查询。";
+  $("camera-status").textContent = "请通过上方入口打开本机摄像头测试。";
+  for (const id of ["connect", "refresh-health", "refresh-devices", "load-history", "camera-start"]) $(id).disabled = true;
+  updateCameraCapability();
+} else {
+  void refreshHealth();
+  void refreshDevices();
+  state.devicesTimer = setInterval(() => { if (!document.hidden) void refreshDevices(); }, 2000);
+  connectCameraMcp();
+}

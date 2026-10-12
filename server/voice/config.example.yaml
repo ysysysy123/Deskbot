@@ -13,6 +13,9 @@ server:
   max_binary_bytes: 65536
   max_recording_bytes: 2000000
   max_recording_seconds: 30
+  max_connections: 8
+  max_sessions_per_device: 1
+  send_timeout_s: 15
 
 audio:
   input_sample_rate: 16000
@@ -49,12 +52,16 @@ llm:
   max_tokens: 1024
   summary_max_tokens: 256
   timeout_s: 60
+  max_retries: 1
 # For a remote OpenAI-compatible endpoint, set VOICE_LLM_API_KEY.
 
 tts:
+  provider: edge
   voice: zh-CN-XiaoxiaoNeural
   rate: +0%
   volume: +0%
+  # command reads UTF-8 text from stdin and writes raw 24 kHz mono s16le PCM to stdout.
+  command: ""
   timeout_s: 30
   error_text: 抱歉，服务暂时不可用。
 
@@ -77,6 +84,7 @@ memory:
   recent_limit: 10
   summary_threshold: 12
   context_limit: 64
+  max_messages_per_device: 5000
 
 local_test:
   host: 127.0.0.1
@@ -87,6 +95,20 @@ mcp:
   url: http://127.0.0.1:8006/mcp
   timeout_seconds: 20
   max_rounds: 3
+  # Only these device tools are exposed to the dialogue model by default.
+  allowed_device_tools:
+    - self.get_device_status
+    - self.motion.drive
+    - self.motion.turn
+    - self.motion.stop
+    - self.motion.get_status
+    - self.sensor.get_imu
+    - self.camera.start
+    - self.camera.take_photo
+    - self.camera.stop
+    - self.audio_speaker.set_volume
+    - self.screen.set_brightness
+    - self.screen.set_theme
 
 vision:
   enabled: false

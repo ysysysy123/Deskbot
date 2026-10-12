@@ -82,9 +82,11 @@ VOICE_VISION_TIMEOUT_SECONDS=60
 
 `VOICE_VISION_BASE_URL` 和 `VOICE_VISION_API_KEY` 留空时分别继承 `VOICE_LLM_BASE_URL` 和 `VOICE_LLM_API_KEY`，无需重复填写智谱密钥。更换视觉服务时可独立设置地址、密钥和模型。`VOICE_MCP_MAX_ROUNDS` 限制单轮对话的工具调用轮数；超时单位均为秒。修改后重启语音服务与测试页服务。只启用 MCP 而未启用视觉时，仍可控制摄像头、拍照，但不能解读图像。
 
+实机工具还受 `mcp.allowed_device_tools` 白名单限制。新增固件工具前先把完整名称加入配置；未列入白名单的工具不会提供给模型。`VOICE_MCP_ENABLED=false` 时，即使设备在 hello 中声明 MCP，服务端也不会初始化或转发设备工具。
+
 MCP 服务地址为 `http://127.0.0.1:8006/mcp`，提供 `self_camera_start`、`self_camera_take_photo`、上游兼容别名 `self.camera.take_photo`、`self_camera_stop` 和 `self_camera_status`；拍照结果以 MCP image content 返回，图片不经过语音 WebSocket。外部 Agent 可使用 JSON-RPC `initialize`、`tools/list`、`tools/call` 访问它；多个测试页同时打开时，通过参数 `_meta` 中的 `deskbot/session_id` 指定语音会话。
 
-实机固件在 WebSocket hello 的 `features.mcp=true` 时，语音服务器会自动通过当前设备的同一条 WebSocket 转发 `tools/list` 和 `tools/call`。模型可使用设备声明的 `self.motion.*`、`self.sensor.*` 和 `self.camera.*` 工具，工具结果会回到模型后再生成语音。运动调用由服务端要求 `duration_ms` 在 1 到 5000 毫秒之间；设备断开时不会继续保留待处理的 MCP 请求。语音示例包括“向前走一秒”“马上停下”“现在姿态怎么样”和“看看前面有什么”。
+实机固件在 WebSocket hello 的 `features.mcp=true` 且服务端 MCP 已启用时，语音服务器会自动通过当前设备的同一条 WebSocket 转发 `tools/list` 和 `tools/call`。运动调用由服务端要求 `duration_ms` 在 1 到 5000 毫秒之间；取消一轮或断开连接时会尽力发送 `self.motion.stop`。设备断开时不会继续保留待处理的 MCP 请求。语音示例包括“向前走一秒”“马上停下”“现在姿态怎么样”和“看看前面有什么”。
 
 这条实机链路仍由 `VOICE_MCP_ENABLED=true` 总开关控制；它不需要把实机 MCP 当成 HTTP 地址填写，设备工具来自当前语音 WebSocket 会话。麦克风继续使用 `listen.start/stop` 协议，不作为 MCP 工具暴露。
 
@@ -102,7 +104,7 @@ python performance_tester.py tts --text '你好，这是语音合成测试。' -
 python performance_tester.py all --audio samples/speech.wav --json data/performance.json
 ```
 
-`--json -` 输出纯 JSON。测速使用真实 Provider，失败返回非零退出码；不下载模型，不用模拟回复代替。结果分别记录初始化、首响应和总耗时；ASR/TTS 还有音频时长与实时率。当前 ASR 是整段识别，Edge TTS 每句音频收齐后转码；首响应指标按这一实际边界计算。
+`--json -` 输出纯 JSON。测速使用真实 Provider，失败返回非零退出码；不下载模型，不用模拟回复代替。结果分别记录初始化、首响应和总耗时；ASR/TTS 还有音频时长与实时率。当前 ASR 是整段识别，Edge TTS 收到音频后即流式转码；TTS 首响应是首块 PCM 到达的时间。
 
 ## 当前依赖状态
 
@@ -118,7 +120,7 @@ python performance_tester.py all --audio samples/speech.wav --json data/performa
 
 同日通过真实浏览器验证对话打开摄像头、拍照后视觉回答及关闭释放设备；两页同时连接时工具只发送给绑定会话。结果摘要在 `data/camera-dialogue-acceptance.json`，不含照片。
 
-随后针对组合指令补充验收：摄像头关闭时上传“打开摄像头看看看到了什么”的语音样本，实际 ASR 正确转写、直接拍照工具自动开启摄像头并返回画面描述，首段回复约 4.49 秒；持续麦克风模式也实际转写了“你打开摄像头看看有什么。”并完成同样流程。结果记录于 `data/camera-combined-acceptance.json`，不含图像。当前离线测试为 309 项 Python 与 10 项浏览器逻辑测试通过。
+随后针对组合指令补充验收：摄像头关闭时上传“打开摄像头看看看到了什么”的语音样本，实际 ASR 正确转写、直接拍照工具自动开启摄像头并返回画面描述，首段回复约 4.49 秒；持续麦克风模式也实际转写了“你打开摄像头看看有什么。”并完成同样流程。结果记录于 `data/camera-combined-acceptance.json`，不含图像。2026-10-11 回归测试为 342 项 Python、16 项浏览器逻辑与 7 项启动器测试通过。
 
 ```bash
 .venv/bin/python -m pytest -q
@@ -126,3 +128,17 @@ node --test tests/browser/local_test.test.cjs
 ```
 
 持续模式测试覆盖静音等待、自动分轮、播放结束后恢复、空识别和合成失败后的恢复、连接保活；浏览器逻辑测试还覆盖长时间采集、手动提交、打断保留麦克风、摄像头快照和关闭后释放设备。自动测试使用模拟媒体设备，实际硬件仍需在本机允许权限后验证。
+
+
+## 设备工具诊断与启动器（2026-10-02）
+
+- 桌面启动图标打开面板；选择模式后启动。视觉模式负责照片分析，文字模式也保留设备 MCP。最近成功模式和模型会保存，下次打开沿用。
+- 关闭图标停止本仓库的面板、语音服务和测试页。启动器按脚本实际路径识别进程，允许重启时复用 TIME_WAIT 端口。
+- 日志位置：`~/.local/state/deskbot/launcher.log`、`voice.log`、`tester.log`。
+- 在线设备卡片的“已连接”表示语音 WebSocket 可用；“工具就绪”表示 MCP initialize 和所有工具分页均成功。失败原因与最近一次调用单独显示。
+- “读取姿态”“读取底盘状态”“读取设备状态”直接查询选定实机，浏览器不冒充同 Device-Id 重连。
+- 实机摄像头通过 `8003/mcp/vision/explain` 接收 multipart 照片，地址由 initialize 下发，视觉服务共用当前配置。工具返回分析文字时直接播报，无需再调用文字模型改写。
+- 每轮 ASR、首段文字、首段语音、总耗时在设备卡片显示；后三项从本轮录音提交/文字发送后服务端开始处理时累计。
+- `file://` 打开页面仅显示本地 HTTP 入口，正常使用 `http://127.0.0.1:8006/`。
+
+回归测试：在 `server/voice` 执行 `PYTHONPATH=src:. .venv/bin/python -m pytest -q`；仓库根目录执行 `node --test server/voice/tests/browser/local_test.test.cjs` 和 `server/voice/.venv/bin/python -m pytest -q tools/tests/test_deskbot_launcher.py`。

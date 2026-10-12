@@ -9,7 +9,10 @@ from voice_server.memory.models import MemoryContext, MemoryMessage
 from voice_server.memory.service import MemoryService
 
 
-def create_admin_app(config: AppConfig, memory: MemoryService, *, session_status=None) -> web.Application:
+READ_ONLY_DEVICE_TOOLS = {"self.motion.get_status", "self.sensor.get_imu", "self.get_device_status"}
+
+
+def create_admin_app(config: AppConfig, memory: MemoryService, *, session_status=None, device_tool_call=None) -> web.Application:
     @web.middleware
     async def admin_auth(request: web.Request, handler):
         if not check_admin_token(request.headers.get("Authorization"), config.admin_api.token):
@@ -68,10 +71,27 @@ def create_admin_app(config: AppConfig, memory: MemoryService, *, session_status
         sessions = session_status() if session_status is not None else []
         return web.json_response({"sessions": sessions, "active_count": len(sessions)})
 
+    async def read_device_tool(request: web.Request) -> web.Response:
+        payload = await _json_mapping(request)
+        if payload is None or not isinstance(payload.get("name"), str) or payload["name"] not in READ_ONLY_DEVICE_TOOLS:
+            return web.json_response({"ok": False, "detail": "此接口仅支持读取设备状态、底盘状态和姿态。"}, status=400)
+        if payload.get("arguments", {}) != {}:
+            return web.json_response({"ok": False, "detail": "状态查询不需要参数。"}, status=400)
+        if device_tool_call is None:
+            return web.json_response({"ok": False, "detail": "设备工具服务未就绪。"}, status=503)
+        try:
+            result = await device_tool_call(request.match_info["session_id"], payload["name"], {})
+        except (ValueError, ConnectionError) as error:
+            return web.json_response({"ok": False, "detail": str(error)}, status=409)
+        except TimeoutError:
+            return web.json_response({"ok": False, "detail": "设备工具响应超时。"}, status=504)
+        return web.json_response({"ok": not bool(result.get("isError")), "result": result})
+
     app.router.add_get("/api/v1/memory/{device_id}", get_memory)
     app.router.add_post("/api/v1/memory/{device_id}/messages", remember_message)
     app.router.add_delete("/api/v1/memory/{device_id}", clear_memory)
     app.router.add_get("/api/v1/sessions", get_sessions)
+    app.router.add_post("/api/v1/sessions/{session_id}/tools", read_device_tool)
     return app
 
 

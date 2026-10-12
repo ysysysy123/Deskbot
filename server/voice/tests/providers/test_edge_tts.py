@@ -1,3 +1,6 @@
+import asyncio
+from contextlib import aclosing
+
 import pytest
 
 from voice_server.providers.edge_tts import EdgeTTSProvider
@@ -17,12 +20,14 @@ class FakeTranscoder:
         self._pcm = pcm
         self.inputs = []
 
-    async def to_pcm(self, media):
-        self.inputs.append(media)
-        return self._pcm
+    async def stream_mp3_to_pcm(self, media, *, chunk_size):
+        async for part in media:
+            self.inputs.append(part)
+        for offset in range(0, len(self._pcm), chunk_size):
+            yield self._pcm[offset:offset + chunk_size]
 
 
-async def test_edge_tts_collects_audio_converts_once_and_uses_voice_settings():
+async def test_edge_tts_streams_audio_only_and_uses_voice_settings():
     """Would fail if metadata leaked into FFmpeg input or configured speech settings were dropped."""
     created = {}
 
@@ -52,7 +57,7 @@ async def test_edge_tts_collects_audio_converts_once_and_uses_voice_settings():
         "rate": "+10%",
         "volume": "-5%",
     }
-    assert transcoder.inputs == [b"mp3-amp3-b"]
+    assert transcoder.inputs == [b"mp3-a", b"mp3-b"]
 
 
 async def test_edge_tts_rejects_empty_audio_before_transcoding():
@@ -183,3 +188,33 @@ def test_edge_tts_rejects_non_positive_or_odd_chunk_sizes():
         EdgeTTSProvider(chunk_size=0, **kwargs)
     with pytest.raises(ValueError, match="positive even"):
         EdgeTTSProvider(chunk_size=3, **kwargs)
+
+
+async def test_edge_tts_yields_pcm_before_remote_stream_ends_and_closes_on_abort():
+    finished = False
+    closed = asyncio.Event()
+
+    class StreamingCommunicator:
+        async def stream(self):
+            nonlocal finished
+            try:
+                yield {"type": "audio", "data": b"first-mp3"}
+                await asyncio.Event().wait()
+                finished = True
+            finally:
+                closed.set()
+
+    class StreamingTranscoder:
+        async def stream_mp3_to_pcm(self, media, *, chunk_size):
+            async for part in media:
+                assert part == b"first-mp3"
+                yield b"pcm!"
+
+    provider = EdgeTTSProvider(
+        voice="voice", rate="+0%", volume="+0%",
+        transcoder=StreamingTranscoder(), communicate_factory=lambda **kwargs: StreamingCommunicator(),
+    )
+    async with aclosing(provider.synthesize("hello")) as stream:
+        assert await asyncio.wait_for(anext(stream), 1) == b"pcm!"
+        assert not finished
+    assert closed.is_set()

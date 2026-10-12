@@ -226,3 +226,30 @@ async def test_empty_admin_token_allows_loopback_default_without_authorization(a
     response = await client.get("/api/v1/memory/device-a")
 
     assert response.status == 200
+
+
+async def test_device_tool_endpoint_routes_to_exact_session_and_blocks_motion(aiohttp_client):
+    calls = []
+
+    async def call_tool(session, name, args):
+        calls.append((session, name, args))
+        return {"content": [{"type": "text", "text": '{"pitch": 0.5}'}], "isError": False}
+
+    client = await aiohttp_client(create_admin_app(AppConfig(), FakeMemory(), device_tool_call=call_tool))
+    response = await client.post("/api/v1/sessions/device-session/tools", json={"name": "self.sensor.get_imu"})
+    assert response.status == 200
+    assert (await response.json())["ok"] is True
+    assert calls == [("device-session", "self.sensor.get_imu", {})]
+    blocked = await client.post("/api/v1/sessions/device-session/tools", json={"name": "self.motion.drive"})
+    assert blocked.status == 400
+    assert len(calls) == 1
+
+
+async def test_device_tool_endpoint_reports_disconnection(aiohttp_client):
+    async def call_tool(*args):
+        raise ConnectionError("设备已断开")
+
+    client = await aiohttp_client(create_admin_app(AppConfig(), FakeMemory(), device_tool_call=call_tool))
+    response = await client.post("/api/v1/sessions/old-session/tools", json={"name": "self.sensor.get_imu"})
+    assert response.status == 409
+    assert await response.json() == {"ok": False, "detail": "设备已断开"}

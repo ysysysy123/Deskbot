@@ -189,65 +189,34 @@ async def handle_mute_microphone(session, mute: bool):
 
 ## 六、本地联调与快速测试脚本 (Developer Quickstart)
 
-为方便服务端开发者在不需要对硬件说话的情况下快速验证 MCP 工具调用，可使用以下 Python 脚本直连设备所在的 WebSocket 端口进行自动化调试：
+实机是 MCP 服务端；Python 语音服务器是 MCP 客户端。工具调用必须经过实机已经建立的 WebSocket 会话，不能另建一个同 Device-Id 的模拟连接来控制原设备。
+
+设备连接后的流程：服务器回复 hello → MCP initialize（视觉模式带 capabilities.vision.url）→ notifications/initialized → tools/list（读取所有 nextCursor 页并缓存）→ tools/call。相机上传到语音服务自身的 `http://<服务器局域网 IP>:8003/mcp/vision/explain`，无需单独启动 8005 服务。图片不落盘。
+
+测试页 `http://127.0.0.1:8006/` 的实机卡片显示工具状态、清单、最近调用、每轮耗时。可点击“读取姿态”“读取底盘状态”“读取设备状态”验证完整的服务端—实机往返。
+
+脚本只读查询示例（在服务器本机执行；启用管理 Token 时需自行提供 Authorization 请求头）：
 
 ```python
-#!/usr/bin/env python3
-"""Deskbot MCP 联调测试工具脚本"""
-import asyncio
 import json
-from websockets.asyncio.client import connect
+import urllib.request
 
-DEVICE_WS_URL = "ws://192.168.10.111:8000/xiaozhi/v1/"
-DEVICE_MAC = "10:51:db:75:de:50"
-
-async def test_deskbot_mcp():
-    print(f"Connecting to {DEVICE_WS_URL} ...")
-    async with connect(DEVICE_WS_URL, additional_headers={"Device-Id": DEVICE_MAC}) as ws:
-        # 1. 发送标准客户端 hello 包
-        hello_msg = {
-            "type": "hello",
-            "version": 1,
-            "transport": "websocket",
-            "features": {"mcp": True},
-            "audio_params": {"format": "opus", "sample_rate": 16000, "channels": 1, "frame_duration": 60}
-        }
-        await ws.send(json.dumps(hello_msg))
-        server_hello = await ws.recv()
-        print("Received Server Hello:", server_hello)
-
-        # 2. 模拟下发 MCP 工具调用：让小车向前行驶 600 毫秒
-        tool_call_drive = {
-            "type": "mcp",
-            "method": "tools/call",
-            "params": {
-                "name": "self.motion.drive",
-                "arguments": {"linear": 30, "angular": 0, "duration_ms": 600}
-            }
-        }
-        print("Sending motion drive tool call...")
-        await ws.send(json.dumps(tool_call_drive))
-
-        # 3. 模拟下发查询陀螺仪姿态工具调用
-        tool_call_imu = {
-            "type": "mcp",
-            "method": "tools/call",
-            "params": {"name": "self.sensor.get_imu", "arguments": {}}
-        }
-        print("Sending get_imu tool call...")
-        await ws.send(json.dumps(tool_call_imu))
-
-        # 监听回包
-        while True:
-            msg = await ws.recv()
-            if isinstance(msg, str):
-                print("Received text packet:", msg)
-            else:
-                print(f"Received binary packet ({len(msg)} bytes)")
-
-if __name__ == "__main__":
-    asyncio.run(test_deskbot_mcp())
+base = "http://127.0.0.1:8004/api/v1"
+with urllib.request.urlopen(base + "/sessions") as response:
+    sessions = json.load(response)["sessions"]
+device = next(item for item in sessions
+              if item.get("client_type") == "device"
+              and item.get("mcp", {}).get("status") == "ready")
+request = urllib.request.Request(
+    base + "/sessions/" + device["session_id"] + "/tools",
+    data=json.dumps({"name": "self.sensor.get_imu", "arguments": {}}).encode(),
+    headers={"Content-Type": "application/json"},
+)
+with urllib.request.urlopen(request) as response:
+    print(json.load(response))
 ```
+
+该调试接口只开放以上三种状态查询。运动、拍照仍由当前实机语音会话发起。模型 Function Calling 使用 `device_self_motion_drive` 等下划线别名，发送给固件时还原成 `self.motion.drive`；浏览器摄像头使用 `self_camera_*`，两者不会混用。
 
 ---
 

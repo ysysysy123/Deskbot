@@ -21,6 +21,7 @@ class TurnRequest:
     text: str
     messages: list[dict[str, str]]
     device_mcp: Any | None = None
+    diagnostics: dict[str, Any] | None = None
 
 
 class DialogueBackend(Protocol):

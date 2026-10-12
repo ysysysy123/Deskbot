@@ -7,11 +7,13 @@ import time
 import uuid
 from collections.abc import Callable
 from typing import Any
+from urllib.parse import urlsplit
 
 from websockets.exceptions import ConnectionClosed
 
 from voice_server.config import AppConfig
 from voice_server.dialogue import DialogueBackend
+from voice_server.device_mcp import DeviceMcpBridge
 from voice_server.compat import wait_for
 from voice_server.protocol.messages import (
     HelloMessage,
@@ -31,85 +33,24 @@ _VOICE_PATH = "/xiaozhi/v1/"
 class WebSocketTransport:
     """The small transport surface used by a voice session."""
 
-    def __init__(self, connection: Any) -> None:
+    def __init__(self, connection: Any, *, send_timeout_s: float = 15.0) -> None:
         self._connection = connection
         self._send_lock = asyncio.Lock()
+        self._send_timeout_s = send_timeout_s
 
     async def send_json(self, message: dict[str, object]) -> None:
         async with self._send_lock:
-            await self._connection.send(json.dumps(message, ensure_ascii=False))
+            await wait_for(
+                self._connection.send(json.dumps(message, ensure_ascii=False)),
+                self._send_timeout_s,
+            )
 
     async def send_bytes(self, packet: bytes) -> None:
         async with self._send_lock:
-            await self._connection.send(packet)
+            await wait_for(self._connection.send(packet), self._send_timeout_s)
 
     async def close(self, code: int) -> None:
         await self._connection.close(code=code)
-
-
-class DeviceMcpBridge:
-    """Proxy JSON-RPC MCP calls over one physical device WebSocket."""
-
-    def __init__(self, transport: WebSocketTransport, session_id: str, timeout_s: float) -> None:
-        self._transport = transport
-        self._session_id = session_id
-        self._timeout_s = max(0.1, timeout_s)
-        self._next_id = 0
-        self._pending: dict[int, asyncio.Future[dict[str, Any]]] = {}
-        self._closed = False
-
-    async def list_tools(self) -> dict[str, Any]:
-        result = await self.request("tools/list", {"withUserTools": False})
-        return result if isinstance(result, dict) else {}
-
-    async def call_tool(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
-        result = await self.request("tools/call", {"name": name, "arguments": arguments})
-        return result if isinstance(result, dict) else {}
-
-    async def request(self, method: str, params: dict[str, Any] | None = None) -> Any:
-        if self._closed:
-            raise ConnectionError("设备 MCP 会话已关闭")
-        self._next_id += 1
-        request_id = self._next_id
-        loop = asyncio.get_running_loop()
-        future: asyncio.Future[dict[str, Any]] = loop.create_future()
-        self._pending[request_id] = future
-        payload: dict[str, Any] = {"jsonrpc": "2.0", "id": request_id, "method": method}
-        if params is not None:
-            payload["params"] = params
-        try:
-            await self._transport.send_json(
-                {"session_id": self._session_id, "type": "mcp", "payload": payload}
-            )
-            response = await wait_for(future, self._timeout_s)
-        except Exception:
-            self._pending.pop(request_id, None)
-            raise
-        self._pending.pop(request_id, None)
-        if "error" in response:
-            error = response.get("error")
-            if isinstance(error, dict):
-                raise ValueError(str(error.get("message", "设备 MCP 调用失败")))
-            raise ValueError("设备 MCP 调用失败")
-        return response.get("result", {})
-
-    def resolve(self, payload: dict[str, Any]) -> bool:
-        request_id = payload.get("id")
-        if isinstance(request_id, bool) or not isinstance(request_id, int):
-            return False
-        future = self._pending.get(request_id)
-        if future is None or future.done():
-            return False
-        future.set_result(payload)
-        return True
-
-    async def close(self) -> None:
-        self._closed = True
-        error = ConnectionError("设备 MCP 会话已关闭")
-        for future in self._pending.values():
-            if not future.done():
-                future.set_exception(error)
-        self._pending.clear()
 
 
 class VoiceWebSocketServer:
@@ -143,6 +84,10 @@ class VoiceWebSocketServer:
         self._id_factory = id_factory or (lambda: str(uuid.uuid4()))
         self._active_sessions: dict[int, Any] = {}
         self._session_connected_at: dict[int, float] = {}
+        self._session_mcp: dict[int, DeviceMcpBridge] = {}
+        self._session_client_types: dict[int, str] = {}
+        self._session_transports: dict[int, WebSocketTransport] = {}
+        self._session_lock = asyncio.Lock()
 
     @property
     def active_session_count(self) -> int:
@@ -163,9 +108,37 @@ class VoiceWebSocketServer:
                     "state": state_value,
                     "connected_at": connected_at,
                     "duration_s": max(0.0, round(now - connected_at, 1)),
+                    "client_type": self._session_client_types.get(key, "device"),
+                    "last_turn": getattr(session, "last_turn", None),
+                    "mcp": self._session_mcp[key].snapshot() if key in self._session_mcp else {
+                        "supported": False, "status": "unsupported", "tools": [], "error": None, "last_call": None,
+                    },
                 }
             )
         return sorted(result, key=lambda item: (str(item["device_id"]), str(item["session_id"])))
+
+    async def call_device_tool(self, session_id: str, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+        for key, session in self._active_sessions.items():
+            if session.session_id == session_id:
+                bridge = self._session_mcp.get(key)
+                if bridge is None:
+                    raise ValueError("此会话没有声明设备 MCP 支持")
+                return await bridge.call_tool(name, arguments)
+        raise ValueError("设备会话已断开，请刷新设备列表")
+
+    def _device_vision_capability(self, connection: Any) -> dict[str, str] | None:
+        if not self.config.vision.enabled:
+            return None
+        public_url = urlsplit(self.config.server.public_websocket_url)
+        hostname = public_url.hostname
+        if not hostname:
+            hostname = connection.local_address[0]
+        host = f"[{hostname}]" if ":" in hostname else hostname
+        scheme = "https" if public_url.scheme == "wss" else "http"
+        capability = {"url": f"{scheme}://{host}:{self.config.server.ota_port}/mcp/vision/explain"}
+        if self.config.auth.mode == "bearer":
+            capability["token"] = self.config.auth.token
+        return capability
 
     async def handle_connection(self, connection: Any) -> None:
         if connection.request.path != _VOICE_PATH:
@@ -205,13 +178,16 @@ class VoiceWebSocketServer:
             # Keep this feature opt-in.  It is used by the local browser bridge and
             # is ignored by normal device clients.
             local_test_turn_events = hello.local_test_turn_events
-            transport = WebSocketTransport(connection)
+            transport = WebSocketTransport(connection, send_timeout_s=self.config.server.send_timeout_s)
             session_id = self._id_factory()
-            if hello.mcp:
+            if hello.mcp and self.config.mcp.enabled:
                 mcp_bridge = DeviceMcpBridge(
                     transport,
                     session_id,
                     self.config.mcp.timeout_seconds,
+                    vision=self._device_vision_capability(connection),
+                    photo_timeout_s=self.config.vision.timeout_seconds + 10,
+                    allowed_tools=frozenset(self.config.mcp.allowed_device_tools),
                 )
             session = self._session_factory(
                 device_id=device_id,
@@ -247,9 +223,33 @@ class VoiceWebSocketServer:
                     0.0 if local_test_turn_events else self.config.audio.frame_duration_ms / 1000.0
                 ),
             )
-            self._active_sessions[id(session)] = session
-            self._session_connected_at[id(session)] = time.time()
+            session_key = id(session)
+            async with self._session_lock:
+                if len(self._active_sessions) >= self.config.server.max_connections:
+                    raise _CloseConnection(1013)
+                existing = [
+                    (key, current)
+                    for key, current in self._active_sessions.items()
+                    if current.device_id == device_id
+                ]
+                keep = max(0, self.config.server.max_sessions_per_device - 1)
+                for old_key, old_session in existing[: max(0, len(existing) - keep)]:
+                    await old_session.close()
+                    old_transport = self._session_transports.get(old_key)
+                    if old_transport is not None:
+                        try:
+                            await old_transport.close(code=1000)
+                        except ConnectionClosed:
+                            pass
+                self._active_sessions[session_key] = session
+                self._session_connected_at[session_key] = time.time()
+                self._session_client_types[session_key] = "browser" if local_test_turn_events else "device"
+                self._session_transports[session_key] = transport
+                if mcp_bridge is not None:
+                    self._session_mcp[session_key] = mcp_bridge
             await transport.send_json(make_server_hello(session_id, local_test_turn_events=local_test_turn_events))
+            if mcp_bridge is not None:
+                mcp_bridge.start()
             await self._serve_messages(connection, session, transport, mcp_bridge)
         except _CloseConnection as error:
             await connection.close(code=error.code)
@@ -262,21 +262,31 @@ class VoiceWebSocketServer:
             except ConnectionClosed:
                 pass
         finally:
-            if mcp_bridge is not None:
-                await mcp_bridge.close()
             if session is not None:
                 self._active_sessions.pop(id(session), None)
                 self._session_connected_at.pop(id(session), None)
+                self._session_mcp.pop(id(session), None)
+                self._session_client_types.pop(id(session), None)
+                self._session_transports.pop(id(session), None)
                 try:
                     await session.close()
                 except Exception:
                     _LOGGER.exception("Failed to close voice session")
+            if mcp_bridge is not None:
+                await mcp_bridge.close()
 
     async def close_active_sessions(self) -> None:
         sessions = tuple(self._active_sessions.values())
         self._active_sessions.clear()
         self._session_connected_at.clear()
+        bridges = tuple(self._session_mcp.values())
+        self._session_mcp.clear()
+        self._session_client_types.clear()
+        transports = tuple(self._session_transports.values())
+        self._session_transports.clear()
         results = await asyncio.gather(*(session.close() for session in sessions), return_exceptions=True)
+        await asyncio.gather(*(bridge.close() for bridge in bridges))
+        await asyncio.gather(*(transport.close(code=1001) for transport in transports), return_exceptions=True)
         for result in results:
             if isinstance(result, Exception):
                 _LOGGER.exception("Failed to close voice session", exc_info=result)

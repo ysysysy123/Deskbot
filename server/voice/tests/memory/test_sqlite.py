@@ -85,6 +85,19 @@ async def test_memory_is_device_isolated_and_persistent(tmp_path):
     assert [message.content for message in b.recent_messages] == ["B remembers blue"]
 
 
+async def test_recall_returns_related_history_and_bounds_per_device_rows(tmp_path):
+    store = SQLiteMemoryProvider(tmp_path / "memory.db", max_messages_per_device=3)
+    await store.initialize()
+    await store.remember("a", "s", "user", "我喜欢喝红茶")
+    await store.remember("a", "s", "assistant", "记住了")
+    await store.remember("a", "s", "user", "天气很好")
+    await store.remember("a", "s", "assistant", "好的")
+
+    context = await store.recall("a", "天气怎么样？", 10)
+    assert [message.content for message in context.relevant_memories] == ["天气很好"]
+    assert [message.content for message in context.recent_messages] == ["记住了", "天气很好", "好的"]
+
+
 async def test_clear_removes_only_target_device(tmp_path):
     store = SQLiteMemoryProvider(tmp_path / "memory.db")
     await store.initialize()
