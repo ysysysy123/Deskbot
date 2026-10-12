@@ -42,7 +42,7 @@ def create_provider(kind: str, config: AppConfig) -> Any:
         from voice_server.providers.sensevoice import SenseVoiceASRProvider
 
         return SenseVoiceASRProvider.from_model_path(
-            config.asr.model_path, max_concurrency=config.asr.max_concurrency
+            config.asr.model_path, max_concurrency=config.asr.max_concurrency, language=config.asr.language
         )
     if kind == "llm":
         from voice_server.providers.openai_compatible import OpenAICompatibleLLMProvider
@@ -54,7 +54,12 @@ def create_provider(kind: str, config: AppConfig) -> Any:
             temperature=config.llm.temperature,
             max_tokens=config.llm.max_tokens,
             timeout_s=config.llm.timeout_s,
+            max_retries=config.llm.max_retries,
         )
+    if config.tts.provider == "command":
+        from voice_server.providers.local_tts import LocalCommandTTSProvider
+
+        return LocalCommandTTSProvider(config.tts.command)
     from voice_server.providers.edge_tts import EdgeTTSProvider
 
     return EdgeTTSProvider(voice=config.tts.voice, rate=config.tts.rate, volume=config.tts.volume)
@@ -123,7 +128,7 @@ async def run_benchmarks(config: AppConfig, *, kinds: list[str], repeat: int, te
         "timing_notes": [
             "初始化单独计时；每个模块顺序重复执行，无隐式预热，第一次可能包含冷启动开销。",
             "ASR 为整段识别，首响应等于总耗时；LLM 首响应为第一个非空文本片段，并非精确的 token 计时。",
-            "当前 Edge TTS 先下载完整音频再转 PCM；首响应为 provider 首个 PCM 块，包含下载和转码。",
+            "Edge TTS 和 command TTS 都按首个 PCM 块计时；command TTS 从本地进程 stdout 读取原始 PCM。",
         ],
         "results": [],
     }

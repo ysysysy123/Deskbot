@@ -8,7 +8,7 @@ import os
 import shutil
 from collections.abc import Callable
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 
 from aiohttp import ClientSession, ClientTimeout, WSMsgType, web
 
@@ -132,7 +132,11 @@ def create_local_test_app(
                 async with ClientSession(timeout=ClientTimeout(total=2)) as client:
                     async with client.get(ota_url + "/health") as response:
                         ok = response.status == 200 and (await response.json()).get("status") == "ok"
-                        return {"ok": ok, "detail": "OTA 健康检查通过" if ok else "OTA 健康响应异常"}
+                    async with client.get(ota_url + "/readyz") as response:
+                        ready = response.status == 200 and (await response.json()).get("status") == "ready"
+                        ok = ok and ready
+                        detail = "OTA 已就绪" if ok else "OTA 进程存在但尚未就绪"
+                        return {"ok": ok, "detail": detail}
             except Exception:
                 return {"ok": False, "detail": "OTA 服务未启动或不可达"}
 
@@ -213,6 +217,25 @@ def create_local_test_app(
                 "messages": [],
                 "detail": "语音服务未启动或历史记录暂不可用",
             })
+
+    async def read_device_tool(request: web.Request) -> web.Response:
+        # Match the existing local tester's same-origin API; only read-only
+        # queries are allowed by the admin endpoint, never motion or capture.
+        origin = request.headers.get("Origin")
+        if origin and origin != f"{request.scheme}://{request.host}":
+            return web.json_response({"ok": False, "detail": "请从本地测试页查询设备。"}, status=403)
+        try:
+            payload = await request.json()
+        except (ValueError, UnicodeError):
+            return web.json_response({"ok": False, "detail": "请求格式无效。"}, status=400)
+        headers = {"Authorization": f"Bearer {config.admin_api.token}"} if config.admin_api.token else {}
+        session_id = quote(request.match_info["session_id"], safe="")
+        try:
+            async with ClientSession(timeout=ClientTimeout(total=config.mcp.timeout_seconds + 5)) as client:
+                async with client.post(admin_url + f"/api/v1/sessions/{session_id}/tools", json=payload, headers=headers) as response:
+                    return web.json_response(await response.json(), status=response.status)
+        except (OSError, TimeoutError):
+            return web.json_response({"ok": False, "detail": "设备服务未连接或查询超时。"}, status=503)
 
     async def bridge(request: web.Request) -> web.WebSocketResponse:
         # A local test page may use the configured device token, so reject cross-origin use.
@@ -578,6 +601,7 @@ def create_local_test_app(
     app.router.add_get("/api/info", info)
     app.router.add_get("/api/health", health)
     app.router.add_get("/api/devices", devices)
+    app.router.add_post("/api/devices/{session_id}/tools", read_device_tool)
     app.router.add_get("/api/history", history)
     app.router.add_get("/ws", bridge)
     app.router.add_get("/camera-mcp", camera_bridge)

@@ -21,17 +21,21 @@ class OpenAICompatibleLLMProvider:
         temperature: float,
         max_tokens: int,
         timeout_s: float,
+        max_retries: int | None = None,
         client: Any | None = None,
     ) -> None:
         self._owns_client = client is None
         if client is None:
             from openai import AsyncOpenAI
 
-            client = AsyncOpenAI(
-                api_key=api_key or "local",
-                base_url=base_url,
-                timeout=timeout_s,
-            )
+            options = {
+                "api_key": api_key or "local",
+                "base_url": base_url,
+                "timeout": timeout_s,
+            }
+            if max_retries is not None:
+                options["max_retries"] = max_retries
+            client = AsyncOpenAI(**options)
         self._client = client
         self._model = model
         self._temperature = temperature

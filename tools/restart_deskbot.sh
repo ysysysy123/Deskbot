@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 
-# Stop Deskbot services left by any previous launcher instance, regardless of PID.
-pkill -f 'server/voice/run.py' >/dev/null 2>&1 || true
-pkill -f 'server/voice/local_test.py' >/dev/null 2>&1 || true
-pkill -f '/home/yyy/desktop/ai/Deskbot/tools/deskbot_launcher.py' >/dev/null 2>&1 || true
+set -euo pipefail
 
-exec /home/yyy/Apps/miniconda3/envs/xiaozhi/bin/python \
-  /home/yyy/desktop/ai/Deskbot/tools/deskbot_launcher.py
+DESKBOT_TOOLS="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+DESKBOT_PYTHON="${DESKBOT_PYTHON:-$HOME/Apps/miniconda3/envs/xiaozhi/bin/python}"
+
+# Use the same precise process matching and shutdown wait as the panel.
+exec "$DESKBOT_PYTHON" "$DESKBOT_TOOLS/deskbot_launcher.py" --restart

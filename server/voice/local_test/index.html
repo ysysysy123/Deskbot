@@ -5,32 +5,35 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Deskbot · 语音本地测试</title>
   <link rel="stylesheet" href="styles.css">
-  <script src="app.js?v=devices-20261002" defer></script>
+  <script src="app.js?v=device-tools-20261002" defer></script>
 </head>
 <body>
   <main>
     <header class="page-header">
       <div><div class="eyebrow">DESKBOT / VOICE LAB</div><h1>语音本地测试</h1><p>文字、麦克风与音频文件，共用真实设备的语音链路。</p></div>
-      <span id="connection-status" class="badge">未连接</span>
+      <span id="connection-status" class="badge">本页未连接</span>
     </header>
+
+    <aside id="file-warning" class="file-warning" hidden><strong>请通过本地服务打开测试页</strong><p>当前是直接打开的 HTML 文件，无法读取设备状态、历史记录或连接工具通道。先启动 Deskbot，再点击下面的入口。</p><a href="http://127.0.0.1:8006/">打开 Deskbot 测试页 →</a></aside>
 
     <section class="card environment" aria-labelledby="environment-title">
       <div class="section-heading"><h2 id="environment-title">运行环境</h2><button id="refresh-health" class="quiet">刷新检查</button></div>
       <div class="address-grid"><div><span class="label">设备 WebSocket</span><code id="ws-address">读取配置中…</code></div><div><span class="label">设备 OTA</span><code id="ota-address">—</code></div></div>
       <div id="health-status" class="health-list" aria-live="polite"></div>
       <details><summary id="readiness-summary">检查本机依赖…</summary><div id="readiness-details" class="readiness-list"></div></details>
-      <p class="hint">麦克风请通过 <code>http://127.0.0.1:8006</code> 或 <code>localhost</code> 打开。测试页与语音服务需要分别启动。</p>
+      <p class="hint">本页麦克风和摄像头使用当前电脑的设备。<a href="http://127.0.0.1:8006/">本机测试页入口</a> · 实机的工具状态见下方设备卡片。</p>
     </section>
 
     <section class="card devices" aria-labelledby="devices-title">
-      <div class="section-heading"><h2 id="devices-title">在线设备 <span id="device-count" class="count-badge">0</span></h2><button id="refresh-devices" class="quiet">刷新</button></div>
+      <div class="section-heading"><h2 id="devices-title">设备与测试会话 <span class="small">在线</span> <span id="device-count" class="count-badge">—</span></h2><button id="refresh-devices" class="quiet">刷新</button></div>
       <div id="device-list" class="device-list" aria-live="polite"><p class="empty-state">正在读取设备状态…</p></div>
-      <p id="device-status" class="hint">每 2 秒刷新一次；设备断开后会从列表移除。</p>
+      <p id="device-status" class="hint">每 2 秒刷新一次；本页保留最近 10 个离线会话的最后诊断，设备重连后更新。刷新页面会清除离线记录。</p>
+      <p class="hint">“已连接”表示语音连接正常；“工具就绪”表示实机已返回可调用工具。向对应实机说话即可控制它；下方浏览器对话独立于实机会话。</p>
     </section>
 
     <div class="workspace">
       <section class="card controls" aria-labelledby="test-title">
-        <div class="section-heading"><h2 id="test-title">交互测试</h2><span class="small">输入 16 kHz · 播放 24 kHz</span></div>
+        <div class="section-heading"><h2 id="test-title">本页交互测试</h2><span class="small">输入 16 kHz · 播放 24 kHz</span></div>
         <div class="connection-fields"><label>设备 ID<input id="device-id" value="browser-test" autocomplete="off" maxlength="128"></label><label>设备 Token <span class="optional">可选</span><input id="token" type="password" autocomplete="off" placeholder="留空使用服务端配置"></label></div>
         <div class="button-row"><button id="connect" class="primary">连接语音服务</button><button id="disconnect" disabled>断开</button></div>
         <div class="divider"></div>
@@ -53,8 +56,9 @@
     </div>
 
     <section class="card camera" aria-labelledby="camera-title">
-      <div class="section-heading"><h2 id="camera-title">摄像头测试</h2><span class="small" id="camera-capability">正在检查摄像头对话能力…</span></div>
-      <div class="camera-grid"><video id="camera-preview" autoplay muted playsinline></video><div class="camera-side"><div class="button-row"><button id="camera-start">打开摄像头</button><button id="camera-shot" disabled>抓取快照</button><button id="camera-stop" disabled>关闭摄像头</button></div><canvas id="camera-canvas" class="visually-hidden"></canvas><img id="camera-snapshot" alt="最近一次摄像头快照" hidden><p id="camera-status" class="hint">浏览器会先请求摄像头权限。</p></div></div>
+      <div class="section-heading"><h2 id="camera-title">本机浏览器摄像头</h2><span class="small" id="camera-capability">正在检查本页工具通道…</span></div>
+      <p class="camera-scope">这里预览当前电脑的摄像头。向实机说“看看前面有什么”可调用它的 <code>self.camera.take_photo</code>；设备卡片显示调用结果，实机画面不会出现在这个预览区。</p>
+      <div class="camera-grid"><video id="camera-preview" autoplay muted playsinline></video><div class="camera-side"><div class="button-row"><button id="camera-start">打开本机摄像头</button><button id="camera-shot" disabled>抓取快照</button><button id="camera-stop" disabled>关闭摄像头</button></div><canvas id="camera-canvas" class="visually-hidden"></canvas><img id="camera-snapshot" alt="最近一次本机摄像头快照" hidden><p id="camera-status" class="hint">浏览器会先请求当前电脑的摄像头权限。</p></div></div>
     </section>
 
     <section class="card log-card" aria-labelledby="log-title"><div class="section-heading"><h2 id="log-title">事件日志 <span class="small">最近 400 条</span></h2><div class="button-row"><button id="clear-log" class="quiet">清空</button><button id="export-log" class="quiet">导出日志</button></div></div><pre id="event-log" role="log" aria-live="off"></pre></section>

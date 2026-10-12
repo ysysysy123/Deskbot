@@ -12,8 +12,8 @@
 | 打断 | `上游语音/core/handle/receiveAudioHandle.py` 可结合 `client_aec`、VAD 在回复期间触发打断 | 浏览器持续模式在生成及播放回复时继续 Silero VAD，连续约 180 ms 语音自动取消旧轮、清空旧播放并录入新一句；采集请求浏览器回声消除。原生 ESP32 连接未改：仍支持 `abort`、新文本或新 `auto/realtime start` 取消旧轮，尚无回复期间 VAD 打断。 |
 | ASR | `上游语音/core/providers/asr/` 同时有本地、云端与流式实现，例如 `fun_local.py`、`doubao_stream.py` | 当前只有本地 SenseVoice；`ASRProvider.transcribe` 接收完整一轮 PCM，说完后才识别。流式识别需要扩展 Provider 契约，不能仅切换模型名。 |
 | LLM 与 Agent | `上游语音/core/providers/llm/`、`intent/`、`tools/` 支持多后端、工具执行及多种 MCP 接入 | 当前为 OpenAI 兼容流式 LLM，可连接 Ollama。已预留 `DialogueBackend.stream(TurnRequest)`；`CameraMcpDialogueBackend` 已把本地测试页的摄像头 MCP 工具接入对话，拍照可交给独立的 `glm-4v-flash` 分析。通用 Agent 工具编排仍需扩展后端适配器。 |
-| TTS 与响应延迟 | `上游语音/core/providers/tts/` 有 Edge、流式云端和本地服务适配器 | 当前只有 Edge TTS；LLM 接收与逐句合成通过有界队列并行，但每句音频收齐后才转码。已有 `TTSProvider` 输出 PCM 接口，可替换本地引擎；尚无真正流式音频合成。上游 Edge 实现也会收集音频，流式能力来自其他 Provider。 |
-| 记忆 | `上游语音/core/providers/memory/` 有本地短记忆、Mem0、PowerMem 等选项 | 已有按设备隔离的 SQLite 消息、摘要、近期上下文和本机管理 API；`relevant_memories` 仍为空，尚无检索记忆。Agent 自管工具历史时可在后端适配器中实现。 |
+| TTS 与响应延迟 | `上游语音/core/providers/tts/` 有 Edge、流式云端和本地服务适配器 | 当前支持 Edge TTS 和可配置的本地命令 TTS；Edge 音频边到达边转码，LLM 仍按句子边界启动合成，因此尚未做到 token 到音频的端到端流式。 |
+| 记忆 | `上游语音/core/providers/memory/` 有本地短记忆、Mem0、PowerMem 等选项 | 已有按设备隔离的 SQLite 消息、摘要、近期上下文、简单相关历史检索和本机管理 API；默认限制每个设备保留的原始消息数，尚无向量检索。Agent 自管工具历史时可在后端适配器中实现。 |
 | 唤醒词 | `上游测试/wakeword_runtime/core/detector.py` 使用 Sherpa ONNX；上游服务还区分唤醒问候与普通文本 | 本地接受设备传来的 `detect.text`，按普通对话处理；没有浏览器本地关键词检测或独立问候策略。设备端唤醒是否可用取决于固件。 |
 | 声纹与说话人 | `上游语音/core/providers/asr/base.py` 可并行识别声纹，把说话人信息交给对话 | 尚无声纹识别；`Device-Id` 只表示设备，不表示该设备前不同的人。 |
 | 音频格式 | 上游 Provider、握手及浏览器播放器有自己的采样率处理 | 本地设备输入固定 16 kHz、输出固定 24 kHz，均为单声道、60 ms 原始 Opus；不是 Ogg 文件。新测试页按本地参数适配。 |
@@ -74,6 +74,6 @@
 ## 后续优先顺序
 
 1. **真实链路已跑通**：使用上游 SenseVoice 权重、Conda Python 依赖与 FFmpeg 完成 ASR、TTS 和文本对话验证。
-2. **再减少首包等待**：先测首段文本和首包音频耗时；优先替换可逐块输出 PCM 的 TTS，再按实测结果决定是否增加流式 ASR。
-3. **接入 Agent**：实现 `DialogueBackend` 适配器，让工具与规划留在 Agent 内，仅向语音层输出可朗读文本；同时传递取消，避免打断后继续播报旧任务。
+2. **再减少首包等待**：优先使用本地命令 TTS 或低重试 LLM 配置，按首段文本、首包音频和 p95 延迟持续测量，再决定是否增加流式 ASR。
+3. **动作取消与工具策略**：设备工具使用服务端白名单，运动工具限制时长，取消/断开时尽力发送停止命令。
 4. **按交互需求扩展**：把浏览器已有的 VAD 自动打断扩展到原生 ESP32 连接，并结合设备端回声处理验证；需要多人身份时再增加声纹。

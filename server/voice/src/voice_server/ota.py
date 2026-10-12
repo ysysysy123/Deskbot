@@ -1,14 +1,55 @@
 import ipaddress
+import base64
+import logging
 import re
+from collections.abc import Callable, Mapping
 from urllib.parse import urlsplit
 
 from aiohttp import web
 
 from voice_server.config import AppConfig
+from voice_server.auth import build_authenticator
 
 
-def create_ota_app(config: AppConfig) -> web.Application:
+def create_ota_app(
+    config: AppConfig,
+    *,
+    vision=None,
+    readiness: Callable[[], Mapping[str, object]] | None = None,
+) -> web.Application:
     app = web.Application()
+    authenticate = build_authenticator(config.auth).authenticate
+
+    async def explain_photo(request: web.Request) -> web.Response:
+        if not authenticate(request.headers.get("Device-Id", ""), request.headers.get("Authorization")):
+            return web.json_response({"success": False, "error": "unauthorized"}, status=401)
+        if vision is None:
+            return web.json_response({"success": False, "error": "视觉模型未启用，请在启动器选择视觉版。"}, status=503)
+        if request.content_type != "multipart/form-data":
+            return web.json_response({"success": False, "error": "需要上传 multipart/form-data 照片。"}, status=400)
+        question, image, mime_type = "", bytearray(), "image/jpeg"
+        try:
+            reader = await request.multipart()
+            async for part in reader:
+                if part.name == "question":
+                    question = (await part.text())[:2000]
+                elif part.name == "file":
+                    mime_type = part.headers.get("Content-Type", "image/jpeg")
+                    while chunk := await part.read_chunk():
+                        image.extend(chunk)
+                        if len(image) > 4 * 1024 * 1024:
+                            raise web.HTTPRequestEntityTooLarge(max_size=4 * 1024 * 1024, actual_size=len(image))
+            if not image:
+                return web.json_response({"success": False, "error": "没有收到照片。"}, status=400)
+            description = await vision.describe(base64.b64encode(image).decode("ascii"), mime_type, question)
+        except (ValueError, AssertionError):
+            return web.json_response({"success": False, "error": "照片上传格式无效。"}, status=400)
+        except web.HTTPException:
+            raise
+        except Exception as error:
+            logging.getLogger(__name__).warning("Device vision failed: %s", type(error).__name__)
+            return web.json_response({"success": False, "error": "照片已上传，但视觉模型分析失败。"}, status=502)
+        return web.json_response({"success": True, "photo_captured": True, "vision_description": description})
 
     async def ota(request: web.Request) -> web.Response:
         try:
@@ -26,9 +67,16 @@ def create_ota_app(config: AppConfig) -> web.Application:
     async def health(request: web.Request) -> web.Response:
         return web.json_response({"status": "ok"})
 
+    async def ready(request: web.Request) -> web.Response:
+        body = dict(readiness() if readiness is not None else {"status": "ready"})
+        status = 200 if body.get("status") == "ready" else 503
+        return web.json_response(body, status=status)
+
     app.router.add_get("/xiaozhi/ota/", ota)
     app.router.add_post("/xiaozhi/ota/", ota)
     app.router.add_get("/health", health)
+    app.router.add_get("/readyz", ready)
+    app.router.add_post("/mcp/vision/explain", explain_photo)
     return app
 
 

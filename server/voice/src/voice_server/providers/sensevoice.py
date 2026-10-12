@@ -4,14 +4,15 @@ from typing import Any
 
 
 class SenseVoiceASRProvider:
-    def __init__(self, model: Any, *, max_concurrency: int = 1) -> None:
+    def __init__(self, model: Any, *, max_concurrency: int = 1, language: str = "auto") -> None:
         if max_concurrency <= 0:
             raise ValueError("max_concurrency must be positive")
         self._model = model
         self._semaphore = asyncio.Semaphore(max_concurrency)
+        self._language = language
 
     @classmethod
-    def from_model_path(cls, path: str, *, max_concurrency: int = 1) -> "SenseVoiceASRProvider":
+    def from_model_path(cls, path: str, *, max_concurrency: int = 1, language: str = "auto") -> "SenseVoiceASRProvider":
         if max_concurrency <= 0:
             raise ValueError("max_concurrency must be positive")
 
@@ -22,7 +23,7 @@ class SenseVoiceASRProvider:
             vad_kwargs={"max_single_segment_time": 30000},
             disable_update=True,
         )
-        return cls(model, max_concurrency=max_concurrency)
+        return cls(model, max_concurrency=max_concurrency, language=language)
 
     async def transcribe(self, pcm_audio: bytes, sample_rate: int) -> str:
         if sample_rate != 16000:
@@ -34,7 +35,7 @@ class SenseVoiceASRProvider:
                     self._model.generate,
                     input=pcm_audio,
                     cache={},
-                    language="auto",
+                    language=self._language,
                     use_itn=True,
                     batch_size_s=60,
                 )

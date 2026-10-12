@@ -119,6 +119,26 @@ def test_dialogue_settings_and_memory_window_load_from_yaml(tmp_path):
     assert config.memory.context_limit == 32
 
 
+def test_local_tts_and_device_tool_policy_load_from_yaml(tmp_path):
+    path = tmp_path / "config.yaml"
+    path.write_text(
+        "tts:\n  provider: command\n  command: local-tts\n"
+        "mcp:\n  enabled: true\n  allowed_device_tools: [self.sensor.get_imu]\n",
+        encoding="utf-8",
+    )
+    config = load_config(path, {})
+    assert config.tts.provider == "command"
+    assert config.tts.command == "local-tts"
+    assert config.mcp.allowed_device_tools == ("self.sensor.get_imu",)
+
+
+def test_local_tts_requires_a_command(tmp_path):
+    path = tmp_path / "config.yaml"
+    path.write_text("tts:\n  provider: command\n", encoding="utf-8")
+    with pytest.raises(ConfigError, match="tts.command"):
+        load_config(path, {})
+
+
 def test_context_cap_cannot_drop_messages_before_summary_threshold(tmp_path):
     path = tmp_path / "config.yaml"
     path.write_text("memory:\n  context_limit: 10\n", encoding="utf-8")

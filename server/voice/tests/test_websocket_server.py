@@ -63,8 +63,11 @@ def _server(*, config=None, authenticator=None, sessions=None, codecs=None, vads
     sessions = [] if sessions is None else sessions
     codecs = [] if codecs is None else codecs
     vads = [] if vads is None else vads
+    if config is None:
+        base = AppConfig()
+        config = replace(base, mcp=replace(base.mcp, enabled=True))
     return VoiceWebSocketServer(
-        config=config or AppConfig(),
+        config=config,
         authenticator=authenticator or NoAuthAuthenticator(),
         asr=object(),
         llm=object(),
@@ -155,25 +158,191 @@ async def test_client_id_is_accepted_but_device_id_remains_session_memory_key():
         await listener.wait_closed()
 
 
-async def test_device_mcp_bridge_round_trips_jsonrpc_over_voice_socket():
+async def _reply_mcp(client, request, result):
+    await client.send(json.dumps({
+        "session_id": "session-1", "type": "mcp",
+        "payload": {"jsonrpc": "2.0", "id": request["payload"]["id"], "result": result},
+    }))
+
+
+async def _initialize_device(client, tools):
+    initialize = json.loads(await client.recv())
+    assert initialize["payload"]["method"] == "initialize"
+    await _reply_mcp(client, initialize, {"protocolVersion": "2024-11-05", "capabilities": {"tools": {}}})
+    assert json.loads(await client.recv())["payload"]["method"] == "notifications/initialized"
+    request = json.loads(await client.recv())
+    assert request["payload"]["method"] == "tools/list"
+    await _reply_mcp(client, request, {"tools": tools})
+
+
+async def test_device_mcp_initializes_paginates_caches_and_reports_tool_results():
+    sessions = []
+    config = AppConfig()
+    config = replace(config, server=replace(config.server, public_websocket_url="ws://192.0.2.10:8000/xiaozhi/v1/"),
+                     vision=replace(config.vision, enabled=True),
+                     mcp=replace(config.mcp, enabled=True))
+    server = _server(config=config, sessions=sessions)
+    listener, url = await _listen(server)
+    tool = {"name": "self.sensor.get_imu", "description": "Read IMU", "inputSchema": {"type": "object"}}
+    camera = {"name": "self.camera.take_photo", "description": "Take photo"}
+    try:
+        async with websockets.connect(url, additional_headers={"Device-Id": "device-mcp"}) as client:
+            await client.send(HELLO_MCP)
+            assert json.loads(await client.recv())["type"] == "hello"
+            initialize = json.loads(await client.recv())
+            assert initialize["payload"]["method"] == "initialize"
+            assert initialize["payload"]["params"]["capabilities"]["vision"] == {
+                "url": "http://192.0.2.10:8003/mcp/vision/explain",
+            }
+            assert server.session_snapshot()[0]["mcp"]["status"] == "initializing"
+            await _reply_mcp(client, initialize, {"protocolVersion": "2024-11-05"})
+            assert json.loads(await client.recv())["payload"]["method"] == "notifications/initialized"
+            first_page = json.loads(await client.recv())
+            assert first_page["payload"]["params"] == {"withUserTools": False}
+            await _reply_mcp(client, first_page, {"tools": [camera], "nextCursor": tool["name"]})
+            second_page = json.loads(await client.recv())
+            assert second_page["payload"]["params"]["cursor"] == tool["name"]
+            await _reply_mcp(client, second_page, {"tools": [tool]})
+            assert await sessions[0].device_mcp.list_tools() == {"tools": [camera, tool]}
+            assert await sessions[0].device_mcp.list_tools() == {"tools": [camera, tool]}
+            # A second list is served from cache, without another device request.
+            await client.send('{"type":"ping","nonce":"cached"}')
+            assert json.loads(await client.recv()) == {"type": "pong", "nonce": "cached"}
+            snapshot = server.session_snapshot()[0]
+            assert snapshot["client_type"] == "device"
+            assert snapshot["mcp"]["status"] == "ready"
+            assert [item["name"] for item in snapshot["mcp"]["tools"]] == [camera["name"], tool["name"]]
+
+            request_task = asyncio.create_task(server.call_device_tool("session-1", tool["name"], {}))
+            outgoing = json.loads(await client.recv())
+            assert outgoing["payload"]["params"] == {"name": tool["name"], "arguments": {}}
+            assert server.session_snapshot()[0]["mcp"]["last_call"]["status"] == "running"
+            result = {"content": [{"type": "text", "text": '{"pitch":1.2}'}], "isError": False}
+            await _reply_mcp(client, outgoing, result)
+            assert await request_task == result
+            last_call = server.session_snapshot()[0]["mcp"]["last_call"]
+            assert last_call["status"] == "success"
+            assert last_call["summary"] == '{"pitch":1.2}'
+            assert last_call["finished_at"] >= last_call["started_at"]
+            with pytest.raises(ValueError, match="未提供"):
+                await server.call_device_tool("session-1", "self.unknown", {})
+    finally:
+        listener.close()
+        await listener.wait_closed()
+
+
+async def test_device_mcp_initialization_error_remains_visible_without_breaking_voice():
     sessions = []
     server = _server(sessions=sessions)
     listener, url = await _listen(server)
     try:
         async with websockets.connect(url, additional_headers={"Device-Id": "device-mcp"}) as client:
             await client.send(HELLO_MCP)
-            assert json.loads(await client.recv())["type"] == "hello"
-            request_task = asyncio.create_task(sessions[0].device_mcp.list_tools())
+            await client.recv()
+            initialize = json.loads(await client.recv())
+            await client.send(json.dumps({"type": "mcp", "payload": {
+                "jsonrpc": "2.0", "id": initialize["payload"]["id"],
+                "error": {"code": -32601, "message": "initialize unavailable"},
+            }}))
+            with pytest.raises(ConnectionError, match="initialize unavailable"):
+                await sessions[0].device_mcp.list_tools()
+            assert server.session_snapshot()[0]["mcp"]["status"] == "error"
+            assert server.session_snapshot()[0]["mcp"]["error"] == "initialize unavailable"
+            await client.send('{"type":"ping"}')
+            assert json.loads(await client.recv()) == {"type": "pong"}
+    finally:
+        listener.close()
+        await listener.wait_closed()
+
+
+async def test_device_mcp_tool_error_and_disconnect_are_reported():
+    sessions = []
+    server = _server(sessions=sessions)
+    listener, url = await _listen(server)
+    tool = {"name": "self.sensor.get_imu"}
+    try:
+        async with websockets.connect(url, additional_headers={"Device-Id": "device-mcp"}) as client:
+            await client.send(HELLO_MCP)
+            await client.recv()
+            await _initialize_device(client, [tool])
+            request_task = asyncio.create_task(server.call_device_tool("session-1", tool["name"], {}))
             outgoing = json.loads(await client.recv())
-            assert outgoing["type"] == "mcp"
-            assert outgoing["payload"]["method"] == "tools/list"
-            request_id = outgoing["payload"]["id"]
-            await client.send(json.dumps({
-                "session_id": "session-1",
-                "type": "mcp",
-                "payload": {"jsonrpc": "2.0", "id": request_id, "result": {"tools": []}},
-            }))
-            assert await request_task == {"tools": []}
+            result = {"content": [{"type": "text", "text": "IMU unavailable"}], "isError": True}
+            await _reply_mcp(client, outgoing, result)
+            assert await request_task == result
+            snapshot = server.session_snapshot()[0]["mcp"]
+            assert snapshot["status"] == "ready"
+            assert snapshot["last_call"]["status"] == "error"
+            assert snapshot["error"] == "IMU unavailable"
+            request_task = asyncio.create_task(server.call_device_tool("session-1", tool["name"], {}))
+            await client.recv()
+            await client.close()
+            with pytest.raises(ConnectionError, match="会话已关闭"):
+                await request_task
+            assert sessions[0].device_mcp.snapshot()["status"] == "closed"
+    finally:
+        listener.close()
+        await listener.wait_closed()
+
+
+async def test_device_mcp_discovery_timeout_does_not_repeat_on_every_turn():
+    sessions = []
+    config = AppConfig()
+    config = replace(config, mcp=replace(config.mcp, enabled=True, timeout_seconds=0.01))
+    server = _server(config=config, sessions=sessions)
+    listener, url = await _listen(server)
+    try:
+        async with websockets.connect(url, additional_headers={"Device-Id": "device-mcp"}) as client:
+            await client.send(HELLO_MCP)
+            await client.recv()
+            assert json.loads(await client.recv())["payload"]["method"] == "initialize"
+            with pytest.raises(ConnectionError, match="初始化超时"):
+                await sessions[0].device_mcp.list_tools()
+            with pytest.raises(ConnectionError, match="初始化超时"):
+                await sessions[0].device_mcp.list_tools()
+            await client.send('{"type":"ping"}')
+            assert json.loads(await client.recv()) == {"type": "pong"}
+    finally:
+        listener.close()
+        await listener.wait_closed()
+
+
+async def test_mcp_feature_is_ignored_when_server_mcp_is_disabled():
+    base = AppConfig()
+    config = replace(base, mcp=replace(base.mcp, enabled=False))
+    sessions = []
+    server = _server(config=config, sessions=sessions)
+    listener, url = await _listen(server)
+    try:
+        async with websockets.connect(url, additional_headers={"Device-Id": "device-mcp"}) as client:
+            await client.send(HELLO_MCP)
+            await client.recv()
+            await client.send('{"type":"ping","nonce":"disabled"}')
+            assert json.loads(await client.recv()) == {"type": "pong", "nonce": "disabled"}
+            assert sessions[0].device_mcp is None
+    finally:
+        listener.close()
+        await listener.wait_closed()
+
+
+async def test_new_connection_replaces_stale_session_for_same_device():
+    base = AppConfig()
+    config = replace(base, server=replace(base.server, max_sessions_per_device=1))
+    sessions = []
+    server = _server(config=config, sessions=sessions)
+    listener, url = await _listen(server)
+    try:
+        first = await websockets.connect(url, additional_headers={"Device-Id": "same-device"})
+        await first.send(HELLO)
+        await first.recv()
+        second = await websockets.connect(url, additional_headers={"Device-Id": "same-device"})
+        await second.send(HELLO)
+        await second.recv()
+        with pytest.raises(websockets.ConnectionClosed):
+            await first.recv()
+        assert sessions[0].closed is True
+        assert server.active_session_count == 1
+        await second.close()
     finally:
         listener.close()
         await listener.wait_closed()

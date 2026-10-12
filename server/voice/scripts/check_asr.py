@@ -37,6 +37,7 @@ async def _run(args: argparse.Namespace) -> None:
     provider = SenseVoiceASRProvider.from_model_path(
         config.asr.model_path,
         max_concurrency=config.asr.max_concurrency,
+        language=config.asr.language,
     )
     print(await provider.transcribe(pcm, 16_000))
 

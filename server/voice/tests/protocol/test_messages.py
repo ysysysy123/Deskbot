@@ -53,6 +53,17 @@ def test_rejects_v2_hello():
     assert error.value.close_code == 1002
 
 
+def test_parses_device_mcp_hello_with_font_capabilities():
+    message = parse_client_message(
+        '{"type":"hello","version":1,"transport":"websocket","audio_params":'
+        '{"format":"opus","sample_rate":16000,"channels":1,"frame_duration":60},'
+        '"features":{"mcp":true,"glyph_push":true},'
+        '"text_font":{"bundle":"deskbot","charset":"zh_CN","size":16,"bpp":4}}'
+    )
+    assert message.mcp is True
+    assert message.local_test_turn_events is False
+
+
 def test_rejects_hello_with_incompatible_audio_params():
     """Would fail if non-16 kHz mono Opus input were accepted."""
     with pytest.raises(ProtocolError, match="audio_params") as error:

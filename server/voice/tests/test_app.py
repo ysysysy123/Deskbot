@@ -415,14 +415,14 @@ def test_from_config_constructs_dependencies_without_loading_real_models(monkeyp
     constructed = []
 
     class Store:
-        def __init__(self, path, *, context_limit):
+        def __init__(self, path, *, context_limit, max_messages_per_device):
             constructed.append(("store", path))
 
     class ASR:
         @classmethod
-        def from_model_path(cls, path, *, max_concurrency):
+        def from_model_path(cls, path, *, max_concurrency, language="auto"):
             instance = cls()
-            constructed.append(("asr", path, max_concurrency))
+            constructed.append(("asr", path, max_concurrency, language))
             return instance
 
     class LLM:

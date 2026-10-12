@@ -27,6 +27,20 @@ async def test_health_returns_ok_json(aiohttp_client):
     assert await response.json() == {"status": "ok"}
 
 
+async def test_readyz_reports_startup_state(aiohttp_client):
+    state = {"status": "starting", "providers": {"asr": "loaded"}}
+    client = await aiohttp_client(create_ota_app(AppConfig(), readiness=lambda: state))
+
+    starting = await client.get("/readyz")
+    assert starting.status == 503
+    assert await starting.json() == state
+
+    state["status"] = "ready"
+    ready = await client.get("/readyz")
+    assert ready.status == 200
+    assert await ready.json() == state
+
+
 async def test_public_ota_omits_token_by_default(aiohttp_client):
     config = config_with(
         public_websocket_url="wss://voice.example/xiaozhi/v1/",
@@ -147,3 +161,29 @@ async def test_public_url_never_includes_token_even_if_switch_is_misconfigured(a
     body = await (await client.get("/xiaozhi/ota/")).json()
 
     assert "token" not in body["websocket"]
+
+
+async def test_device_photo_upload_matches_firmware_multipart(aiohttp_client):
+    from aiohttp import FormData
+    calls = []
+
+    class Vision:
+        async def describe(self, *args):
+            calls.append(args)
+            return "桌上有一本书。"
+
+    client = await aiohttp_client(create_ota_app(AppConfig(), vision=Vision()))
+    form = FormData()
+    form.add_field("question", "桌上有什么？")
+    form.add_field("file", b"JPEG_BYTES", filename="camera.jpg", content_type="image/jpeg")
+    response = await client.post("/mcp/vision/explain", data=form, headers={"Device-Id": "test-device"})
+    assert response.status == 200
+    assert await response.json() == {"success": True, "photo_captured": True, "vision_description": "桌上有一本书。"}
+    assert calls == [("SlBFR19CWVRFUw==", "image/jpeg", "桌上有什么？")]
+
+
+async def test_device_photo_requires_configured_vision_and_auth(aiohttp_client):
+    disabled = await aiohttp_client(create_ota_app(AppConfig()))
+    assert (await disabled.post("/mcp/vision/explain")).status == 503
+    protected = await aiohttp_client(create_ota_app(config_with(auth_mode="bearer", auth_token="test-only")))
+    assert (await protected.post("/mcp/vision/explain")).status == 401

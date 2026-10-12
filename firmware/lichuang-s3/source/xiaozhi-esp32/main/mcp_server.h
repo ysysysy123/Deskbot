@@ -4,6 +4,7 @@
 #include <expected>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <type_traits>
@@ -429,6 +430,8 @@ public:
     }
 
     void AddCommonTools();
+    // Boards with deferred camera initialization register this during startup.
+    void AddCameraTool();
     void AddUserOnlyTools();
     void AddTool(std::unique_ptr<McpTool> tool);
     void AddTool(const std::string& name, const std::string& description,
@@ -456,6 +459,10 @@ private:
                     ResponseSender response_sender);
 
     std::vector<std::unique_ptr<McpTool>> tools_;
+    bool camera_tool_registered_ = false;
+    std::mutex vision_config_mutex_;
+    std::string vision_url_;
+    std::string vision_token_;
 };
 
 #endif  // MCP_SERVER_H

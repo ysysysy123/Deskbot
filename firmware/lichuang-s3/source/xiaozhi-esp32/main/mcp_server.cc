@@ -89,36 +89,53 @@ void McpServer::AddCommonTools() {
                 });
     }
 
-    auto camera = board.GetCamera();
-    if (camera) {
-        AddTool("self.camera.take_photo",
-                "Always remember you have a camera. If the user asks you to see something, use "
-                "this tool to take a photo and then explain it.\n"
-                "Args:\n"
-                "  `question`: The question that you want to ask about the photo.\n"
-                "Return:\n"
-                "  A JSON object that provides the photo information.",
-                PropertyList({Property("question", kPropertyTypeString)}),
-                [camera](const PropertyList& properties) -> ToolResult {
-                    // Lower the priority to do the camera capture
-                    TaskPriorityReset priority_reset(1);
-
-                    if (!camera->Capture()) {
-                        return std::unexpected("Failed to capture photo");
-                    }
-                    auto question = properties["question"].value<std::string>();
-                    auto result = camera->Explain(question);
-                    if (!result) {
-                        return std::unexpected(std::move(result.error()));
-                    }
-                    return std::move(*result);
-                });
+    if (board.GetCamera()) {
+        AddCameraTool();
     }
 #endif
 
     // Restore the original tools list to the end of the tools list
     tools_.insert(tools_.end(), std::make_move_iterator(original_tools.begin()),
                   std::make_move_iterator(original_tools.end()));
+}
+
+void McpServer::AddCameraTool() {
+    // AddCommonTools temporarily moves tools_ while ordering the catalog. Keep
+    // registration state separate so an early board registration stays unique.
+    if (camera_tool_registered_) {
+        return;
+    }
+    camera_tool_registered_ = true;
+    AddTool("self.camera.take_photo",
+            "Always remember you have a camera. If the user asks you to see something, use "
+            "this tool to take a photo and then explain it.\n"
+            "Args:\n"
+            "  `question`: The question that you want to ask about the photo.\n"
+            "Return:\n"
+            "  A JSON object that provides the photo information.",
+            PropertyList({Property("question", kPropertyTypeString)}),
+            [this](const PropertyList& properties) -> ToolResult {
+                auto camera = Board::GetInstance().GetCamera();
+                if (!camera) {
+                    return std::unexpected("Camera is not ready yet");
+                }
+                {
+                    std::lock_guard<std::mutex> lock(vision_config_mutex_);
+                    if (vision_url_.empty()) {
+                        return std::unexpected("Vision service is not configured");
+                    }
+                    camera->SetExplainUrl(vision_url_, vision_token_);
+                }
+                TaskPriorityReset priority_reset(1);
+                if (!camera->Capture()) {
+                    return std::unexpected("Failed to capture photo");
+                }
+                auto result = camera->Explain(properties["question"].value<std::string>());
+                if (!result) {
+                    return std::unexpected(std::move(result.error()));
+                }
+                return std::move(*result);
+            });
 }
 
 void McpServer::AddUserOnlyTools() {
@@ -361,19 +378,22 @@ void McpServer::ParseMessage(const std::string& message, ResponseSender response
 }
 
 void McpServer::ParseCapabilities(const cJSON* capabilities) {
+    // initialize may arrive before the board's deferred camera task finishes.
+    // Keep the config here and apply it from the serialized tool callback.
+    std::lock_guard<std::mutex> lock(vision_config_mutex_);
+    vision_url_.clear();
+    vision_token_.clear();
+    if (!cJSON_IsObject(capabilities)) {
+        return;
+    }
     auto vision = cJSON_GetObjectItem(capabilities, "vision");
     if (cJSON_IsObject(vision)) {
         auto url = cJSON_GetObjectItem(vision, "url");
         auto token = cJSON_GetObjectItem(vision, "token");
         if (cJSON_IsString(url)) {
-            auto camera = Board::GetInstance().GetCamera();
-            if (camera) {
-                std::string url_str = std::string(url->valuestring);
-                std::string token_str;
-                if (cJSON_IsString(token)) {
-                    token_str = std::string(token->valuestring);
-                }
-                camera->SetExplainUrl(url_str, token_str);
+            vision_url_ = url->valuestring;
+            if (cJSON_IsString(token)) {
+                vision_token_ = token->valuestring;
             }
         }
     }
@@ -416,10 +436,9 @@ void McpServer::ParseMessage(const cJSON* json, ResponseSender response_sender) 
 
     if (method_str == "initialize") {
         if (cJSON_IsObject(params)) {
-            auto capabilities = cJSON_GetObjectItem(params, "capabilities");
-            if (cJSON_IsObject(capabilities)) {
-                ParseCapabilities(capabilities);
-            }
+            ParseCapabilities(cJSON_GetObjectItem(params, "capabilities"));
+        } else {
+            ParseCapabilities(nullptr);
         }
         auto app_desc = esp_app_get_description();
         std::string message =

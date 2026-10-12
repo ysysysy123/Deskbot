@@ -7,11 +7,11 @@ const vm = require('node:vm');
 
 const assets = path.resolve(__dirname, '../../local_test');
 
-function page() {
+function page({protocol = 'http:'} = {}) {
   const elements = new Map();
   function element() {
     return {
-      textContent: '', value: '', disabled: false, children: [],
+      textContent: '', value: '', disabled: false, children: [], dataset: {},
       classList: {toggle() {}}, addEventListener() {}, removeEventListener() {}, remove() {},
       append(...items) { this.children.push(...items); },
       replaceChildren(...items) { this.children = items; },
@@ -23,6 +23,8 @@ function page() {
   const html = fs.readFileSync(path.join(assets, 'index.html'), 'utf8');
   for (const match of html.matchAll(/id="([^"]+)"/g)) elements.set(match[1], element());
   const sent = [];
+  const requests = [];
+  const intervals = [];
   const tracks = [];
   const sounds = [];
   const stream = () => {
@@ -54,16 +56,103 @@ function page() {
       getElementById(id) { assert.ok(elements.has(id), `Missing HTML element: ${id}`); return elements.get(id); },
       createElement: element,
     },
-    window: {addEventListener() {}}, WebSocket: {OPEN: 1},
-    fetch: () => new Promise(() => {}),
-    setInterval: () => 1, clearInterval() {}, setTimeout, clearTimeout,
+    window: {addEventListener() {}}, WebSocket: {OPEN: 1}, location: {protocol, host: '127.0.0.1:8006'},
+    fetch: (url) => { requests.push(url); return new Promise(() => {}); },
+    setInterval: (callback) => { intervals.push(callback); return 1; }, clearInterval() {}, setTimeout, clearTimeout,
   });
   for (const item of elements.values()) item.parentElement = element();
   vm.runInContext(fs.readFileSync(path.join(assets, 'app.js'), 'utf8'), context);
   context.testSocket = {readyState: 1, send(value) { sent.push(typeof value === 'string' ? JSON.parse(value) : value); }};
   vm.runInContext('state.connected = true; state.socket = testSocket;', context);
-  return {context, elements, sent, tracks, sounds, stream, run: code => vm.runInContext(code, context)};
+  return {context, elements, sent, tracks, sounds, stream, requests, intervals, run: code => vm.runInContext(code, context)};
 }
+
+function textOf(element) {
+  return [element.textContent, ...element.children.map(textOf)].join('\n');
+}
+
+test('file page offers the local service link without API polling or connecting', async () => {
+  const ui = page({protocol: 'file:'});
+  assert.equal(ui.elements.get('file-warning').hidden, false);
+  assert.equal(ui.elements.get('connect').disabled, true);
+  assert.match(textOf(ui.elements.get('device-list')), /本地服务入口/);
+  await ui.run('refreshHealth(); refreshDevices(); connect(); loadHistory("test-device");');
+  assert.equal(ui.requests.length, 0);
+  assert.equal(ui.intervals.length, 0);
+});
+
+test('device cards distinguish voice connection, MCP initialization, failures and discovered tools', () => {
+  const ui = page();
+  ui.run(`renderDevices({sessions:[
+    {device_id:'device-a',session_id:'a',client_type:'device',state:'idle',mcp:{supported:true,status:'initializing',tools:[]}},
+    {device_id:'device-b',session_id:'b',client_type:'device',state:'listening',mcp:{supported:true,status:'ready',tools:[{name:'self.camera.take_photo',description:'实机拍照'},{name:'self.motion.get_status'}],last_call:{name:'self.camera.take_photo',status:'error',error:'相机未初始化'}}},
+    {device_id:'browser-test',session_id:'c',client_type:'browser',state:'idle',mcp:{supported:false,status:'unsupported',tools:[]}}
+  ]});`);
+  const cards = ui.elements.get('device-list').children;
+  assert.match(textOf(cards[0]), /工具初始化中/);
+  assert.doesNotMatch(textOf(cards[0]), /工具就绪/);
+  assert.match(textOf(cards[1]), /2 个工具/);
+  assert.match(textOf(cards[1]), /self.camera.take_photo/);
+  assert.match(textOf(cards[1]), /最近调用 · 失败/);
+  assert.match(textOf(cards[1]), /相机未初始化/);
+  assert.match(textOf(cards[2]), /浏览器测试/);
+  assert.match(textOf(cards[2]), /本页测试会话使用/);
+});
+
+test('device turn timing shows server measurements and leaves missing audio unset', () => {
+  const ui = page();
+  ui.run(`renderDevices({sessions:[{device_id:'device-a',session_id:'a',last_turn:{status:'error',asr_ms:175,first_text_ms:2500,first_audio_ms:null,total_ms:8100,error_stage:'tts',error:'合成超时'}}]});`);
+  const card = ui.elements.get('device-list').children[0];
+  const metrics = card.children.find(child => child.className === 'device-turn').children[1];
+  assert.match(textOf(card), /最近一轮 · 失败/);
+  assert.match(textOf(metrics.children[0]), /ASR 识别\n0.17 s/);
+  assert.match(textOf(metrics.children[1]), /首段文字\n2.50 s/);
+  assert.match(textOf(metrics.children[2]), /首段语音\n—/);
+  assert.match(textOf(metrics.children[3]), /总耗时\n8.10 s/);
+  assert.match(textOf(card), /语音合成：合成超时/);
+});
+
+test('device cards keep the last MCP error visible after a device disconnects', async () => {
+  const ui = page();
+  const payloads = [
+    {ok:true, active_count:1, sessions:[{device_id:'device-a',session_id:'a',state:'idle',client_type:'device',mcp:{status:'error',tools:[],error:'设备相机工具未注册'},last_turn:{status:'error',error_stage:'dialogue',error:'工具不可用'}}]},
+    {ok:true, active_count:0, sessions:[]},
+  ];
+  ui.context.fetch = async () => ({ok:true, json:async () => payloads.shift()});
+  await ui.run('(async()=>{await refreshDevices(); await refreshDevices()})()');
+  const cards = ui.elements.get('device-list').children;
+  assert.equal(cards.length, 1);
+  assert.match(textOf(cards[0]), /已断开，保留最后诊断/);
+  assert.match(textOf(cards[0]), /设备相机工具未注册/);
+  assert.equal(ui.elements.get('device-count').textContent, '0');
+});
+
+test('read-only device tests use the selected session and keep errors visible after polling', async () => {
+  const ui = page();
+  ui.run(`renderDevices({ok:true,sessions:[{device_id:'test-device',session_id:'test/session',mcp:{status:'ready',tools:[{name:'self.sensor.get_imu'}]}}]});`);
+  const calls = [];
+  ui.context.fetch = async (url, options) => {
+    calls.push({url, options});
+    return {ok: false, json: async () => ({ok:false,detail:'设备已断开，请重新连接'})};
+  };
+  await ui.run(`testDeviceTool('test/session','self.sensor.get_imu')`);
+  assert.equal(calls[0].url, '/api/devices/test%2Fsession/tools');
+  assert.equal(calls[0].options.method, 'POST');
+  assert.deepEqual(JSON.parse(calls[0].options.body), {name:'self.sensor.get_imu',arguments:{}});
+  ui.run('renderDevices(state.lastDevices)');
+  assert.match(textOf(ui.elements.get('device-list')), /本页读取失败/);
+  assert.match(textOf(ui.elements.get('device-list')), /设备已断开/);
+});
+
+test('a browser camera config switch alone does not claim the tool channel is ready', () => {
+  const ui = page();
+  ui.run(`state.info={camera_tools_enabled:true,vision_model:null};updateCameraCapability()`);
+  assert.match(ui.elements.get('camera-capability').textContent, /通道未连接/);
+  ui.run(`state.cameraMcpSocket=testSocket;updateCameraCapability()`);
+  assert.match(ui.elements.get('camera-capability').textContent, /等待本页对话绑定/);
+  ui.run(`state.voiceSessionId='session';state.cameraBound=true;updateCameraCapability()`);
+  assert.match(ui.elements.get('camera-capability').textContent, /本页摄像头工具就绪/);
+});
 
 test('continuous capture stays open over turns; playback must drain before resume', async () => {
   const ui = page();

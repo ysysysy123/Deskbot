@@ -3,7 +3,10 @@
 
 from __future__ import annotations
 
+import argparse
 import json
+import logging
+from logging.handlers import RotatingFileHandler
 import os
 import queue
 import shutil
@@ -40,6 +43,7 @@ NINFER_CONTAINER = "ninfer-bonsai"
 ZHIPU_DEFAULT_BASE_URL = "https://open.bigmodel.cn/api/paas/v4"
 ZHIPU_DEFAULT_TEXT_MODEL = "glm-4-flash"
 ZHIPU_DEFAULT_VISION_MODEL = "glm-4v-flash"
+LOG_DIR = Path(os.environ.get("XDG_STATE_HOME", str(Path.home() / ".local" / "state"))) / "deskbot"
 
 MODES = {
     "ninfer · 文字版": ("ninfer", False),
@@ -93,6 +97,9 @@ def port_is_open(port: int) -> bool:
 def port_is_in_use(port: int) -> bool:
     """Check local port ownership without sending invalid data to the service."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        # A recently stopped server can leave TCP connections in TIME_WAIT.
+        # Match the server's reuse option so restart does not misreport them.
+        probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
             probe.bind(("127.0.0.1", port))
         except OSError:
@@ -100,12 +107,14 @@ def port_is_in_use(port: int) -> bool:
     return False
 
 
-def deskbot_process_pids() -> dict[str, list[int]]:
-    """Find Deskbot voice/tester processes left by an earlier panel instance."""
+def deskbot_process_pids(*, include_launcher: bool = False) -> dict[str, list[int]]:
+    """Find this checkout's Python services, including relative script paths."""
     scripts = {
         "voice": "server/voice/run.py",
         "tester": "server/voice/local_test.py",
     }
+    if include_launcher:
+        scripts["launcher"] = "tools/deskbot_launcher.py"
     found = {name: [] for name in scripts}
     proc_root = Path("/proc")
     if not proc_root.is_dir():
@@ -115,13 +124,32 @@ def deskbot_process_pids() -> dict[str, list[int]]:
             continue
         try:
             command = (entry / "cmdline").read_bytes().decode(errors="ignore").split("\0")
-        except (OSError, UnicodeError):
+            if entry.stat().st_uid != os.getuid() or not Path(command[0]).name.startswith("python"):
+                continue
+            # Python is launched with an optional -u/-B, followed by its script.
+            arguments = [arg for arg in command[1:] if arg]
+            while arguments and arguments[0] in {"-u", "-B"}:
+                arguments.pop(0)
+            if not arguments or arguments[0].startswith("-"):
+                continue
+            script_path = (entry / "cwd").resolve() / arguments[0]
+            script_path = script_path.resolve()
+        except (OSError, UnicodeError, IndexError):
             continue
         for name, script in scripts.items():
-            if script in command or str(ROOT / script) in command:
+            if script_path == (ROOT / script).resolve():
                 found[name].append(int(entry.name))
                 break
     return found
+
+
+def process_is_running(pid: int) -> bool:
+    try:
+        # A terminated child may remain a zombie until its parent reaps it.
+        state = (Path("/proc") / str(pid) / "stat").read_text().rsplit(")", 1)[1].split()[0]
+        return state != "Z"
+    except (FileNotFoundError, ProcessLookupError):
+        return False
 
 
 def stop_process_group(pid: int) -> None:
@@ -130,25 +158,25 @@ def stop_process_group(pid: int) -> None:
         process_group = os.getpgid(pid)
     except ProcessLookupError:
         return
-    target = process_group if process_group != os.getpgrp() else pid
+    # Only a session/group leader owns its process group. A manually started
+    # server can share a terminal's group with unrelated programs.
+    owns_group = process_group == pid and process_group != os.getpgrp()
     for terminate_signal, wait_seconds in (
         (signal.SIGINT, 3),
         (signal.SIGTERM, 3),
         (signal.SIGKILL, 1),
     ):
         try:
-            os.killpg(target, terminate_signal) if target == process_group else os.kill(target, terminate_signal)
+            os.killpg(pid, terminate_signal) if owns_group else os.kill(pid, terminate_signal)
         except ProcessLookupError:
             return
         deadline = time.monotonic() + wait_seconds
         while time.monotonic() < deadline:
-            try:
-                os.kill(pid, 0)
-            except ProcessLookupError:
-                return
-            except PermissionError:
+            if not process_is_running(pid):
                 return
             time.sleep(0.1)
+    if process_is_running(pid):
+        raise RuntimeError(f"无法停止 Deskbot 进程 {pid}，请检查进程状态。")
 
 
 def stop_stale_deskbot_processes() -> list[int]:
@@ -158,6 +186,44 @@ def stop_stale_deskbot_processes() -> list[int]:
     for pid in stale_pids:
         stop_process_group(pid)
     return stale_pids
+
+
+def stop_deskbot() -> None:
+    """Close old panels first so a pending startup cannot relaunch services."""
+    for pid in deskbot_process_pids(include_launcher=True)["launcher"]:
+        stop_process_group(pid)
+    stop_stale_deskbot_processes()
+
+
+def launcher_logger() -> logging.Logger:
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    logger = logging.getLogger("deskbot.launcher")
+    logger.setLevel(logging.INFO)
+    if not logger.handlers:
+        handler = RotatingFileHandler(LOG_DIR / "launcher.log", maxBytes=5_000_000, backupCount=1, encoding="utf-8")
+        handler.setFormatter(logging.Formatter("%(asctime)s %(message)s"))
+        logger.addHandler(handler)
+    return logger
+
+
+def load_selection() -> tuple[str, str]:
+    try:
+        selection = json.loads((LOG_DIR / "selection.json").read_text(encoding="utf-8"))
+        mode = selection.get("mode")
+        model = selection.get("model", "")
+        if mode in MODES and isinstance(model, str):
+            return mode, model
+    except (OSError, ValueError, AttributeError):
+        pass
+    return "ninfer · 文字版", NINFER_MODEL
+
+
+def save_selection(mode: str, model: str) -> None:
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    (LOG_DIR / "selection.json").write_text(
+        json.dumps({"mode": mode, "model": model}, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
 
 
 def running_ninfer() -> tuple[bool, bool]:
@@ -185,7 +251,7 @@ def running_ninfer() -> tuple[bool, bool]:
 
 
 class DeskbotLauncher:
-    def __init__(self, root: tk.Tk) -> None:
+    def __init__(self, root: tk.Tk, *, mode: str | None = None, model: str | None = None) -> None:
         self.root = root
         self.root.title("Deskbot 本地服务器")
         self.root.tk.call("tk", "appname", "DeskbotLocalServer")
@@ -200,6 +266,7 @@ class DeskbotLauncher:
         style.configure("TLabelframe.Label", font=("song ti", 16, "bold"))
 
         self.events: queue.Queue[tuple] = queue.Queue()
+        self.logger = launcher_logger()
         self.processes: dict[str, subprocess.Popen] = {}
         self.process_lock = threading.Lock()
         self.busy = False
@@ -207,16 +274,22 @@ class DeskbotLauncher:
         self.ninfer_mode: bool | None = None
         self.ollama_models: list[str] = []
 
-        self.mode_var = tk.StringVar(value="ninfer · 文字版")
-        self.model_var = tk.StringVar(value=NINFER_MODEL)
+        saved_mode, saved_model = load_selection()
+        selected_mode = mode or saved_mode
+        selected_model = model if model is not None else saved_model if selected_mode == saved_mode else ""
+        self.mode_var = tk.StringVar(value=selected_mode)
+        self.model_var = tk.StringVar(value=selected_model)
         self.model_status_var = tk.StringVar(value="模型：等待选择")
         self.server_status_var = tk.StringVar(value="Deskbot：未启动")
 
         self._build_ui()
         self._on_mode_change()
+        if MODES[selected_mode][0] == "ollama" and selected_model:
+            self.model_var.set(selected_model)
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
         self.root.after(100, self._drain_events)
         self.refresh_ollama_models()
+        self._log(f"日志保存在：{LOG_DIR}")
 
     def _build_ui(self) -> None:
         outer = ttk.Frame(self.root, padding=18)
@@ -258,11 +331,11 @@ class DeskbotLauncher:
         controls = ttk.Frame(outer)
         controls.pack(fill="x", pady=(2, 8))
         self.start_button = ttk.Button(
-            controls, text="启动模型 + Deskbot 服务", command=self.start_services
+            controls, text="启动 / 重启 Deskbot", command=self.start_services
         )
         self.start_button.pack(side="left")
         self.stop_button = ttk.Button(
-            controls, text="停止本面板启动的服务", command=self.stop_services, state="disabled"
+            controls, text="停止 Deskbot 服务", command=self.stop_services
         )
         self.stop_button.pack(side="left", padx=(8, 0))
         self.open_button = ttk.Button(
@@ -271,7 +344,7 @@ class DeskbotLauncher:
         self.open_button.pack(side="left", padx=(8, 0))
 
         note = (
-            "视觉模式会启用 Deskbot 摄像头/视觉入口；请在浏览器中允许摄像头权限。"
+            "设备工具在所有模式可用；视觉模式支持分析照片。浏览器拍照需要允许摄像头权限。"
             "智谱模式读取现有 .env 的密钥；Ollama 视觉模式需要支持图片输入的模型。"
             "选择只作用于本次启动，不修改 .env。"
             "语音合成仍使用 Edge TTS，需要联网。"
@@ -316,6 +389,7 @@ class DeskbotLauncher:
             self.model_status_var.set("模型：已选择 " + self.mode_var.get())
 
     def _log(self, message: str) -> None:
+        self.logger.info(message)
         self.events.put(("log", message))
 
     def _set_status(self, *, model: str | None = None, server: str | None = None) -> None:
@@ -359,16 +433,22 @@ class DeskbotLauncher:
                 self.ollama_models = event[1]
                 self.model_combo.configure(values=self.ollama_models)
                 current = self.model_var.get()
-                if self.mode_var.get().startswith("Ollama") and current not in self.ollama_models:
+                if self.mode_var.get().startswith("Ollama") and not current:
                     self.model_var.set(self.ollama_models[0] if self.ollama_models else "")
                 if event[2] and MODES[self.mode_var.get()][0] == "ollama":
                     self.model_status_var.set(event[2])
             elif kind == "error":
                 messagebox.showerror(event[1], event[2], parent=self.root)
+            elif kind == "process_exit":
+                name, process, returncode = event[1:]
+                with self.process_lock:
+                    is_current = self.processes.get(name) is process
+                if is_current and name in {"voice", "tester"}:
+                    self.server_status_var.set(f"Deskbot：{name} 已退出（{returncode}），请查看日志或重启")
+                    self.open_button.configure(state="disabled")
             elif kind == "done":
                 self._set_busy(False)
-                if event[1]:
-                    self.open_button.configure(state="normal")
+                self.open_button.configure(state="normal" if event[1] else "disabled")
                 if event[2]:
                     self.root.destroy()
                     return
@@ -389,41 +469,27 @@ class DeskbotLauncher:
         except Exception:
             self.events.put(("models", [], "Ollama：接口暂不可用；可先启动服务或安装本地模型"))
 
-    def _owned_process_running(self, name: str) -> bool:
-        with self.process_lock:
-            process = self.processes.get(name)
-            return process is not None and process.poll() is None
-
-    def _preflight_ports(self) -> bool:
+    def _preflight_ports(self) -> None:
         stale_pids = stop_stale_deskbot_processes()
         if stale_pids:
             self._log(
-                "发现上次面板遗留的 Deskbot 进程，正在停止："
+                "已停止此前启动的 Deskbot 进程："
                 + ", ".join(str(pid) for pid in stale_pids)
             )
-            for pid in stale_pids:
-                stop_process_group(pid)
 
         occupied = []
-        for port, process_name in ((8000, "voice"), (8003, "voice"), (8006, "tester")):
-            if port_is_in_use(port) and not self._owned_process_running(process_name):
+        for port in (8000, 8003, 8006):
+            if port_is_in_use(port):
                 occupied.append(str(port))
         if occupied:
-            messagebox.showerror(
-                "端口已被占用",
-                "这些端口已有其他进程在监听：" + ", ".join(occupied)
-                + "。请先停止旧的 Deskbot 服务，再从这个面板启动。",
-                parent=self.root,
+            raise RuntimeError(
+                "这些端口仍被其他程序占用：" + ", ".join(occupied)
+                + "。Deskbot 旧进程已清理，请检查占用端口的程序。"
             )
-            return False
-        return True
 
     def start_services(self) -> None:
         if self.busy:
             return
-        if not self._preflight_ports():
-            return
-
         mode = self.mode_var.get()
         kind, vision = MODES[mode]
         model = self.model_var.get().strip()
@@ -541,28 +607,45 @@ class DeskbotLauncher:
         self._log(f"Ollama 模型可用：{model}")
 
     def _spawn_process(self, name: str, args: list[str], env: dict[str, str]) -> subprocess.Popen:
-        process = subprocess.Popen(
-            args,
-            cwd=VOICE_DIR,
-            env=env,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1,
-            start_new_session=True,
-        )
+        log_path = LOG_DIR / f"{name}.log"
+        if log_path.exists() and log_path.stat().st_size > 5_000_000:
+            log_path.replace(LOG_DIR / f"{name}.previous.log")
+        # A file remains writable if the panel is closed unexpectedly. A pipe
+        # to the old panel used to lose both diagnostics and its reader.
+        with log_path.open("a", encoding="utf-8") as output:
+            offset = output.tell()
+            output.write(f"\n--- {time.strftime('%Y-%m-%d %H:%M:%S')} {name} started ---\n")
+            output.flush()
+            process = subprocess.Popen(
+                args,
+                cwd=VOICE_DIR,
+                env={**env, "PYTHONUNBUFFERED": "1"},
+                stdin=subprocess.DEVNULL,
+                stdout=output,
+                stderr=subprocess.STDOUT,
+                start_new_session=True,
+            )
         with self.process_lock:
             self.processes[name] = process
-        threading.Thread(target=self._read_process_output, args=(name, process), daemon=True).start()
+        threading.Thread(
+            target=self._read_process_output, args=(name, process, log_path, offset), daemon=True
+        ).start()
         self._log(f"已启动 {name} 进程，PID {process.pid}")
         return process
 
-    def _read_process_output(self, name: str, process: subprocess.Popen) -> None:
-        if process.stdout is None:
-            return
-        for line in process.stdout:
-            self._log(f"[{name}] {line.rstrip()}")
+    def _read_process_output(self, name: str, process: subprocess.Popen, log_path: Path, offset: int) -> None:
+        with log_path.open(encoding="utf-8", errors="replace") as output:
+            output.seek(offset)
+            while True:
+                line = output.readline()
+                if line:
+                    self._log(f"[{name}] {line.rstrip()}")
+                elif process.poll() is not None:
+                    break
+                else:
+                    time.sleep(0.2)
+        self._log(f"{name} 进程已退出，退出码 {process.returncode}。日志：{log_path}")
+        self.events.put(("process_exit", name, process, process.returncode))
 
     def _wait_for_health(self, process: subprocess.Popen, timeout: int = 180) -> None:
         deadline = time.monotonic() + timeout
@@ -593,6 +676,7 @@ class DeskbotLauncher:
     def _start_worker(self, kind: str, vision: bool, model: str, stop_existing_ninfer: bool) -> None:
         try:
             self._stop_processes({"voice", "tester"})
+            self._preflight_ports()
 
             if stop_existing_ninfer:
                 self._run_helper(NINFER_STOP, "停止 ninfer 并释放显存", timeout=30)
@@ -675,6 +759,11 @@ class DeskbotLauncher:
             self._log("浏览器测试页已就绪（8006）。")
             self._log("浏览器测试页已启用在线设备列表（每 2 秒刷新）。")
             self._log("Deskbot 已启动成功，可以开始对话。")
+            selected_mode = next(name for name, value in MODES.items() if value == (kind, vision))
+            try:
+                save_selection(selected_mode, model)
+            except OSError as error:
+                self._log(f"服务已启动，但无法保存模型选择：{error}")
             self._set_status(server="Deskbot：运行中（WS 8000 / OTA 8003 / 测试页 8006）")
             self.events.put(("done", True, False))
             webbrowser.open(TEST_PAGE_URL)
@@ -689,24 +778,8 @@ class DeskbotLauncher:
     def _stop_one(process: subprocess.Popen) -> None:
         if process.poll() is not None:
             return
-        try:
-            os.killpg(process.pid, signal.SIGINT)
-            process.wait(timeout=8)
-        except (ProcessLookupError, subprocess.TimeoutExpired):
-            try:
-                os.killpg(process.pid, signal.SIGTERM)
-                process.wait(timeout=3)
-            except (ProcessLookupError, subprocess.TimeoutExpired):
-                try:
-                    os.killpg(process.pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
-        except OSError:
-            process.terminate()
-            try:
-                process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                process.kill()
+        stop_process_group(process.pid)
+        process.wait(timeout=1)
 
     def _stop_processes(self, names: set[str]) -> None:
         with self.process_lock:
@@ -719,18 +792,19 @@ class DeskbotLauncher:
         if self.busy:
             return
         self._set_busy(True)
-        self._set_status(server="Deskbot：正在停止本面板启动的服务")
+        self._set_status(server="Deskbot：正在停止服务")
         threading.Thread(target=self._stop_worker, args=(False,), daemon=True).start()
 
     def _stop_worker(self, close_after: bool) -> None:
         try:
             self._stop_processes({"voice", "tester", "ollama"})
+            stop_stale_deskbot_processes()
             if self.ninfer_started_here:
                 self._run_helper(NINFER_STOP, "停止本面板启动的 ninfer", timeout=30)
                 self.ninfer_started_here = False
                 self.ninfer_mode = None
             self._set_status(model="模型：面板启动的模型进程已停止", server="Deskbot：已停止")
-            self._log("本面板启动的服务已停止。")
+            self._log("Deskbot 服务已停止。")
         except Exception as error:
             self._log("停止时出错：" + str(error))
             self.events.put(("error", "停止服务时出错", str(error)))
@@ -764,9 +838,28 @@ def mode_name(kind: str, vision: bool) -> str:
 
 
 def main() -> None:
-    stop_stale_deskbot_processes()
+    parser = argparse.ArgumentParser(description="Deskbot 本地服务启动面板")
+    actions = parser.add_mutually_exclusive_group()
+    actions.add_argument("--stop", action="store_true", help="关闭旧面板和 Deskbot 服务")
+    actions.add_argument("--restart", action="store_true", help="关闭旧面板及服务，再打开启动面板")
+    parser.add_argument("--mode", choices=tuple(MODES), help="本次打开面板时选择的运行模式")
+    parser.add_argument("--model", help="本次使用的 Ollama 模型名")
+    parser.add_argument("--start", action="store_true", help="打开面板后自动启动所选服务")
+    args = parser.parse_args()
+    if args.stop or args.restart:
+        logger = launcher_logger()
+        try:
+            stop_deskbot()
+            logger.info("旧面板和 Deskbot 服务已停止")
+        except Exception:
+            logger.exception("停止 Deskbot 失败")
+            raise
+        if args.stop:
+            return
     root = tk.Tk()
-    DeskbotLauncher(root)
+    panel = DeskbotLauncher(root, mode=args.mode, model=args.model)
+    if args.start:
+        root.after(100, panel.start_services)
     root.mainloop()
 
 

@@ -366,6 +366,9 @@ private:
 
     void InitializeTools() {
         auto &mcp_server = McpServer::GetInstance();
+        // Declare camera capability before the first MCP tools/list, even when
+        // the staggered hardware initialization has not finished yet.
+        mcp_server.AddCameraTool();
         mcp_server.AddTool("self.system.reconfigure_wifi",
             "End this conversation and enter WiFi configuration mode.\n"
             "**CAUTION** You must ask the user to confirm this action.",

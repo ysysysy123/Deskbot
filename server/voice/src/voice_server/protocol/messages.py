@@ -40,7 +40,7 @@ class PingMessage:
 ClientMessage: TypeAlias = HelloMessage | ListenMessage | AbortMessage | PingMessage
 
 _HELLO_REQUIRED_FIELDS = {"type", "version", "transport", "audio_params"}
-_HELLO_OPTIONAL_FIELDS = {"features"}
+_HELLO_OPTIONAL_FIELDS = {"features", "text_font"}
 _AUDIO_PARAMS_FIELDS = {"format", "sample_rate", "channels", "frame_duration"}
 _LISTEN_REQUIRED_FIELDS = {"type", "state"}
 _LISTEN_OPTIONAL_FIELDS = {"mode", "text", "session_id"}

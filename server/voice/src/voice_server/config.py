@@ -30,6 +30,9 @@ class ServerConfig:
     max_binary_bytes: int = 65_536
     max_recording_bytes: int = 2_000_000
     max_recording_seconds: float = 30.0
+    max_connections: int = 8
+    max_sessions_per_device: int = 1
+    send_timeout_s: float = 15.0
 
 
 @dataclass(frozen=True)
@@ -68,6 +71,7 @@ class AsrConfig:
     model_path: str = "models/SenseVoiceSmall"
     max_concurrency: int = 1
     timeout_s: float = 30.0
+    language: str = "auto"
 
 
 @dataclass(frozen=True)
@@ -79,13 +83,16 @@ class LlmConfig:
     max_tokens: int = 1024
     summary_max_tokens: int = 256
     timeout_s: float = 60.0
+    max_retries: int = 1
 
 
 @dataclass(frozen=True)
 class TtsConfig:
+    provider: str = "edge"
     voice: str = "zh-CN-XiaoxiaoNeural"
     rate: str = "+0%"
     volume: str = "+0%"
+    command: str = ""
     timeout_s: float = 30.0
     error_text: str = "抱歉，服务暂时不可用。"
 
@@ -112,6 +119,7 @@ class MemoryConfig:
     recent_limit: int = 10
     summary_threshold: int = 12
     context_limit: int = 64
+    max_messages_per_device: int = 5000
 
 
 @dataclass(frozen=True)
@@ -126,6 +134,20 @@ class McpConfig:
     url: str = "http://127.0.0.1:8006/mcp"
     timeout_seconds: float = 20.0
     max_rounds: int = 3
+    allowed_device_tools: tuple[str, ...] = (
+        "self.get_device_status",
+        "self.motion.drive",
+        "self.motion.turn",
+        "self.motion.stop",
+        "self.motion.get_status",
+        "self.sensor.get_imu",
+        "self.camera.start",
+        "self.camera.take_photo",
+        "self.camera.stop",
+        "self.audio_speaker.set_volume",
+        "self.screen.set_brightness",
+        "self.screen.set_theme",
+    )
 
 
 @dataclass(frozen=True)
@@ -297,6 +319,9 @@ def _validate(config: AppConfig) -> None:
         ("server.max_binary_bytes", config.server.max_binary_bytes),
         ("server.max_recording_bytes", config.server.max_recording_bytes),
         ("server.max_recording_seconds", config.server.max_recording_seconds),
+        ("server.max_connections", config.server.max_connections),
+        ("server.max_sessions_per_device", config.server.max_sessions_per_device),
+        ("server.send_timeout_s", config.server.send_timeout_s),
         ("vad.min_silence_duration_ms", config.vad.min_silence_duration_ms),
         ("asr.max_concurrency", config.asr.max_concurrency),
         ("asr.timeout_s", config.asr.timeout_s),
@@ -309,6 +334,7 @@ def _validate(config: AppConfig) -> None:
         ("memory.recent_limit", config.memory.recent_limit),
         ("memory.summary_threshold", config.memory.summary_threshold),
         ("memory.context_limit", config.memory.context_limit),
+        ("memory.max_messages_per_device", config.memory.max_messages_per_device),
         ("dialogue.sentence_max_chars", config.dialogue.sentence_max_chars),
         ("dialogue.sentence_queue_size", config.dialogue.sentence_queue_size),
         ("mcp.timeout_seconds", config.mcp.timeout_seconds),
@@ -318,8 +344,25 @@ def _validate(config: AppConfig) -> None:
         if value <= 0:
             raise ConfigError(f"{name} must be positive")
 
+    if config.llm.max_retries < 0:
+        raise ConfigError("llm.max_retries must not be negative")
+    if config.memory.max_messages_per_device < 0:
+        raise ConfigError("memory.max_messages_per_device must not be negative")
+
+    if config.tts.provider not in {"edge", "command"}:
+        raise ConfigError("tts.provider must be edge or command")
+    if config.tts.provider == "command" and not config.tts.command.strip():
+        raise ConfigError("tts.command is required when tts.provider is command")
+    if (
+        any(name.startswith("self.motion.") and name != "self.motion.stop" for name in config.mcp.allowed_device_tools)
+        and "self.motion.stop" not in config.mcp.allowed_device_tools
+    ):
+        raise ConfigError("mcp.allowed_device_tools must include self.motion.stop with motion tools")
+
     if config.memory.context_limit < max(config.memory.recent_limit, config.memory.summary_threshold):
         raise ConfigError("memory.context_limit must cover recent_limit and summary_threshold")
+    if config.memory.max_messages_per_device < config.memory.summary_threshold:
+        raise ConfigError("memory.max_messages_per_device must cover summary_threshold")
 
     for name, value in (
         ("vad.speech_threshold", config.vad.speech_threshold),

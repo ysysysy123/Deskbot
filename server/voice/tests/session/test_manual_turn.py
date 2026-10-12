@@ -62,6 +62,31 @@ async def test_manual_turn_runs_asr_memory_llm_tts_in_order():
         ("device-a", "s1", "assistant", "你好。很高兴见到你！"),
     ]
     assert memory.summary_devices == ["device-a"]
+    metrics = session.last_turn
+    assert metrics["status"] == "success"
+    assert 0 <= metrics["asr_ms"] <= metrics["first_text_ms"] <= metrics["first_audio_ms"] <= metrics["total_ms"]
+
+
+async def test_empty_dialogue_response_falls_back_to_error_audio():
+    transport = FakeTransport()
+    session = make_session(
+        transport=transport,
+        asr=FakeASR("你好"),
+        llm=FakeLLM([]),
+        tts=FakeTTS({"抱歉，请再说一遍。": [b"pcm-error"]}),
+        codec=FakeCodec(decoded=b"pcm-in", encoded={b"pcm-error": [b"opus-error"]}),
+        error_text="抱歉，请再说一遍。",
+    )
+    await session.handle_message(ListenMessage("start", "manual", None))
+    await session.handle_audio(b"input-opus")
+    await session.handle_message(ListenMessage("stop", "manual", None))
+    await session.wait_until_idle()
+
+    assert transport.events[-2:] == [
+        ("bytes", b"opus-error"),
+        ("json", {"session_id": "s1", "type": "tts", "state": "stop"}),
+    ]
+    assert session.last_turn["status"] == "error"
 
 
 async def test_memory_prompt_removes_only_the_recalled_current_user_row():
