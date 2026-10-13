@@ -256,6 +256,50 @@ python3 Deskbot/firmware/lichuang-s3/source/xiaozhi-esp32/tools/capture_and_view
 
 ---
 
+## 第五部分：2026-10-13 摄像头注册修复与现场验收
+
+### 1. “摄像头没有注册”的原因与修复
+
+现场实机能够正常对话和执行运动工具，但只向服务器上报 9 个 MCP 工具，缺少 `self.camera.take_photo`。GC2145 的串口抓帧正常，服务端工具白名单也允许拍照。
+
+旧固件在启动时通过 `AddCommonTools()` 检查相机指针，此时相机尚未完成约 3 秒的延迟初始化，拍照工具便被遗漏。当前源码在立创板子的 `InitializeTools()` 中提前调用 `AddCameraTool()`，工具执行时再取得相机；MCP 初始化下发的视觉地址和认证信息也先缓存，到拍照时应用。
+
+该修复已存在于 2026-10-11 的源码中，实机却仍运行 2026-10-02 编译的 `2.5.0` 固件。本次重新编译并烧录后，实机工具数量增至 10 个，拍照、图片识别与语音回答经现场验证可用。具体服务器改动和验收数据见 [语音服务器工作记录](../server/voice/docs/server-work-log.md#2026-10-13-edge-tts-恢复与实机摄像头验收)。
+
+### 2. 本次可用的构建环境
+
+- 板型目录：`lckfb/szpi-esp32s3`；构建配置：`lichuang-dev`；语言：`zh-CN`。
+- ESP-IDF 6.1 首次编译失败：本次解析到的 `78/uart-uhci` 0.3.3 调用 `gdma_get_alignment_constraints`，该接口在使用的 6.1 环境中不可用。
+- 改用项目支持的 `espressif/idf:release-v6.0` 镜像编译成功，实际 SDK 为 `v6.0.3` 系列，相机组件为 2.1.8，ESP-SR 为 2.4.7。
+- 未修改第三方组件。构建在独立的临时源码副本中进行，生成文件保留在构建目录。
+
+在准备好的独立源码副本目录运行本次验证过的构建命令：
+
+```bash
+docker run --rm --network host -v "$PWD":/project -w /project \
+    espressif/idf:release-v6.0 \
+    python scripts/build.py lckfb/szpi-esp32s3 --name lichuang-dev --language zh-CN
+```
+
+新固件版本仍为 `2.5.0`，编译日期为 2026-10-13，应用镜像大小为 2856960 字节，位于容量为 `0x3f0000` 的应用分区内。新旧分区布局一致。
+
+### 3. 备份、烧录与本地交接材料
+
+本次识别到原生 USB 串口 `/dev/ttyACM0` 和 USB 转串口 `/dev/ttyUSB0`。转串口以 921600 波特率读取闪存时出现数据损坏，后续通过原生 USB 完成全部 16MB 闪存备份和应用烧录。
+
+仅写入实机已核对的 `0x20000` 应用分区，Wi-Fi 和设备配置保留。重启后日志确认 GC2145、QMI8658 IMU 和 PCA9685 初始化正常，GC2145 抓帧为 320×240 RGB565，解码得到 153600 字节。
+
+本地交接目录为 `~/.local/state/deskbot/firmware-camera-repair-20261013-9qr4t40/`，包含：
+
+- `flash-before.bin`：原设备的完整闪存备份，包含设备配置，仅限本地保存。
+- `xiaozhi-camera-fixed.bin`：本次编译并烧录的修复应用镜像。
+- `device-partitions.json`：实机分区布局。
+- `verification.json`：编译、图像、视觉服务、实机调用和用户确认记录。
+
+图片、认证信息和设备闪存备份不纳入公共仓库；代码和工作记录随本次提交同步。
+
+---
+
 ## 结语
 
 本固件经过深度稳定性重构，各外设均已实现**线程安全化、高层抽象化与大模型工具化**。后续开发者无需再深入调试底层的硬件寄存器与多核时序冲突，直接调用 `Board::GetInstance()` 即可专注于高阶 AI 智能体应用的创新与迭代！
