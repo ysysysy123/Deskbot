@@ -1,5 +1,5 @@
 import asyncio
-from contextlib import aclosing
+from contextlib import aclosing, asynccontextmanager
 
 import pytest
 
@@ -25,6 +25,43 @@ class FakeTranscoder:
             self.inputs.append(part)
         for offset in range(0, len(self._pcm), chunk_size):
             yield self._pcm[offset:offset + chunk_size]
+
+
+async def test_default_edge_tts_connects_to_current_microsoft_endpoint(monkeypatch):
+    pytest.importorskip("edge_tts")
+    import aiohttp
+    from yarl import URL
+
+    requests = []
+
+    class WebSocket:
+        async def send_str(self, message):
+            pass
+
+        async def __aiter__(self):
+            headers = b"X-RequestId:test\r\nPath:audio\r\nContent-Type:audio/mpeg"
+            frame = (len(headers) + 2).to_bytes(2, "big") + headers + b"\r\nmp3"
+            yield aiohttp.WSMessage(aiohttp.WSMsgType.BINARY, frame, "")
+            yield aiohttp.WSMessage(aiohttp.WSMsgType.TEXT, "Path:turn.end\r\n\r\n", "")
+
+    @asynccontextmanager
+    async def ws_connect(session, url, **kwargs):
+        parsed = URL(url)
+        requests.append((parsed.host, parsed.path, set(parsed.query)))
+        yield WebSocket()
+
+    monkeypatch.setattr(aiohttp.ClientSession, "ws_connect", ws_connect)
+    transcoder = FakeTranscoder(b"pcm!")
+    provider = EdgeTTSProvider(
+        voice="zh-CN-XiaoxiaoNeural", rate="+0%", volume="+0%", transcoder=transcoder,
+    )
+
+    assert [part async for part in provider.synthesize("hello")] == [b"pcm!"]
+    assert requests == [(
+        "api.msedgeservices.com", "/tts/cognitiveservices/websocket/v1",
+        {"Ocp-Apim-Subscription-Key", "ConnectionId", "Sec-MS-GEC", "Sec-MS-GEC-Version"},
+    )]
+    assert transcoder.inputs == [b"mp3"]
 
 
 async def test_edge_tts_streams_audio_only_and_uses_voice_settings():

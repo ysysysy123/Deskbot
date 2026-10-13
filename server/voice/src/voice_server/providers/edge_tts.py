@@ -19,7 +19,14 @@ class EdgeTTSProvider:
         if chunk_size <= 0 or chunk_size % 2:
             raise ValueError("chunk_size must be a positive even number of bytes")
         if communicate_factory is None:
-            from edge_tts import Communicate
+            from edge_tts import Communicate, communicate
+            from edge_tts.constants import TRUSTED_CLIENT_TOKEN
+
+            # The legacy Bing synthesis endpoint now rejects the v1 client.
+            communicate.WSS_URL = (
+                "wss://api.msedgeservices.com/tts/cognitiveservices/websocket/v1"
+                f"?Ocp-Apim-Subscription-Key={TRUSTED_CLIENT_TOKEN}"
+            )
 
             communicate_factory = Communicate
         self._voice = voice
