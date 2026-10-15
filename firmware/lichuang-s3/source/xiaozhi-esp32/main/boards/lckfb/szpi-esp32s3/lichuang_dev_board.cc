@@ -74,25 +74,53 @@ public:
 };
 
 #if CONFIG_DESKBOT_MOTION_PCA9685
+class LichuangDevBoard;
+
+class LichuangLazyCamera : public Camera {
+private:
+    LichuangDevBoard* board_ = nullptr;
+    std::string explain_url_;
+    std::string explain_token_;
+
+public:
+    LichuangLazyCamera(LichuangDevBoard* board) : board_(board) {}
+
+    virtual void SetExplainUrl(const std::string& url, const std::string& token) override;
+    virtual bool Capture() override;
+    virtual bool SetHMirror(bool enabled) override;
+    virtual bool SetVFlip(bool enabled) override;
+    virtual bool SetSwapBytes(bool enabled) override;
+    virtual std::expected<std::string, std::string> Explain(const std::string& question) override;
+};
+
 class LichuangLcdDisplay : public SpiLcdDisplay {
 private:
     DualWheelController* motion_controller_ = nullptr;
     Qmi8658* imu_ = nullptr;
     Esp32Camera* camera_ = nullptr;
+    std::function<Esp32Camera*()> on_request_camera_;
+    std::function<void()> on_release_camera_;
     std::unique_ptr<ServoControlUi> servo_ui_;
 
 public:
     LichuangLcdDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_handle_t panel,
                        int width, int height, int offset_x, int offset_y, bool mirror_x,
                        bool mirror_y, bool swap_xy, DualWheelController* motion,
-                       Qmi8658* imu, Esp32Camera* camera)
+                       Qmi8658* imu, Esp32Camera* camera,
+                       std::function<Esp32Camera*()> on_request_camera = nullptr,
+                       std::function<void()> on_release_camera = nullptr)
         : SpiLcdDisplay(panel_io, panel, width, height, offset_x, offset_y, mirror_x, mirror_y, swap_xy),
-          motion_controller_(motion), imu_(imu), camera_(camera) {}
+          motion_controller_(motion), imu_(imu), camera_(camera),
+          on_request_camera_(std::move(on_request_camera)),
+          on_release_camera_(std::move(on_release_camera)) {}
 
     virtual void SetupUI() override {
         DisplayLockGuard lock(this);
         SpiLcdDisplay::SetupUI();
         servo_ui_ = std::make_unique<ServoControlUi>(motion_controller_, imu_, camera_);
+        if (on_request_camera_ && on_release_camera_) {
+            servo_ui_->SetCameraCallbacks(on_request_camera_, on_release_camera_);
+        }
         servo_ui_->SetupUI();
     }
 
@@ -248,7 +276,13 @@ private:
 #elif CONFIG_DESKBOT_MOTION_PCA9685
         display_ = new LichuangLcdDisplay(panel_io, panel,
             DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_OFFSET_X, DISPLAY_OFFSET_Y, DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y, DISPLAY_SWAP_XY,
-            motion_controller_.get(), imu_.get(), camera_);
+            motion_controller_.get(), imu_.get(), camera_,
+            [this]() -> Esp32Camera* {
+                return EnsureCameraInitialized();
+            },
+            [this]() {
+                ReleaseCamera();
+            });
 #else
         display_ = new SpiLcdDisplay(panel_io, panel,
             DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_OFFSET_X, DISPLAY_OFFSET_Y, DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y, DISPLAY_SWAP_XY);
@@ -354,6 +388,39 @@ private:
         camera_ = cam;
     }
 
+    Esp32Camera* EnsureCameraInitialized() {
+        if (camera_ != nullptr) {
+            return camera_;
+        }
+        ESP_LOGI(TAG, "Lazy-initializing GC2145 camera on demand...");
+        pca9557_->SetOutputState(2, 0); // Power on camera
+        vTaskDelay(pdMS_TO_TICKS(50));
+        InitializeCamera();
+        if (camera_ != nullptr) {
+#if CONFIG_DESKBOT_MOTION_PCA9685
+            auto* disp = static_cast<LichuangLcdDisplay*>(display_);
+            if (disp) disp->SetCamera(camera_);
+#endif
+            ESP_LOGI(TAG, "GC2145 camera lazy-init completed");
+        }
+        return camera_;
+    }
+
+    void ReleaseCamera() {
+        if (camera_ == nullptr) {
+            return;
+        }
+        ESP_LOGI(TAG, "Releasing GC2145 camera to reclaim SRAM and save power...");
+#if CONFIG_DESKBOT_MOTION_PCA9685
+        auto* disp = static_cast<LichuangLcdDisplay*>(display_);
+        if (disp) disp->SetCamera(nullptr);
+#endif
+        delete camera_;
+        camera_ = nullptr;
+        pca9557_->SetOutputState(2, 1); // Power off camera sensor
+        ESP_LOGI(TAG, "GC2145 camera released, 30KB SRAM DMA reclaimed");
+    }
+
 #if CONFIG_DESKBOT_MOTION_PCA9685
     void InitializeMotion() {
         motion_controller_ = DualWheelController::Create(i2c_bus_);
@@ -403,7 +470,8 @@ private:
     }
 
     void DumpCameraFrame() {
-        if (!camera_) {
+        auto* cam = EnsureCameraInitialized();
+        if (!cam) {
             printf("ERR:NO_CAM\n");
             fflush(stdout);
             return;
@@ -414,15 +482,17 @@ private:
                    s->id.PID, s->slv_addr, (int)LCD_CAM.cam_ctrl1.cam_clk_inv, (int)cam_get_psram_mode());
             fflush(stdout);
         }
-        if (!camera_->Capture()) {
+        if (!cam->Capture()) {
             printf("ERR:CAP_FAIL\n");
             fflush(stdout);
+            ReleaseCamera();
             return;
         }
-        camera_fb_t* fb = camera_->GetCurrentFrameBuffer();
+        camera_fb_t* fb = cam->GetCurrentFrameBuffer();
         if (!fb || !fb->buf) {
             printf("ERR:NULL_BUF\n");
             fflush(stdout);
+            ReleaseCamera();
             return;
         }
         printf("===BEGIN_FRAME:W=%d,H=%d,LEN=%zu===\n", fb->width, fb->height, fb->len);
@@ -441,6 +511,7 @@ private:
         }
         printf("===END_FRAME===\n");
         fflush(stdout);
+        ReleaseCamera();
     }
 
     void StartSerialDiagnosticTask() {
@@ -498,18 +569,9 @@ private:
             vTaskDelay(pdMS_TO_TICKS(60));
 #endif
 
-            // 3. Power on and Initialize GC2145 Camera
-            b->pca9557_->SetOutputState(2, 0); // Power on camera
-            vTaskDelay(pdMS_TO_TICKS(80));
-            b->InitializeCamera();
-            if (b->camera_) {
-#if CONFIG_DESKBOT_MOTION_PCA9685
-                auto* disp = static_cast<LichuangLcdDisplay*>(b->display_);
-                if (disp) disp->SetCamera(b->camera_);
-#endif
-                ESP_LOGI(TAG, "Deferred: GC2145 camera attached");
-            }
-            vTaskDelay(pdMS_TO_TICKS(60));
+            // 3. Keep GC2145 Camera in low-power sleep mode during boot to preserve 30KB SRAM DMA for voice
+            ESP_LOGI(TAG, "Deferred: GC2145 camera in low-power on-demand mode (30KB SRAM DMA preserved)");
+            vTaskDelay(pdMS_TO_TICKS(30));
 
             // 4. Register MCP tools and serial diagnostic task
             b->RegisterDeferredTools();
@@ -522,6 +584,10 @@ private:
             vTaskDelete(nullptr);
         }, "deferred_init", 4096, this, 2, nullptr);
     }
+
+#if CONFIG_DESKBOT_MOTION_PCA9685
+    LichuangLazyCamera lazy_camera_{this};
+#endif
 
 public:
     LichuangDevBoard() : boot_button_(BOOT_BUTTON_GPIO) {
@@ -558,8 +624,16 @@ public:
         return &backlight;
     }
 
-    virtual Camera* GetCamera() override {
+    Esp32Camera* GetActiveCamera() {
         return camera_;
+    }
+
+    virtual Camera* GetCamera() override {
+#if CONFIG_DESKBOT_MOTION_PCA9685
+        return &lazy_camera_;
+#else
+        return camera_;
+#endif
     }
 
     virtual MotionController* GetMotionController() override {
@@ -576,3 +650,45 @@ public:
 };
 
 DECLARE_BOARD(LichuangDevBoard);
+
+#if CONFIG_DESKBOT_MOTION_PCA9685
+void LichuangLazyCamera::SetExplainUrl(const std::string& url, const std::string& token) {
+    explain_url_ = url;
+    explain_token_ = token;
+    auto* cam = board_->GetActiveCamera();
+    if (cam) cam->SetExplainUrl(url, token);
+}
+
+bool LichuangLazyCamera::Capture() {
+    auto* cam = board_->EnsureCameraInitialized();
+    if (!cam) return false;
+    if (!explain_url_.empty()) {
+        cam->SetExplainUrl(explain_url_, explain_token_);
+    }
+    return cam->Capture();
+}
+
+bool LichuangLazyCamera::SetHMirror(bool enabled) {
+    auto* cam = board_->GetActiveCamera();
+    return cam ? cam->SetHMirror(enabled) : false;
+}
+
+bool LichuangLazyCamera::SetVFlip(bool enabled) {
+    auto* cam = board_->GetActiveCamera();
+    return cam ? cam->SetVFlip(enabled) : false;
+}
+
+bool LichuangLazyCamera::SetSwapBytes(bool enabled) {
+    auto* cam = board_->GetActiveCamera();
+    return cam ? cam->SetSwapBytes(enabled) : false;
+}
+
+std::expected<std::string, std::string> LichuangLazyCamera::Explain(const std::string& question) {
+    auto* cam = board_->EnsureCameraInitialized();
+    if (!cam) return std::unexpected("Camera not available");
+    auto res = cam->Explain(question);
+    // Automatically release camera after snapshot explanation to reclaim 30KB SRAM
+    board_->ReleaseCamera();
+    return res;
+}
+#endif

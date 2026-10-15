@@ -53,11 +53,9 @@ lv_obj_t* CreateInfoCard(lv_obj_t* parent, int x, int y, int w, int h, uint32_t 
 
 ServoControlUi::ServoControlUi(MotionController* motion, Qmi8658* imu, Esp32Camera* camera)
     : motion_(motion), imu_(imu), camera_(camera) {
-    cam_preview_buf_ = (uint16_t*)heap_caps_malloc(320 * 240 * sizeof(uint16_t),
-                                                   MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (cam_preview_buf_ == nullptr) {
-        ESP_LOGE(TAG, "Failed to allocate 320x240 preview buffer in PSRAM");
-    }
+    // Memory optimization: cam_preview_buf_ is now allocated on-demand in ShowCameraPanel()
+    // to reclaim ~153.6KB PSRAM during normal voice operations.
+    cam_preview_buf_ = nullptr;
     memset(&cam_img_dsc_, 0, sizeof(cam_img_dsc_));
 }
 
@@ -365,11 +363,21 @@ void ServoControlUi::HideGyroPanel() {
 
 void ServoControlUi::ShowCameraPanel() {
     if (panel_cam_ != nullptr) {
+        if (on_request_camera_) {
+            camera_ = on_request_camera_();
+        }
+        if (cam_preview_buf_ == nullptr) {
+            cam_preview_buf_ = (uint16_t*)heap_caps_malloc(320 * 240 * sizeof(uint16_t),
+                                                           MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+            if (cam_preview_buf_ == nullptr) {
+                ESP_LOGE(TAG, "Failed to allocate 320x240 preview buffer on demand");
+            }
+        }
         lv_obj_remove_flag(panel_cam_, LV_OBJ_FLAG_HIDDEN);
         lv_obj_move_foreground(panel_cam_);
         cam_panel_visible_ = true;
         UpdateCameraPreview();
-        ESP_LOGI(TAG, "Entered camera preview panel");
+        ESP_LOGI(TAG, "Entered camera preview panel (on-demand init)");
     }
 }
 
@@ -377,7 +385,15 @@ void ServoControlUi::HideCameraPanel() {
     if (panel_cam_ != nullptr) {
         lv_obj_add_flag(panel_cam_, LV_OBJ_FLAG_HIDDEN);
         cam_panel_visible_ = false;
-        ESP_LOGI(TAG, "Exited camera preview panel");
+        if (cam_preview_buf_ != nullptr) {
+            heap_caps_free(cam_preview_buf_);
+            cam_preview_buf_ = nullptr;
+        }
+        if (on_release_camera_) {
+            on_release_camera_();
+            camera_ = nullptr;
+        }
+        ESP_LOGI(TAG, "Exited camera preview panel, camera released");
     }
 }
 

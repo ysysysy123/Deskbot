@@ -1,5 +1,6 @@
 #include <esp_err.h>
 #include <esp_log.h>
+#include <esp_timer.h>
 #include <material_symbols.h>
 #include <cstdlib>
 #include <cstring>
@@ -227,7 +228,12 @@ void LvglDisplay::UpdateStatusBar(bool update_all) {
                 SetStatus(time_str);
             }
         } else {
-            ESP_LOGW(TAG, "System time not set (tm_year=%d)", tm_now->tm_year);
+            static int64_t s_last_time_warn_ms = 0;
+            int64_t now_ms = esp_timer_get_time() / 1000;
+            if (now_ms - s_last_time_warn_ms > 30000) {
+                s_last_time_warn_ms = now_ms;
+                ESP_LOGW(TAG, "System time not set (tm_year=%d)", tm_now->tm_year);
+            }
         }
     } else {
         // Reset so the clock re-appears immediately when idle resumes.

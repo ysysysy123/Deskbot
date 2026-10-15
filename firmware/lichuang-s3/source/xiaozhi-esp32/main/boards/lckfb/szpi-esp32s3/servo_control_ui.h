@@ -2,6 +2,7 @@
 #define SERVO_CONTROL_UI_H
 
 #include <lvgl.h>
+#include <functional>
 
 class MotionController;
 class Qmi8658;
@@ -31,6 +32,10 @@ public:
     bool IsCamPanelVisible() const { return cam_panel_visible_; }
 
     void SetCamera(Esp32Camera* camera) { camera_ = camera; }
+    void SetCameraCallbacks(std::function<Esp32Camera*()> on_request_camera, std::function<void()> on_release_camera) {
+        on_request_camera_ = std::move(on_request_camera);
+        on_release_camera_ = std::move(on_release_camera);
+    }
     void SetImu(Qmi8658* imu) { imu_ = imu; }
     void SetMotion(MotionController* motion) { motion_ = motion; }
 
@@ -90,6 +95,8 @@ private:
     lv_image_dsc_t cam_img_dsc_{};
 
     lv_timer_t* refresh_timer_ = nullptr;
+    std::function<Esp32Camera*()> on_request_camera_;
+    std::function<void()> on_release_camera_;
 };
 
 #endif  // SERVO_CONTROL_UI_H
