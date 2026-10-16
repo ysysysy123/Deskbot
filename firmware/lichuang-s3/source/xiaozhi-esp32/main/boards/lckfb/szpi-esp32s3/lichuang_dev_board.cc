@@ -147,7 +147,10 @@ public:
 };
 #endif
 
+class LichuangLazyCamera;
+
 class LichuangDevBoard : public WifiBoard {
+    friend class LichuangLazyCamera;
 private:
     i2c_master_bus_handle_t i2c_bus_ = nullptr;
     i2c_master_dev_handle_t pca9557_handle_ = nullptr;
@@ -388,6 +391,7 @@ private:
         camera_ = cam;
     }
 
+public:
     Esp32Camera* EnsureCameraInitialized() {
         if (camera_ != nullptr) {
             return camera_;
@@ -420,6 +424,7 @@ private:
         pca9557_->SetOutputState(2, 1); // Power off camera sensor
         ESP_LOGI(TAG, "GC2145 camera released, 30KB SRAM DMA reclaimed");
     }
+private:
 
 #if CONFIG_DESKBOT_MOTION_PCA9685
     void InitializeMotion() {

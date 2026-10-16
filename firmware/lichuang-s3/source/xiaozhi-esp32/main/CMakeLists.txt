@@ -161,6 +161,10 @@ elseif(CONFIG_BOARD_TYPE_LICHUANG_DEV_S3)
     set(BUILTIN_TEXT_FONT font_noto_sans_basic_20_4)
     set(BUILTIN_ICON_FONT font_material_symbols_20_4)
     set(DEFAULT_EMOJI_COLLECTION noto-color-emoji_128)
+    list(REMOVE_ITEM SOURCES "boards/common/nt26_board.cc"
+                             "boards/common/ml307_board.cc"
+                             "boards/common/dual_network_board.cc"
+                             )
 elseif(CONFIG_BOARD_TYPE_QUANDONG_S3_DEV)
     set(BOARD_DIR "quandong-s3-dev")
     set(BUILTIN_TEXT_FONT font_noto_sans_basic_20_4)
