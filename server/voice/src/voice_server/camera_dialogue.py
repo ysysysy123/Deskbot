@@ -20,13 +20,26 @@ from voice_server.providers.openai_vision import OpenAICompatibleVisionProvider
 _CAMERA_TOOLS = {
     "self_camera_start", "self_camera_take_photo", "self_camera_stop", "self_camera_status",
 }
+_MOTION_TOOLS = {
+    "self.motion.drive", "self.motion.forward_continuous", "self.motion.turn",
+    "self.motion.set_active_mode", "self.motion.get_active_mode",
+    "self.motion.nod", "self.motion.wiggle", "self.motion.confused", "self.motion.shake_head",
+    "self.motion.gesture", "self.motion.stop", "self.motion.get_status",
+    "self_motion_drive", "self_motion_forward_continuous", "self_motion_turn",
+    "self_motion_set_active_mode", "self_motion_get_active_mode",
+    "self_motion_nod", "self_motion_wiggle", "self_motion_confused", "self_motion_shake_head",
+    "self_motion_gesture", "self_motion_stop", "self_motion_get_status",
+}
+_SUPPORTED_TOOLS = _CAMERA_TOOLS | _MOTION_TOOLS
 _CAMERA_SWITCH_COMMANDS = (
     re.compile(r"(?:(?:请(?:帮我)?|帮我|麻烦(?:你)?|可以)\s*)?(打开|开启|关闭|关掉)\s*(?:摄像头|相机)(?:一下|吗)?[。.!！?？]?"),
     re.compile(r"(?:请)?(?:帮我)?把\s*(?:摄像头|相机)\s*(打开|开启|关闭|关掉)(?:一下)?[。.!！]?"),
 )
 _TOOL_INSTRUCTIONS = (
-    "你可以通过工具操作当前对话浏览器的摄像头。用户要求打开、关闭、拍照或观察当前画面时，"
-    "调用相应工具；观察画面直接调用拍照工具即可，无需先查询状态。"
+    "你可以通过工具操作当前设备的摄像头与运动底盘/拟人动作。"
+    "用户要求打开、关闭、拍照或观察当前画面时，调用相应摄像头工具；观察画面直接调用拍照工具即可，无需先查询状态。"
+    "在运动控制方面：当处于活跃模式时，表达认同/赞许/说明白时大胆调用点头动作，开心时调用摇摆，疑惑时调用歪头，否定拒绝时调用摇头；"
+    "在安静模式下，仅在用户明确指令要做动作时才调用动作工具。"
     "工具返回结果之前，不能说操作已经成功。只根据工具结果说明成功或失败；"
     "不能编造画面。拍照成功后，用 vision_description 中的视觉分析回答用户的问题，"
     "不要复述拍照参数 question 或把浏览器的状态消息当作画面描述。"
@@ -97,7 +110,7 @@ class CameraMcpDialogueBackend:
                 tools = [{"type": "function", "function": {
                     "name": tool["name"], "description": tool.get("description", ""),
                     "parameters": tool.get("inputSchema", {"type": "object", "properties": {}}),
-                }} for tool in listed.get("tools", []) if tool.get("name") in _CAMERA_TOOLS]
+                }} for tool in listed.get("tools", []) if tool.get("name") in _SUPPORTED_TOOLS]
             except (aiohttp.ClientError, asyncio.TimeoutError, ValueError, KeyError):
                 tools = []
             instructions = _TOOL_INSTRUCTIONS if tools else (

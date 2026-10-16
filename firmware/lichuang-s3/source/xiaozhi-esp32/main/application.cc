@@ -664,6 +664,58 @@ void Application::InitializeProtocol() {
                     glyphs.clear();
                 }
                 ESP_LOGI(TAG, ">> %s", text->valuestring);
+
+                // Direct voice command matching for motion & active mode
+                auto* motion = Board::GetInstance().GetMotionController();
+                if (motion != nullptr) {
+                    std::string user_cmd = text->valuestring;
+                    if (user_cmd.find("开启活跃模式") != std::string::npos ||
+                        user_cmd.find("打开活跃模式") != std::string::npos ||
+                        user_cmd.find("进入活跃模式") != std::string::npos) {
+                        motion->SetActiveMode(true);
+                        turn_gesture_played_ = true;
+                        motion->PlayGesture(MotionGesture::kNod);
+                        ESP_LOGI(TAG, "Voice command triggered: Active Mode ENABLED");
+                    } else if (user_cmd.find("关闭活跃模式") != std::string::npos ||
+                               user_cmd.find("退出活跃模式") != std::string::npos ||
+                               user_cmd.find("安静模式") != std::string::npos) {
+                        motion->SetActiveMode(false);
+                        turn_gesture_played_ = true;
+                        motion->PlayGesture(MotionGesture::kShakeHead);
+                        ESP_LOGI(TAG, "Voice command triggered: Active Mode DISABLED");
+                    } else if (user_cmd.find("点个头") != std::string::npos ||
+                               user_cmd.find("做个点头") != std::string::npos ||
+                               user_cmd.find("点头动作") != std::string::npos) {
+                        turn_gesture_played_ = true;
+                        motion->PlayGesture(MotionGesture::kNod);
+                        ESP_LOGI(TAG, "Explicit voice command: Nod");
+                    } else if (user_cmd.find("摇摆一下") != std::string::npos ||
+                               user_cmd.find("做个摇摆") != std::string::npos ||
+                               user_cmd.find("跳个舞") != std::string::npos ||
+                               user_cmd.find("晃一晃") != std::string::npos) {
+                        turn_gesture_played_ = true;
+                        motion->PlayGesture(MotionGesture::kWiggle);
+                        ESP_LOGI(TAG, "Explicit voice command: Wiggle");
+                    } else if (user_cmd.find("歪个头") != std::string::npos ||
+                               user_cmd.find("做个疑惑") != std::string::npos ||
+                               user_cmd.find("卖个萌") != std::string::npos) {
+                        turn_gesture_played_ = true;
+                        motion->PlayGesture(MotionGesture::kConfused);
+                        ESP_LOGI(TAG, "Explicit voice command: Confused");
+                    } else if (user_cmd.find("摇个头") != std::string::npos ||
+                               user_cmd.find("做个摇头") != std::string::npos) {
+                        turn_gesture_played_ = true;
+                        motion->PlayGesture(MotionGesture::kShakeHead);
+                        ESP_LOGI(TAG, "Explicit voice command: ShakeHead");
+                    } else if (user_cmd.find("转个圈") != std::string::npos ||
+                               user_cmd.find("转一圈") != std::string::npos ||
+                               user_cmd.find("庆祝一下") != std::string::npos) {
+                        turn_gesture_played_ = true;
+                        motion->PlayGesture(MotionGesture::kCheer);
+                        ESP_LOGI(TAG, "Explicit voice command: Cheer");
+                    }
+                }
+
                 Schedule([display, message = std::string(text->valuestring),
                           glyphs = std::move(glyphs), bpp]() {
                     display->AddTextGlyphs(glyphs, bpp);
@@ -678,7 +730,7 @@ void Application::InitializeProtocol() {
                 });
                 if (!turn_gesture_played_) {
                     auto* motion = Board::GetInstance().GetMotionController();
-                    if (motion) {
+                    if (motion && motion->IsActiveMode()) {
                         const char* emo = emotion->valuestring;
                         if (strcmp(emo, "happy") == 0 || strcmp(emo, "excited") == 0) {
                             turn_gesture_played_ = true;
@@ -1211,7 +1263,7 @@ void Application::TryTriggerVoiceAccompaniment(const std::string& text) {
         return;
     }
     auto* motion = Board::GetInstance().GetMotionController();
-    if (!motion) {
+    if (!motion || !motion->IsActiveMode()) {
         return;
     }
 
@@ -1220,7 +1272,8 @@ void Application::TryTriggerVoiceAccompaniment(const std::string& text) {
 
     // 1. Confused / 疑惑 / 歪头打量
     static const char* kConfusedKeywords[] = {
-        "没太明白", "没听清", "什么意思", "让我想想", "怎么会", "真的吗", "你是指", nullptr
+        "没太明白", "没听清", "什么意思", "让我想想", "怎么会", "真的吗", "你是指",
+        "不明白", "不太懂", "不太清楚", "不太理解", "纳闷", nullptr
     };
     for (int i = 0; kConfusedKeywords[i]; ++i) {
         if (prefix.find(kConfusedKeywords[i]) != std::string::npos) {
@@ -1234,7 +1287,8 @@ void Application::TryTriggerVoiceAccompaniment(const std::string& text) {
     // 2. Negation / 否定 / 拒绝 / 摇头
     static const char* kNegationKeywords[] = {
         "不可以", "不行", "不能", "不是", "不对", "没有", "不知道",
-        "做不到", "无法", "抱歉", "对不起", "别这样", "不同意", "不赞成", nullptr
+        "做不到", "无法", "抱歉", "对不起", "别这样", "不同意", "不赞成",
+        "不清楚", "不太清楚", "算了吧", nullptr
     };
     for (int i = 0; kNegationKeywords[i]; ++i) {
         if (prefix.find(kNegationKeywords[i]) != std::string::npos) {
@@ -1260,7 +1314,7 @@ void Application::TryTriggerVoiceAccompaniment(const std::string& text) {
 
     // 4. Affirmation / 认同 / 明白 / 点头
     static const char* kAffirmationKeywords[] = {
-        "明白", "收到", "好的", "好嘞", "好啊", "好呀", "没问题",
+        "明白", "收到", "好的", "好嘞", "好啊", "好呀", "好的呢", "没问题",
         "可以", "对的", "是的", "没错", "当然", "我知道了", "我懂了",
         "听到了", "你好", "早上好", "晚上好", "嗨", nullptr
     };

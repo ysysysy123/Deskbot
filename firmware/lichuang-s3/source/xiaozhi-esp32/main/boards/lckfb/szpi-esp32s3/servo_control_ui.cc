@@ -146,9 +146,16 @@ void ServoControlUi::CreateServoPanel() {
     lv_obj_align(title, LV_ALIGN_TOP_LEFT, 8, 4);
 
     // Header STOP ALL button
-    CreateStyledButton(panel_servo_, 84, 22, 0xEF4444, "STOP ALL", 0, OnStopAllClicked, this);
+    CreateStyledButton(panel_servo_, 76, 22, 0xEF4444, "STOP ALL", 0, OnStopAllClicked, this);
     lv_obj_align(lv_obj_get_child(panel_servo_, lv_obj_get_child_count(panel_servo_) - 1),
                  LV_ALIGN_TOP_RIGHT, -6, 2);
+
+    // Active mode toggle button
+    btn_active_mode_ = CreateStyledButton(panel_servo_, 82, 22, 0x10B981, "ACT: ON", 0,
+                                          OnToggleActiveModeClicked, this);
+    lv_obj_align(btn_active_mode_, LV_ALIGN_TOP_RIGHT, -86, 2);
+    label_active_mode_ = lv_obj_get_child(btn_active_mode_, 0);
+    UpdateActiveModeButton();
 
     // Left Servo (CH0) label
     label_left_ = lv_label_create(panel_servo_);
@@ -344,6 +351,7 @@ void ServoControlUi::ShowServoPanel() {
         lv_obj_remove_flag(panel_servo_, LV_OBJ_FLAG_HIDDEN);
         lv_obj_move_foreground(panel_servo_);
         servo_panel_visible_ = true;
+        UpdateActiveModeButton();
         UpdateServoLabels();
         ESP_LOGI(TAG, "Entered servo debugging panel");
     }
@@ -637,4 +645,26 @@ void ServoControlUi::OnCameraSnapClicked(lv_event_t* e) {
         ui->UpdateCameraPreview();
     }
 }
+
+void ServoControlUi::UpdateActiveModeButton() {
+    if (btn_active_mode_ == nullptr || motion_ == nullptr) return;
+    bool active = motion_->IsActiveMode();
+    lv_obj_set_style_bg_color(btn_active_mode_, lv_color_hex(active ? 0x10B981 : 0x64748B), 0);
+    if (label_active_mode_ != nullptr) {
+        lv_label_set_text(label_active_mode_, active ? "ACT: ON" : "ACT: OFF");
+    }
+}
+
+void ServoControlUi::OnToggleActiveModeClicked(lv_event_t* e) {
+    auto* ui = static_cast<ServoControlUi*>(lv_event_get_user_data(e));
+    if (ui != nullptr && ui->motion_ != nullptr) {
+        bool new_mode = !ui->motion_->IsActiveMode();
+        ui->motion_->SetActiveMode(new_mode);
+        ui->UpdateActiveModeButton();
+        if (new_mode) {
+            ui->motion_->PlayGesture(MotionGesture::kNod);
+        }
+    }
+}
+
 

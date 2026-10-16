@@ -63,6 +63,8 @@ private:
     static void OnForwardContinuousClicked(lv_event_t* e);
     static void OnStopAllClicked(lv_event_t* e);
     static void OnGestureClicked(lv_event_t* e);
+    static void OnToggleActiveModeClicked(lv_event_t* e);
+    void UpdateActiveModeButton();
     static void OnCameraSnapClicked(lv_event_t* e);
 
     static void OnPeriodicTimer(lv_timer_t* t);
@@ -80,6 +82,8 @@ private:
     lv_obj_t* panel_servo_ = nullptr;
     lv_obj_t* label_left_ = nullptr;
     lv_obj_t* label_right_ = nullptr;
+    lv_obj_t* btn_active_mode_ = nullptr;
+    lv_obj_t* label_active_mode_ = nullptr;
     bool servo_panel_visible_ = false;
 
     lv_obj_t* panel_gyro_ = nullptr;

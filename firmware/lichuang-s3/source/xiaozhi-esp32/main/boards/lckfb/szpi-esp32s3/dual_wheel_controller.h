@@ -55,6 +55,9 @@ public:
     esp_err_t PlayGesture(MotionGesture gesture) override;
     void ExecuteGestureSequence(MotionGesture gesture);
 
+    void SetActiveMode(bool enabled) override;
+    bool IsActiveMode() const override { return active_mode_; }
+
     int GetLeftSpeed() const override { return current_left_speed_; }
     int GetRightSpeed() const override { return current_right_speed_; }
     uint16_t GetLeftPulseUs() const override { return current_left_pulse_us_; }
@@ -74,6 +77,7 @@ private:
     bool initialized_ = false;
     bool left_reverse_ = false;
     bool right_reverse_ = true;
+    bool active_mode_ = true;
 
     std::atomic<bool> cancel_gesture_{false};
     std::atomic<bool> is_gesturing_{false};

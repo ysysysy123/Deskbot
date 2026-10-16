@@ -10,6 +10,7 @@
 
 #include "mcp_server.h"
 #include "pca9685.h"
+#include "settings.h"
 
 #define TAG "DualWheelController"
 
@@ -59,9 +60,20 @@ bool DualWheelController::Initialize() {
         initialized_ = false;
         return false;
     }
-    ESP_LOGI(TAG, "PCA9685 dual-wheel controller initialized at %uHz (Neutral: %uus, Deadband: ±%uus)",
-             static_cast<unsigned>(kPwmFrequencyHz), kNeutralPulseUs, kDeadbandHalfWidthUs);
+
+    Settings settings("motion");
+    active_mode_ = settings.GetBool("active_mode", true);
+    ESP_LOGI(TAG, "PCA9685 dual-wheel controller initialized at %uHz (Neutral: %uus, Deadband: ±%uus, ActiveMode: %s)",
+             static_cast<unsigned>(kPwmFrequencyHz), kNeutralPulseUs, kDeadbandHalfWidthUs,
+             active_mode_ ? "ENABLED" : "DISABLED");
     return true;
+}
+
+void DualWheelController::SetActiveMode(bool enabled) {
+    active_mode_ = enabled;
+    Settings settings("motion", true);
+    settings.SetBool("active_mode", enabled);
+    ESP_LOGI(TAG, "Motion active mode set to: %s", enabled ? "ENABLED" : "DISABLED");
 }
 
 void DualWheelController::OnDriveTimeout(void* arg) {
@@ -345,8 +357,28 @@ void DualWheelController::RegisterMcpTools(McpServer& server) {
             return true;
         });
 
+    server.AddTool(
+        "self.motion.set_active_mode",
+        "Set Deskbot motion active/expressive mode. Arguments: 'enabled' (boolean). "
+        "When enabled (true), Deskbot enters active mode and boldly performs physical gestures (nod, wiggle, confused, shake_head) during conversation. "
+        "When disabled (false), Deskbot enters quiet mode and only moves when explicitly requested by user.",
+        PropertyList({Property("enabled", kPropertyTypeBoolean)}),
+        [this](const PropertyList& properties) -> ToolResult {
+            bool enabled = properties["enabled"].value<bool>();
+            SetActiveMode(enabled);
+            return enabled ? "活跃模式已开启：我将大胆伴随对话做出拟人肢体动作。" : "活跃模式已关闭：我将保持安静，仅在明确指令时做动作。";
+        });
+
+    server.AddTool(
+        "self.motion.get_active_mode",
+        "Get whether Deskbot is currently in active/expressive mode.",
+        PropertyList(),
+        [this](const PropertyList&) -> ToolResult {
+            return IsActiveMode() ? "{\"active_mode\": true}" : "{\"active_mode\": false}";
+        });
+
     server.AddTool("self.motion.nod",
-                   "Nod forward and backward to express agreement, affirmation, greeting, or acknowledgement.",
+                   "Nod forward and backward. If in active mode, call this boldly whenever expressing agreement, confirmation, acknowledgment, greeting, or saying '明白'/'好的'/'收到'. In quiet mode, only call when user explicitly requests nodding.",
                    PropertyList(), [this](const PropertyList&) -> ToolResult {
                        if (esp_err_t result = PlayGesture(MotionGesture::kNod); result != ESP_OK) {
                            return std::unexpected(esp_err_to_name(result));
@@ -355,7 +387,7 @@ void DualWheelController::RegisterMcpTools(McpServer& server) {
                    });
 
     server.AddTool("self.motion.wiggle",
-                   "Wiggle body left and right quickly to express joy, happiness, excitement, or playful affection.",
+                   "Wiggle body left and right quickly. If in active mode, call this boldly whenever expressing joy, happiness, excitement, or playful joy. In quiet mode, only call when user explicitly requests wiggling.",
                    PropertyList(), [this](const PropertyList&) -> ToolResult {
                        if (esp_err_t result = PlayGesture(MotionGesture::kWiggle); result != ESP_OK) {
                            return std::unexpected(esp_err_to_name(result));
@@ -364,7 +396,7 @@ void DualWheelController::RegisterMcpTools(McpServer& server) {
                    });
 
     server.AddTool("self.motion.confused",
-                   "Tilt to one side and pause briefly to express confusion, curiosity, thinking, or questioning.",
+                   "Tilt head to one side and pause. If in active mode, call this boldly when puzzled, thinking, curious, or asking clarification. In quiet mode, only call when user explicitly requests.",
                    PropertyList(), [this](const PropertyList&) -> ToolResult {
                        if (esp_err_t result = PlayGesture(MotionGesture::kConfused); result != ESP_OK) {
                            return std::unexpected(esp_err_to_name(result));
@@ -373,7 +405,7 @@ void DualWheelController::RegisterMcpTools(McpServer& server) {
                    });
 
     server.AddTool("self.motion.shake_head",
-                   "Shake head firmly left and right to express disagreement, refusal, or negation.",
+                   "Shake head firmly left and right. If in active mode, call this boldly whenever expressing disagreement, negation, refusal, or saying '不行'/'不知道'/'抱歉'. In quiet mode, only call when user explicitly requests.",
                    PropertyList(), [this](const PropertyList&) -> ToolResult {
                        if (esp_err_t result = PlayGesture(MotionGesture::kShakeHead); result != ESP_OK) {
                            return std::unexpected(esp_err_to_name(result));
@@ -409,14 +441,15 @@ void DualWheelController::RegisterMcpTools(McpServer& server) {
                        return true;
                    });
 
-    server.AddTool("self.motion.get_status", "Get live hardware pulse and speed for both wheels",
+    server.AddTool("self.motion.get_status", "Get live hardware pulse, speed, and active mode for both wheels",
                    PropertyList(), [this](const PropertyList&) -> ToolResult {
                        std::ostringstream ss;
                        ss << "{\"left_speed\": " << GetLeftSpeed()
                           << ", \"right_speed\": " << GetRightSpeed()
                           << ", \"left_pulse_us\": " << GetLeftPulseUs()
                           << ", \"right_pulse_us\": " << GetRightPulseUs()
-                          << ", \"neutral_us\": " << GetNeutralPulseUs() << "}";
+                          << ", \"neutral_us\": " << GetNeutralPulseUs()
+                          << ", \"active_mode\": " << (IsActiveMode() ? "true" : "false") << "}";
                        return ss.str();
                    });
 }

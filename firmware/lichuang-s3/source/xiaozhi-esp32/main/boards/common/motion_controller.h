@@ -65,6 +65,10 @@ public:
     // Anthropomorphic gestures
     virtual esp_err_t PlayGesture(MotionGesture gesture) = 0;
 
+    // Active / Expressive mode (controls whether autonomous gestures occur during conversation)
+    virtual void SetActiveMode(bool enabled) = 0;
+    virtual bool IsActiveMode() const = 0;
+
     inline esp_err_t Nod() { return PlayGesture(MotionGesture::kNod); }
     inline esp_err_t Wiggle() { return PlayGesture(MotionGesture::kWiggle); }
     inline esp_err_t Confused() { return PlayGesture(MotionGesture::kConfused); }
