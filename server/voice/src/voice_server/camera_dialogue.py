@@ -48,6 +48,8 @@ _DEVICE_TOOL_INSTRUCTIONS = (
     "这些工具操作的都是当前说话的实机，不是电脑浏览器。只使用实际列出的工具。"
     "实机相机通常只支持拍照分析，不支持常驻预览；用户说打开摄像头时调用拍照分析即可。"
     "工具返回 success=false 时说明失败原因；success=true 时根据真实结果简短回答。"
+    "用户要求前进、后退、转向时，必须实际调用对应的 drive 或 turn 工具，不能只口头答应。"
+    "历史对话中的执行描述不代表本轮已经执行；本轮没有工具结果就不能声称已收到指令或正在移动。"
 )
 
 
@@ -126,32 +128,35 @@ def _direct_stop_tool(text: str, available_names: set[str]) -> str | None:
 
 def _direct_motion_request(text: str) -> tuple[str, dict[str, int], str] | None:
     """Handle short, unambiguous movement requests without relying on LLM tool choice."""
-    value = re.sub(r"^(?:(?:小智[，,、\s]*)+|请|帮我)+", "", text.strip())
+    value = re.sub(
+        r"^(?:(?:你好|小智|小志|请|帮我|麻烦你|能不能|可以|你)[，,、\s]*)+", "", text.strip(),
+    )
     duration_pattern = (
-        r"(一步|一小步|一点|一下|"
+        r"(一小步|一点|一下|(?:一|两|二|三|四|五|六|七|八|九|十|\d+)步|"
         r"(?:半|一|两|二|三|四|五|六|七|八|九|十|\d+(?:\.\d+)?)秒)?"
     )
     match = re.fullmatch(
-        r"(前走|向前|往前|前进|向后|往后|后退)(?:走|移动|挪)?\s*"
-        + duration_pattern + r"[。.!！]?", value,
+        r"(前走|向前|往前|前进|向后|往后|后退)(?:再)?(?:走|移动|挪)?\s*"
+        + duration_pattern + r"(?:吧|吗)?[。.!！?？]?", value,
     )
     drive = match is not None
     if match is None:
-        match = re.fullmatch(r"(向左|左转|向右|右转)(?:转)?\s*" + duration_pattern + r"[。.!！]?", value)
+        match = re.fullmatch(r"(向左|往左|左转|向右|往右|右转)(?:再)?(?:转)?\s*" + duration_pattern + r"(?:吧|吗)?[。.!！?？]?", value)
     if match is None:
         return None
     direction, amount = match.group(1), match.group(2) or "一下"
     duration = 500
-    if amount.endswith("秒"):
+    if amount.endswith(("秒", "步")) and amount != "一小步":
         number = amount[:-1]
         numbers = {"半": 0.5, "一": 1, "二": 2, "两": 2, "三": 3, "四": 4, "五": 5,
                    "六": 6, "七": 7, "八": 8, "九": 9, "十": 10}
-        duration = round((numbers[number] if number in numbers else float(number)) * 1000)
+        # Steps are short timed nudges; the chassis does not measure step distance.
+        duration = round((numbers[number] if number in numbers else float(number)) * (1000 if amount.endswith("秒") else 500))
     # _execute validates the same 1..5000 ms limit for direct and model calls.
     if drive:
         linear = 40 if direction in {"前走", "向前", "往前", "前进"} else -40
         return "self.motion.drive", {"linear": linear, "angular": 0, "duration_ms": duration}, "移动"
-    angular = -30 if direction in {"向左", "左转"} else 30
+    angular = -30 if direction in {"向左", "往左", "左转"} else 30
     return "self.motion.turn", {"angular": angular, "duration_ms": duration}, "转向"
 
 
@@ -249,6 +254,20 @@ class CameraMcpDialogueBackend:
                     yield f"设备停止失败：{reason}"
                 return
             direct_motion = _direct_motion_request(request.text) if request.device_mcp is not None else None
+            if direct_motion is None and request.device_mcp is not None and re.fullmatch(
+                r"(?:请)?(?:再|继续)走(?:一步|一小步|一下)[。.!！]?", request.text.strip(),
+            ):
+                # Resolve an explicit repeat from the user's last movement request,
+                # never from an assistant's potentially ungrounded success claim.
+                for message in reversed(request.messages[:-1]):
+                    if message["role"] != "user":
+                        continue
+                    previous = _direct_motion_request(message["content"])
+                    if previous is not None:
+                        name, arguments, label = previous
+                        if name == "self.motion.drive":
+                            direct_motion = (name, {**arguments, "duration_ms": 500}, label)
+                        break
             if direct_motion is not None:
                 motion_name, motion_args, motion_label = direct_motion
                 result = json.loads(await self._execute(

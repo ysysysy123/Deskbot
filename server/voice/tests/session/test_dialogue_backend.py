@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from tests.fakes import FakeASR, FakeCodec, FakeLLM, FakeMemory, FakeTTS
+from tests.fakes import FakeASR, FakeCodec, FakeLLM, FakeMemory, FakeTTS, FakeTransport
 from voice_server.protocol.messages import parse_client_message
 from voice_server.protocol.state import SessionState
 from test_manual_turn import make_session
@@ -96,3 +96,95 @@ async def test_failed_asr_logs_stage_and_recovers_for_next_turn(caplog):
     await session.wait_until_idle()
     assert "stage=asr" in caplog.text and "model unavailable" in caplog.text
     assert session.state is SessionState.IDLE
+
+
+async def test_next_sentence_is_synthesized_during_previous_playback():
+    playing, release, next_ready = asyncio.Event(), asyncio.Event(), asyncio.Event()
+
+    class Transport(FakeTransport):
+        async def send_bytes(self, packet):
+            if packet == b"first":
+                playing.set()
+                await release.wait()
+            await super().send_bytes(packet)
+
+    class TTS:
+        async def synthesize(self, text):
+            if text == "第一句。":
+                yield b"pcm-a"
+            else:
+                await playing.wait()
+                next_ready.set()
+                yield b"pcm-b"
+
+    transport = Transport()
+    session = make_session(
+        transport=transport, llm=FakeLLM(["第一句。第二句。"]), tts=TTS(),
+        codec=FakeCodec(encoded={b"pcm-a": [b"first"], b"pcm-b": [b"second"]}),
+        tts_timeout_s=2,
+    )
+    await session.handle_text("你好")
+    try:
+        await asyncio.wait_for(next_ready.wait(), 1)
+        assert not any(kind == "bytes" for kind, _ in transport.events)
+        release.set()
+        await session.wait_until_idle()
+        assert [data for kind, data in transport.events if kind == "bytes"] == [b"first", b"second"]
+        assert session.last_turn["status"] == "success"
+    finally:
+        release.set()
+        await session.abort()
+
+
+async def test_abort_closes_prefetched_tts_while_first_sentence_is_playing():
+    next_started, next_closed, gate = asyncio.Event(), asyncio.Event(), asyncio.Event()
+
+    class Transport(FakeTransport):
+        async def send_bytes(self, packet):
+            await gate.wait()
+            await super().send_bytes(packet)
+
+    class TTS:
+        async def synthesize(self, text):
+            if text == "第一句。":
+                yield b"pcm"
+            else:
+                try:
+                    next_started.set()
+                    await gate.wait()
+                    yield b"pcm"
+                finally:
+                    next_closed.set()
+
+    transport = Transport()
+    session = make_session(
+        transport=transport, llm=FakeLLM(["第一句。第二句。"]), tts=TTS(),
+        codec=FakeCodec(encoded={b"pcm": [b"opus"]}), tts_timeout_s=2,
+    )
+    await session.handle_text("你好")
+    try:
+        await asyncio.wait_for(next_started.wait(), 1)
+    finally:
+        await session.abort()
+    assert next_closed.is_set()
+    assert not any(kind == "bytes" for kind, _ in transport.events)
+    assert session.state is SessionState.IDLE
+
+
+async def test_prefetched_tts_failure_is_reported_after_previous_audio():
+    class TTS:
+        async def synthesize(self, text):
+            if text == "第一句。":
+                yield b"pcm"
+            else:
+                raise RuntimeError("synthesis failed")
+
+    session = make_session(
+        llm=FakeLLM(["第一句。第二句。"]), tts=TTS(),
+        codec=FakeCodec(encoded={b"pcm": [b"opus"]}),
+    )
+    await session.handle_text("你好")
+    await session.wait_until_idle()
+    assert [data for kind, data in session._transport.events if kind == "bytes"] == [b"opus"]
+    assert session.last_turn["status"] == "error"
+    assert session.last_turn["error_stage"] == "tts"
