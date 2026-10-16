@@ -7,12 +7,24 @@
 class McpServer;
 
 /**
+ * Anthropomorphic robot gestures for Deskbot.
+ */
+enum class MotionGesture {
+    kNod,        // 点头/赞同 (前后点动两次)
+    kWiggle,      // 欢快摇摆/撒娇 (快速左右摇摆三次)
+    kConfused,    // 疑惑/思考 (歪头打量并短暂停顿)
+    kShakeHead,   // 摇头/拒绝 (左右坚决摇头两次)
+    kCheer,       // 庆祝/转圈 (原地顺时针欢呼转圈)
+};
+
+/**
  * High-level abstract motion controller interface for Deskbot.
  * Serves as the single source of truth for all driving, steering,
  * safety timeouts, touch UI feedback, and MCP autonomous tools.
  */
 class MotionController {
 public:
+    using MotionGesture = ::MotionGesture;
     virtual ~MotionController() = default;
 
     // Direct wheel control (-100% .. 100%)
@@ -51,13 +63,6 @@ public:
     virtual esp_err_t Stop() = 0;
 
     // Anthropomorphic gestures
-    enum class MotionGesture {
-        kNod,        // 点头/赞同 (前后点动两次)
-        kWiggle,      // 欢快摇摆/撒娇 (快速左右摇摆三次)
-        kConfused,    // 疑惑/思考 (歪头打量并短暂停顿)
-        kShakeHead,   // 摇头/拒绝 (左右坚决摇头两次)
-        kCheer,       // 庆祝/转圈 (原地顺时针欢呼转圈)
-    };
     virtual esp_err_t PlayGesture(MotionGesture gesture) = 0;
 
     inline esp_err_t Nod() { return PlayGesture(MotionGesture::kNod); }

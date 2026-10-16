@@ -13,6 +13,7 @@
 #include "backlight.h"
 #include "camera.h"
 #include "assets.h"
+#include "motion_controller.h"
 
 /**
  * Network events for unified callback

@@ -624,6 +624,7 @@ void Application::InitializeProtocol() {
             if (strcmp(state->valuestring, "start") == 0) {
                 Schedule([this]() {
                     aborted_ = false;
+                    turn_gesture_played_ = false;
                     SetDeviceState(kDeviceStateSpeaking);
                 });
             } else if (strcmp(state->valuestring, "stop") == 0) {
@@ -645,7 +646,9 @@ void Application::InitializeProtocol() {
                         glyphs.clear();
                     }
                     ESP_LOGI(TAG, "<< %s", text->valuestring);
-                    Schedule([display, message = std::string(text->valuestring),
+                    std::string sentence_text = text->valuestring;
+                    TryTriggerVoiceAccompaniment(sentence_text);
+                    Schedule([display, message = std::move(sentence_text),
                               glyphs = std::move(glyphs), bpp]() {
                         display->AddTextGlyphs(glyphs, bpp);
                         display->SetChatMessage("assistant", message.c_str());
@@ -673,6 +676,25 @@ void Application::InitializeProtocol() {
                 Schedule([display, emotion_str = std::string(emotion->valuestring)]() {
                     display->SetEmotion(emotion_str.c_str());
                 });
+                if (!turn_gesture_played_) {
+                    auto* motion = Board::GetInstance().GetMotionController();
+                    if (motion) {
+                        const char* emo = emotion->valuestring;
+                        if (strcmp(emo, "happy") == 0 || strcmp(emo, "excited") == 0) {
+                            turn_gesture_played_ = true;
+                            motion->PlayGesture(MotionGesture::kWiggle);
+                            ESP_LOGI(TAG, "Emotion accompaniment: '%s' -> Wiggle", emo);
+                        } else if (strcmp(emo, "confused") == 0 || strcmp(emo, "thinking") == 0) {
+                            turn_gesture_played_ = true;
+                            motion->PlayGesture(MotionGesture::kConfused);
+                            ESP_LOGI(TAG, "Emotion accompaniment: '%s' -> Confused", emo);
+                        } else if (strcmp(emo, "sad") == 0 || strcmp(emo, "angry") == 0) {
+                            turn_gesture_played_ = true;
+                            motion->PlayGesture(MotionGesture::kShakeHead);
+                            ESP_LOGI(TAG, "Emotion accompaniment: '%s' -> ShakeHead", emo);
+                        }
+                    }
+                }
             }
         } else if (strcmp(type->valuestring, "mcp") == 0) {
             auto payload = cJSON_GetObjectItem(root, "payload");
@@ -1175,8 +1197,80 @@ void Application::Schedule(std::function<void()>&& callback) {
 void Application::AbortSpeaking(AbortReason reason) {
     ESP_LOGI(TAG, "Abort speaking");
     aborted_ = true;
+    auto* motion = Board::GetInstance().GetMotionController();
+    if (motion) {
+        motion->Stop();
+    }
     if (protocol_) {
         protocol_->SendAbortSpeaking(reason);
+    }
+}
+
+void Application::TryTriggerVoiceAccompaniment(const std::string& text) {
+    if (turn_gesture_played_) {
+        return;
+    }
+    auto* motion = Board::GetInstance().GetMotionController();
+    if (!motion) {
+        return;
+    }
+
+    // Inspect the first part of the sentence (typical first clause, up to 60 bytes)
+    std::string prefix = text.substr(0, std::min<size_t>(text.size(), 60));
+
+    // 1. Confused / 疑惑 / 歪头打量
+    static const char* kConfusedKeywords[] = {
+        "没太明白", "没听清", "什么意思", "让我想想", "怎么会", "真的吗", "你是指", nullptr
+    };
+    for (int i = 0; kConfusedKeywords[i]; ++i) {
+        if (prefix.find(kConfusedKeywords[i]) != std::string::npos) {
+            turn_gesture_played_ = true;
+            motion->PlayGesture(MotionGesture::kConfused);
+            ESP_LOGI(TAG, "Voice accompaniment: '%s' -> Confused", kConfusedKeywords[i]);
+            return;
+        }
+    }
+
+    // 2. Negation / 否定 / 拒绝 / 摇头
+    static const char* kNegationKeywords[] = {
+        "不可以", "不行", "不能", "不是", "不对", "没有", "不知道",
+        "做不到", "无法", "抱歉", "对不起", "别这样", "不同意", "不赞成", nullptr
+    };
+    for (int i = 0; kNegationKeywords[i]; ++i) {
+        if (prefix.find(kNegationKeywords[i]) != std::string::npos) {
+            turn_gesture_played_ = true;
+            motion->PlayGesture(MotionGesture::kShakeHead);
+            ESP_LOGI(TAG, "Voice accompaniment: '%s' -> ShakeHead", kNegationKeywords[i]);
+            return;
+        }
+    }
+
+    // 3. Joy / 欢快 / 赞赏 / 摇摆
+    static const char* kJoyKeywords[] = {
+        "太棒了", "真棒", "太好了", "太酷了", "开心", "哈哈", "喜欢", "谢谢", "不客气", "真厉害", nullptr
+    };
+    for (int i = 0; kJoyKeywords[i]; ++i) {
+        if (prefix.find(kJoyKeywords[i]) != std::string::npos) {
+            turn_gesture_played_ = true;
+            motion->PlayGesture(MotionGesture::kWiggle);
+            ESP_LOGI(TAG, "Voice accompaniment: '%s' -> Wiggle", kJoyKeywords[i]);
+            return;
+        }
+    }
+
+    // 4. Affirmation / 认同 / 明白 / 点头
+    static const char* kAffirmationKeywords[] = {
+        "明白", "收到", "好的", "好嘞", "好啊", "好呀", "没问题",
+        "可以", "对的", "是的", "没错", "当然", "我知道了", "我懂了",
+        "听到了", "你好", "早上好", "晚上好", "嗨", nullptr
+    };
+    for (int i = 0; kAffirmationKeywords[i]; ++i) {
+        if (prefix.find(kAffirmationKeywords[i]) != std::string::npos) {
+            turn_gesture_played_ = true;
+            motion->PlayGesture(MotionGesture::kNod);
+            ESP_LOGI(TAG, "Voice accompaniment: '%s' -> Nod", kAffirmationKeywords[i]);
+            return;
+        }
     }
 }
 
