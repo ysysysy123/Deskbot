@@ -398,13 +398,50 @@ async def test_firmware_boolean_stop_reports_success_without_browser_or_model():
     assert not completions.calls
 
 
-async def test_firmware_short_forward_command_calls_drive_without_model_confirmation():
+@pytest.mark.parametrize("text,duration", [
+    ("往前走一步", 500),
+    ("往前再走一步。", 500),
+    ("往前走两步。", 1000),
+    ("你往前移动一下。", 500),
+    ("你好，小志往前走。", 500),
+    ("可以往前走一下吗？", 500),
+])
+async def test_firmware_short_forward_command_calls_drive_without_model_confirmation(text, duration):
     llm, completions = provider([])
     device = FirmwareMcp(["self.motion.drive"], {"isError": False, "content": [{"type": "text", "text": "true"}]})
     backend = CameraMcpDialogueBackend(llm, mcp_url="http://unreachable.invalid")
-    assert [part async for part in backend.stream(device_turn("往前走一步", device))] == ["设备已收到移动指令。"]
-    assert device.calls == [("self.motion.drive", {"linear": 40, "angular": 0, "duration_ms": 500})]
+    assert [part async for part in backend.stream(device_turn(text, device))] == ["设备已收到移动指令。"]
+    assert device.calls == [("self.motion.drive", {"linear": 40, "angular": 0, "duration_ms": duration})]
     assert not completions.calls
+
+
+async def test_repeat_movement_uses_previous_user_direction():
+    llm, completions = provider([])
+    device = FirmwareMcp(["self.motion.drive"], {"content": [{"type": "text", "text": "true"}]})
+    backend = CameraMcpDialogueBackend(llm, mcp_url="http://unreachable.invalid")
+    turn = device_turn("再走一步。", device)
+    turn.messages.insert(-1, {"role": "user", "content": "往后走一步。"})
+    assert [part async for part in backend.stream(turn)] == ["设备已收到移动指令。"]
+    assert device.calls == [("self.motion.drive", {"linear": -40, "angular": 0, "duration_ms": 500})]
+    assert not completions.calls
+
+
+@pytest.mark.parametrize("text", ["不要往前走。", "怎么让你往前走？"])
+async def test_movement_discussion_does_not_directly_execute(text):
+    llm, completions = provider([[chunk("好的。")]])
+    device = FirmwareMcp(["self.motion.drive"], {})
+    backend = CameraMcpDialogueBackend(llm, mcp_url="http://unreachable.invalid")
+    assert [part async for part in backend.stream(device_turn(text, device))] == ["好的。"]
+    assert not device.calls
+
+
+async def test_large_step_request_reports_limit_without_model_success_claim():
+    llm, completions = provider([])
+    device = FirmwareMcp(["self.motion.drive"], {})
+    backend = CameraMcpDialogueBackend(llm, mcp_url="http://unreachable.invalid")
+    answer = "".join([part async for part in backend.stream(device_turn("往前走100步。", device))])
+    assert "设备移动失败" in answer and "5000" in answer
+    assert not device.calls and not completions.calls
 
 
 async def test_firmware_drive_failure_is_reported_without_claiming_success():

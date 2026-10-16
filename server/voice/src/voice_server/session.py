@@ -270,12 +270,12 @@ class VoiceSession:
                 metrics,
             )
             stage = "dialogue"
-            async with aclosing(self._response_sentences(request, assistant_chunks, generation)) as responses:
-                async for sentence in responses:
+            async with aclosing(self._response_audio(request, assistant_chunks, generation)) as responses:
+                async for sentence, audio in responses:
                     stage = "tts"
                     tts_started_at = time.monotonic()
                     try:
-                        tts_started = await self._speak_sentence(sentence, tts_started, generation, display=True)
+                        tts_started = await self._speak_sentence(sentence, tts_started, generation, display=True, audio=audio)
                     except Exception:
                         tts_failed = True
                         raise
@@ -428,7 +428,54 @@ class VoiceSession:
             producer.cancel()
             await asyncio.gather(producer, return_exceptions=True)
 
-    async def _speak_sentence(self, sentence: str, started: bool, generation: int, *, display: bool) -> bool:
+    async def _response_audio(self, request: TurnRequest, chunks: list[str], generation: int):
+        # Synthesize ahead of paced playback, including across sentence boundaries.
+        # At most ~6 seconds of 24 kHz PCM are queued; only one TTS request runs at a time.
+        queue: asyncio.Queue[str | bytes | Exception | None] = asyncio.Queue(100)
+
+        async def produce() -> None:
+            try:
+                async with aclosing(self._response_sentences(request, chunks, generation)) as sentences:
+                    async for sentence in sentences:
+                        await queue.put(sentence)
+                        async with aclosing(self._tts.synthesize(sentence).__aiter__()) as audio:
+                            while self._is_current(generation):
+                                try:
+                                    pcm = await wait_for(anext(audio), self._tts_timeout_s)
+                                except StopAsyncIteration:
+                                    break
+                                for offset in range(0, len(pcm), 2880):
+                                    await queue.put(pcm[offset:offset + 2880])
+                        await queue.put(None)  # End of this sentence's audio.
+            except Exception as error:
+                await queue.put(error)
+            else:
+                await queue.put(None)  # End of the response.
+
+        async def sentence_audio():
+            while True:
+                item = await queue.get()
+                if item is None:
+                    return
+                if isinstance(item, Exception):
+                    raise item
+                yield item
+
+        producer = asyncio.create_task(produce())
+        try:
+            while True:
+                sentence = await queue.get()
+                if sentence is None:
+                    return
+                if isinstance(sentence, Exception):
+                    raise sentence
+                async with aclosing(sentence_audio()) as audio:
+                    yield sentence, audio
+        finally:
+            producer.cancel()
+            await asyncio.gather(producer, return_exceptions=True)
+
+    async def _speak_sentence(self, sentence: str, started: bool, generation: int, *, display: bool, audio=None) -> bool:
         if not self._is_current(generation):
             return started
         if not started:
@@ -443,7 +490,8 @@ class VoiceSession:
         if not await self._send_json(generation, make_tts(self.session_id, "sentence_start", sentence)):
             return started
         sent_packets = 0
-        async with aclosing(self._tts.synthesize(sentence).__aiter__()) as iterator:
+        source = audio if audio is not None else self._tts.synthesize(sentence).__aiter__()
+        async with aclosing(source) as iterator:
             while True:
                 try:
                     pcm = await wait_for(anext(iterator), self._tts_timeout_s)
