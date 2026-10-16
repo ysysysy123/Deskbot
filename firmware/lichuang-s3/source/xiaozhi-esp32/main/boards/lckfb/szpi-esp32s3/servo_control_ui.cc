@@ -19,6 +19,7 @@ lv_obj_t* CreateStyledButton(lv_obj_t* parent, int w, int h, uint32_t color_hex,
     lv_obj_set_size(btn, w, h);
     lv_obj_set_style_bg_color(btn, lv_color_hex(color_hex), 0);
     lv_obj_set_style_radius(btn, 6, 0);
+    lv_obj_set_style_pad_all(btn, 0, 0);
     lv_obj_set_user_data(btn, (void*)(intptr_t)user_value);
 
     lv_obj_t* lbl = lv_label_create(btn);
@@ -206,9 +207,10 @@ void ServoControlUi::CreateServoPanel() {
     lv_obj_set_flex_align(row_both, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER);
 
-    CreateStyledButton(row_both, 92, 26, 0x3B82F6, "FWD 20%", 20, OnBothSpeedClicked, this);
-    CreateStyledButton(row_both, 92, 26, 0xEF4444, "STOP", 0, OnBothSpeedClicked, this);
-    CreateStyledButton(row_both, 92, 26, 0x8B5CF6, "REV 20%", -20, OnBothSpeedClicked, this);
+    CreateStyledButton(row_both, 72, 26, 0x10B981, "FWD CONT", 20, OnForwardContinuousClicked, this);
+    CreateStyledButton(row_both, 72, 26, 0x3B82F6, "FWD 2s", 20, OnBothSpeedClicked, this);
+    CreateStyledButton(row_both, 72, 26, 0xEF4444, "STOP", 0, OnBothSpeedClicked, this);
+    CreateStyledButton(row_both, 72, 26, 0x8B5CF6, "REV 20%", -20, OnBothSpeedClicked, this);
 
     // Anthropomorphic Gestures row
     lv_obj_t* row_gestures = lv_obj_create(panel_servo_);
@@ -599,6 +601,18 @@ void ServoControlUi::OnBothSpeedClicked(lv_event_t* e) {
             ui->motion_->DriveForDuration(speed, speed, 2000);
         }
         ui->UpdateServoLabels();
+    }
+}
+
+void ServoControlUi::OnForwardContinuousClicked(lv_event_t* e) {
+    auto* ui = static_cast<ServoControlUi*>(lv_event_get_user_data(e));
+    if (ui != nullptr && ui->motion_ != nullptr) {
+        lv_obj_t* btn = static_cast<lv_obj_t*>(lv_event_get_target(e));
+        int speed = (int)(intptr_t)lv_obj_get_user_data(btn);
+        if (speed <= 0) speed = 20;
+        ui->motion_->Forward(speed, 0);
+        ui->UpdateServoLabels();
+        ESP_LOGI(TAG, "Continuous forward clicked: running indefinitely at %d%% until STOP", speed);
     }
 }
 

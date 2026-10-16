@@ -108,6 +108,9 @@ esp_err_t DualWheelController::SetLeftSpeed(int percent) {
     if (percent < -100 || percent > 100) {
         return ESP_ERR_INVALID_ARG;
     }
+    if (stop_timer_ != nullptr) {
+        esp_timer_stop(stop_timer_);
+    }
     current_left_speed_ = percent;
     return SetWheelSpeed(kLeftChannel, percent, left_reverse_);
 }
@@ -115,6 +118,9 @@ esp_err_t DualWheelController::SetLeftSpeed(int percent) {
 esp_err_t DualWheelController::SetRightSpeed(int percent) {
     if (percent < -100 || percent > 100) {
         return ESP_ERR_INVALID_ARG;
+    }
+    if (stop_timer_ != nullptr) {
+        esp_timer_stop(stop_timer_);
     }
     current_right_speed_ = percent;
     return SetWheelSpeed(kRightChannel, percent, right_reverse_);
@@ -124,6 +130,9 @@ esp_err_t DualWheelController::SetWheelSpeeds(int left_percent, int right_percen
     if (left_percent < -100 || left_percent > 100 || right_percent < -100 ||
         right_percent > 100) {
         return ESP_ERR_INVALID_ARG;
+    }
+    if (stop_timer_ != nullptr) {
+        esp_timer_stop(stop_timer_);
     }
     current_left_speed_ = left_percent;
     current_right_speed_ = right_percent;
@@ -286,10 +295,10 @@ void DualWheelController::ExecuteGestureSequence(MotionGesture gesture) {
 void DualWheelController::RegisterMcpTools(McpServer& server) {
     server.AddTool(
         "self.motion.drive",
-        "Drive Deskbot with linear speed (-100..100) and turn angle (-100..100) for duration_ms.",
+        "Drive Deskbot with linear speed (-100..100) and turn angle (-100..100). If duration_ms > 0, auto-stops after duration; if duration_ms == 0, drives continuously until stop.",
         PropertyList({Property("linear", kPropertyTypeInteger, 0, -100, 100),
                       Property("angular", kPropertyTypeInteger, 0, -100, 100),
-                      Property("duration_ms", kPropertyTypeInteger, kDefaultDriveDurationMs, 1,
+                      Property("duration_ms", kPropertyTypeInteger, kDefaultDriveDurationMs, 0,
                                kMaxDriveDurationMs)}),
         [this](const PropertyList& properties) -> ToolResult {
             const int linear = properties["linear"].value<int>();
@@ -297,8 +306,26 @@ void DualWheelController::RegisterMcpTools(McpServer& server) {
             const int duration_ms = properties["duration_ms"].value<int>();
             int left = std::clamp(linear + angular, -100, 100);
             int right = std::clamp(linear - angular, -100, 100);
-            if (esp_err_t result = DriveForDuration(left, right, duration_ms);
-                result != ESP_OK) {
+            if (duration_ms > 0) {
+                if (esp_err_t result = DriveForDuration(left, right, duration_ms);
+                    result != ESP_OK) {
+                    return std::unexpected(esp_err_to_name(result));
+                }
+            } else {
+                if (esp_err_t result = SetWheelSpeeds(left, right); result != ESP_OK) {
+                    return std::unexpected(esp_err_to_name(result));
+                }
+            }
+            return true;
+        });
+
+    server.AddTool(
+        "self.motion.forward_continuous",
+        "Drive Deskbot forward continuously at specified speed percentage (default 20%). Call self.motion.stop to halt.",
+        PropertyList({Property("speed", kPropertyTypeInteger, 20, 1, 100)}),
+        [this](const PropertyList& properties) -> ToolResult {
+            const int speed = properties["speed"].value<int>();
+            if (esp_err_t result = Forward(speed, 0); result != ESP_OK) {
                 return std::unexpected(esp_err_to_name(result));
             }
             return true;
