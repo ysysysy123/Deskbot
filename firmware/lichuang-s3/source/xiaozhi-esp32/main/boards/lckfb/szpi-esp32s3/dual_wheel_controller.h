@@ -1,6 +1,7 @@
 #ifndef DUAL_WHEEL_CONTROLLER_H
 #define DUAL_WHEEL_CONTROLLER_H
 
+#include <atomic>
 #include <cstdint>
 #include <memory>
 
@@ -51,6 +52,8 @@ public:
     esp_err_t TurnForDuration(int angular_turn, int duration_ms) override;
 
     esp_err_t Stop() override;
+    esp_err_t PlayGesture(MotionGesture gesture) override;
+    void ExecuteGestureSequence(MotionGesture gesture);
 
     int GetLeftSpeed() const override { return current_left_speed_; }
     int GetRightSpeed() const override { return current_right_speed_; }
@@ -71,6 +74,9 @@ private:
     bool initialized_ = false;
     bool left_reverse_ = false;
     bool right_reverse_ = true;
+
+    std::atomic<bool> cancel_gesture_{false};
+    std::atomic<bool> is_gesturing_{false};
 
     int current_left_speed_ = 0;
     int current_right_speed_ = 0;

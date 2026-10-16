@@ -61,6 +61,7 @@ private:
     static void OnRightSpeedClicked(lv_event_t* e);
     static void OnBothSpeedClicked(lv_event_t* e);
     static void OnStopAllClicked(lv_event_t* e);
+    static void OnGestureClicked(lv_event_t* e);
     static void OnCameraSnapClicked(lv_event_t* e);
 
     static void OnPeriodicTimer(lv_timer_t* t);

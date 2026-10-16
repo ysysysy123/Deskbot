@@ -4,6 +4,8 @@
 #include <memory>
 #include <sstream>
 
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 #include <esp_log.h>
 
 #include "mcp_server.h"
@@ -166,6 +168,7 @@ esp_err_t DualWheelController::TurnForDuration(int angular_turn, int duration_ms
 }
 
 esp_err_t DualWheelController::Stop() {
+    cancel_gesture_.store(true);
     if (pwm_ == nullptr || !initialized_) {
         return ESP_ERR_INVALID_STATE;
     }
@@ -179,6 +182,105 @@ esp_err_t DualWheelController::Stop() {
     esp_err_t res1 = pwm_->SetChannelPulseUs(kLeftChannel, kNeutralPulseUs);
     esp_err_t res2 = pwm_->SetChannelPulseUs(kRightChannel, kNeutralPulseUs);
     return (res1 != ESP_OK) ? res1 : res2;
+}
+
+esp_err_t DualWheelController::PlayGesture(MotionGesture gesture) {
+    if (!initialized_ || pwm_ == nullptr) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    if (stop_timer_ != nullptr) {
+        esp_timer_stop(stop_timer_);
+    }
+    cancel_gesture_.store(true);
+    if (is_gesturing_.load()) {
+        vTaskDelay(pdMS_TO_TICKS(40));
+    }
+    cancel_gesture_.store(false);
+
+    struct GestureArg {
+        DualWheelController* self;
+        MotionGesture gesture;
+    };
+    auto* arg = new GestureArg{this, gesture};
+
+    BaseType_t res = xTaskCreate([](void* p) {
+        auto* a = static_cast<GestureArg*>(p);
+        a->self->ExecuteGestureSequence(a->gesture);
+        delete a;
+        vTaskDelete(nullptr);
+    }, "motion_gesture", 2560, arg, 4, nullptr);
+
+    return (res == pdPASS) ? ESP_OK : ESP_FAIL;
+}
+
+void DualWheelController::ExecuteGestureSequence(MotionGesture gesture) {
+    is_gesturing_.store(true);
+    ESP_LOGI(TAG, "Playing gesture %d", static_cast<int>(gesture));
+
+    auto delay_or_cancel = [this](int ms) -> bool {
+        int steps = ms / 20;
+        for (int i = 0; i < steps; ++i) {
+            if (cancel_gesture_.load()) return false;
+            vTaskDelay(pdMS_TO_TICKS(20));
+        }
+        return !cancel_gesture_.load();
+    };
+
+    switch (gesture) {
+        case MotionGesture::kNod:
+            // 点头：向前轻探 -> 刹车 -> 后退回位，重复 2 次
+            for (int i = 0; i < 2; ++i) {
+                SetWheelSpeeds(20, 20);
+                if (!delay_or_cancel(140)) break;
+                SetWheelSpeeds(0, 0);
+                if (!delay_or_cancel(60)) break;
+                SetWheelSpeeds(-20, -20);
+                if (!delay_or_cancel(140)) break;
+                SetWheelSpeeds(0, 0);
+                if (!delay_or_cancel(80)) break;
+            }
+            break;
+
+        case MotionGesture::kWiggle:
+            // 欢快摇摆：左摇 -> 右摇，连续 3 个来回
+            for (int i = 0; i < 3; ++i) {
+                SetWheelSpeeds(-25, 25);
+                if (!delay_or_cancel(110)) break;
+                SetWheelSpeeds(25, -25);
+                if (!delay_or_cancel(110)) break;
+            }
+            break;
+
+        case MotionGesture::kConfused:
+            // 疑惑/歪头：左偏 -> 停顿思考 450ms -> 慢速回正
+            SetWheelSpeeds(-20, 20);
+            if (!delay_or_cancel(170)) break;
+            SetWheelSpeeds(0, 0);
+            if (!delay_or_cancel(450)) break;
+            SetWheelSpeeds(18, -18);
+            if (!delay_or_cancel(190)) break;
+            break;
+
+        case MotionGesture::kShakeHead:
+            // 坚定摇头：左右甩头 2 次
+            for (int i = 0; i < 2; ++i) {
+                SetWheelSpeeds(-30, 30);
+                if (!delay_or_cancel(180)) break;
+                SetWheelSpeeds(30, -30);
+                if (!delay_or_cancel(180)) break;
+            }
+            break;
+
+        case MotionGesture::kCheer:
+            // 旋转欢呼：原地自转一圈
+            SetWheelSpeeds(30, -30);
+            delay_or_cancel(750);
+            break;
+    }
+
+    Stop();
+    is_gesturing_.store(false);
+    ESP_LOGI(TAG, "Gesture completed");
 }
 
 void DualWheelController::RegisterMcpTools(McpServer& server) {
@@ -211,6 +313,62 @@ void DualWheelController::RegisterMcpTools(McpServer& server) {
             const int angular = properties["angular"].value<int>();
             const int duration_ms = properties["duration_ms"].value<int>();
             if (esp_err_t result = TurnForDuration(angular, duration_ms); result != ESP_OK) {
+                return std::unexpected(esp_err_to_name(result));
+            }
+            return true;
+        });
+
+    server.AddTool("self.motion.nod",
+                   "Nod forward and backward to express agreement, affirmation, greeting, or acknowledgement.",
+                   PropertyList(), [this](const PropertyList&) -> ToolResult {
+                       if (esp_err_t result = PlayGesture(MotionGesture::kNod); result != ESP_OK) {
+                           return std::unexpected(esp_err_to_name(result));
+                       }
+                       return true;
+                   });
+
+    server.AddTool("self.motion.wiggle",
+                   "Wiggle body left and right quickly to express joy, happiness, excitement, or playful affection.",
+                   PropertyList(), [this](const PropertyList&) -> ToolResult {
+                       if (esp_err_t result = PlayGesture(MotionGesture::kWiggle); result != ESP_OK) {
+                           return std::unexpected(esp_err_to_name(result));
+                       }
+                       return true;
+                   });
+
+    server.AddTool("self.motion.confused",
+                   "Tilt to one side and pause briefly to express confusion, curiosity, thinking, or questioning.",
+                   PropertyList(), [this](const PropertyList&) -> ToolResult {
+                       if (esp_err_t result = PlayGesture(MotionGesture::kConfused); result != ESP_OK) {
+                           return std::unexpected(esp_err_to_name(result));
+                       }
+                       return true;
+                   });
+
+    server.AddTool("self.motion.shake_head",
+                   "Shake head firmly left and right to express disagreement, refusal, or negation.",
+                   PropertyList(), [this](const PropertyList&) -> ToolResult {
+                       if (esp_err_t result = PlayGesture(MotionGesture::kShakeHead); result != ESP_OK) {
+                           return std::unexpected(esp_err_to_name(result));
+                       }
+                       return true;
+                   });
+
+    server.AddTool(
+        "self.motion.gesture",
+        "Perform an anthropomorphic robot gesture. Supported types: 'nod', 'wiggle', 'confused', 'shake_head', 'cheer'.",
+        PropertyList({Property("name", kPropertyTypeString, "nod")}),
+        [this](const PropertyList& properties) -> ToolResult {
+            std::string name = properties["name"].value<std::string>();
+            MotionGesture g = MotionGesture::kNod;
+            if (name == "nod") g = MotionGesture::kNod;
+            else if (name == "wiggle") g = MotionGesture::kWiggle;
+            else if (name == "confused") g = MotionGesture::kConfused;
+            else if (name == "shake_head" || name == "shake") g = MotionGesture::kShakeHead;
+            else if (name == "cheer" || name == "spin") g = MotionGesture::kCheer;
+            else return std::unexpected("Unknown gesture name. Supported: nod, wiggle, confused, shake_head, cheer");
+
+            if (esp_err_t result = PlayGesture(g); result != ESP_OK) {
                 return std::unexpected(esp_err_to_name(result));
             }
             return true;

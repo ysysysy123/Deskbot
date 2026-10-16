@@ -50,6 +50,22 @@ public:
     // Emergency stop
     virtual esp_err_t Stop() = 0;
 
+    // Anthropomorphic gestures
+    enum class MotionGesture {
+        kNod,        // 点头/赞同 (前后点动两次)
+        kWiggle,      // 欢快摇摆/撒娇 (快速左右摇摆三次)
+        kConfused,    // 疑惑/思考 (歪头打量并短暂停顿)
+        kShakeHead,   // 摇头/拒绝 (左右坚决摇头两次)
+        kCheer,       // 庆祝/转圈 (原地顺时针欢呼转圈)
+    };
+    virtual esp_err_t PlayGesture(MotionGesture gesture) = 0;
+
+    inline esp_err_t Nod() { return PlayGesture(MotionGesture::kNod); }
+    inline esp_err_t Wiggle() { return PlayGesture(MotionGesture::kWiggle); }
+    inline esp_err_t Confused() { return PlayGesture(MotionGesture::kConfused); }
+    inline esp_err_t ShakeHead() { return PlayGesture(MotionGesture::kShakeHead); }
+    inline esp_err_t Cheer() { return PlayGesture(MotionGesture::kCheer); }
+
     // State inspection (always returns actual hardware pulse and speed)
     virtual int GetLeftSpeed() const = 0;
     virtual int GetRightSpeed() const = 0;

@@ -153,12 +153,12 @@ void ServoControlUi::CreateServoPanel() {
     label_left_ = lv_label_create(panel_servo_);
     lv_obj_set_style_text_font(label_left_, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(label_left_, lv_color_hex(0xF9E2AF), 0);
-    lv_obj_align(label_left_, LV_ALIGN_TOP_LEFT, 8, 28);
+    lv_obj_align(label_left_, LV_ALIGN_TOP_LEFT, 8, 24);
 
     // Left Servo buttons row
     lv_obj_t* row_l = lv_obj_create(panel_servo_);
-    lv_obj_set_size(row_l, 312, 32);
-    lv_obj_align(row_l, LV_ALIGN_TOP_MID, 0, 48);
+    lv_obj_set_size(row_l, 312, 28);
+    lv_obj_align(row_l, LV_ALIGN_TOP_MID, 0, 42);
     lv_obj_set_style_bg_opa(row_l, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(row_l, 0, 0);
     lv_obj_set_style_pad_all(row_l, 0, 0);
@@ -166,22 +166,22 @@ void ServoControlUi::CreateServoPanel() {
     lv_obj_set_flex_align(row_l, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER);
 
-    CreateStyledButton(row_l, 54, 30, 0xF97316, "-30%", -30, OnLeftSpeedClicked, this);
-    CreateStyledButton(row_l, 54, 30, 0xEA580C, "-10%", -10, OnLeftSpeedClicked, this);
-    CreateStyledButton(row_l, 54, 30, 0x64748B, "STOP", 0, OnLeftSpeedClicked, this);
-    CreateStyledButton(row_l, 54, 30, 0x0D9488, "+10%", 10, OnLeftSpeedClicked, this);
-    CreateStyledButton(row_l, 54, 30, 0x14B8A6, "+30%", 30, OnLeftSpeedClicked, this);
+    CreateStyledButton(row_l, 54, 26, 0xF97316, "-30%", -30, OnLeftSpeedClicked, this);
+    CreateStyledButton(row_l, 54, 26, 0xEA580C, "-10%", -10, OnLeftSpeedClicked, this);
+    CreateStyledButton(row_l, 54, 26, 0x64748B, "STOP", 0, OnLeftSpeedClicked, this);
+    CreateStyledButton(row_l, 54, 26, 0x0D9488, "+10%", 10, OnLeftSpeedClicked, this);
+    CreateStyledButton(row_l, 54, 26, 0x14B8A6, "+30%", 30, OnLeftSpeedClicked, this);
 
     // Right Servo (CH1) label
     label_right_ = lv_label_create(panel_servo_);
     lv_obj_set_style_text_font(label_right_, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(label_right_, lv_color_hex(0xA6E3A1), 0);
-    lv_obj_align(label_right_, LV_ALIGN_TOP_LEFT, 8, 82);
+    lv_obj_align(label_right_, LV_ALIGN_TOP_LEFT, 8, 72);
 
     // Right Servo buttons row
     lv_obj_t* row_r = lv_obj_create(panel_servo_);
-    lv_obj_set_size(row_r, 312, 32);
-    lv_obj_align(row_r, LV_ALIGN_TOP_MID, 0, 102);
+    lv_obj_set_size(row_r, 312, 28);
+    lv_obj_align(row_r, LV_ALIGN_TOP_MID, 0, 90);
     lv_obj_set_style_bg_opa(row_r, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(row_r, 0, 0);
     lv_obj_set_style_pad_all(row_r, 0, 0);
@@ -189,16 +189,16 @@ void ServoControlUi::CreateServoPanel() {
     lv_obj_set_flex_align(row_r, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER);
 
-    CreateStyledButton(row_r, 54, 30, 0xF97316, "-30%", -30, OnRightSpeedClicked, this);
-    CreateStyledButton(row_r, 54, 30, 0xEA580C, "-10%", -10, OnRightSpeedClicked, this);
-    CreateStyledButton(row_r, 54, 30, 0x64748B, "STOP", 0, OnRightSpeedClicked, this);
-    CreateStyledButton(row_r, 54, 30, 0x0D9488, "+10%", 10, OnRightSpeedClicked, this);
-    CreateStyledButton(row_r, 54, 30, 0x14B8A6, "+30%", 30, OnRightSpeedClicked, this);
+    CreateStyledButton(row_r, 54, 26, 0xF97316, "-30%", -30, OnRightSpeedClicked, this);
+    CreateStyledButton(row_r, 54, 26, 0xEA580C, "-10%", -10, OnRightSpeedClicked, this);
+    CreateStyledButton(row_r, 54, 26, 0x64748B, "STOP", 0, OnRightSpeedClicked, this);
+    CreateStyledButton(row_r, 54, 26, 0x0D9488, "+10%", 10, OnRightSpeedClicked, this);
+    CreateStyledButton(row_r, 54, 26, 0x14B8A6, "+30%", 30, OnRightSpeedClicked, this);
 
     // Dual Wheel Quick Actions row
     lv_obj_t* row_both = lv_obj_create(panel_servo_);
-    lv_obj_set_size(row_both, 312, 32);
-    lv_obj_align(row_both, LV_ALIGN_TOP_MID, 0, 138);
+    lv_obj_set_size(row_both, 312, 28);
+    lv_obj_align(row_both, LV_ALIGN_TOP_MID, 0, 120);
     lv_obj_set_style_bg_opa(row_both, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(row_both, 0, 0);
     lv_obj_set_style_pad_all(row_both, 0, 0);
@@ -206,12 +206,28 @@ void ServoControlUi::CreateServoPanel() {
     lv_obj_set_flex_align(row_both, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER);
 
-    CreateStyledButton(row_both, 92, 30, 0x3B82F6, "FWD 20%", 20, OnBothSpeedClicked, this);
-    CreateStyledButton(row_both, 92, 30, 0xEF4444, "STOP", 0, OnBothSpeedClicked, this);
-    CreateStyledButton(row_both, 92, 30, 0x8B5CF6, "REV 20%", -20, OnBothSpeedClicked, this);
+    CreateStyledButton(row_both, 92, 26, 0x3B82F6, "FWD 20%", 20, OnBothSpeedClicked, this);
+    CreateStyledButton(row_both, 92, 26, 0xEF4444, "STOP", 0, OnBothSpeedClicked, this);
+    CreateStyledButton(row_both, 92, 26, 0x8B5CF6, "REV 20%", -20, OnBothSpeedClicked, this);
+
+    // Anthropomorphic Gestures row
+    lv_obj_t* row_gestures = lv_obj_create(panel_servo_);
+    lv_obj_set_size(row_gestures, 312, 28);
+    lv_obj_align(row_gestures, LV_ALIGN_TOP_MID, 0, 150);
+    lv_obj_set_style_bg_opa(row_gestures, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(row_gestures, 0, 0);
+    lv_obj_set_style_pad_all(row_gestures, 0, 0);
+    lv_obj_set_flex_flow(row_gestures, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(row_gestures, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER);
+
+    CreateStyledButton(row_gestures, 68, 26, 0x06B6D4, "NOD", 0, OnGestureClicked, this);
+    CreateStyledButton(row_gestures, 68, 26, 0xEC4899, "WIGGLE", 1, OnGestureClicked, this);
+    CreateStyledButton(row_gestures, 68, 26, 0xA855F7, "TILT", 2, OnGestureClicked, this);
+    CreateStyledButton(row_gestures, 68, 26, 0xF59E0B, "SHAKE", 3, OnGestureClicked, this);
 
     // Back to Chat button
-    CreateStyledButton(panel_servo_, 304, 34, 0x4F46E5, "< BACK TO CHAT", 0,
+    CreateStyledButton(panel_servo_, 304, 30, 0x4F46E5, "< BACK TO CHAT", 0,
                        OnBackFromServoClicked, this);
     lv_obj_align(lv_obj_get_child(panel_servo_, lv_obj_get_child_count(panel_servo_) - 1),
                  LV_ALIGN_BOTTOM_MID, 0, -4);
@@ -586,9 +602,25 @@ void ServoControlUi::OnBothSpeedClicked(lv_event_t* e) {
     }
 }
 
+void ServoControlUi::OnGestureClicked(lv_event_t* e) {
+    auto* ui = static_cast<ServoControlUi*>(lv_event_get_user_data(e));
+    if (ui != nullptr && ui->motion_ != nullptr) {
+        lv_obj_t* btn = static_cast<lv_obj_t*>(lv_event_get_target(e));
+        int gesture_idx = (int)(intptr_t)lv_obj_get_user_data(btn);
+        switch (gesture_idx) {
+            case 0: ui->motion_->PlayGesture(MotionController::MotionGesture::kNod); break;
+            case 1: ui->motion_->PlayGesture(MotionController::MotionGesture::kWiggle); break;
+            case 2: ui->motion_->PlayGesture(MotionController::MotionGesture::kConfused); break;
+            case 3: ui->motion_->PlayGesture(MotionController::MotionGesture::kShakeHead); break;
+        }
+        ui->UpdateServoLabels();
+    }
+}
+
 void ServoControlUi::OnCameraSnapClicked(lv_event_t* e) {
     auto* ui = static_cast<ServoControlUi*>(lv_event_get_user_data(e));
     if (ui != nullptr) {
         ui->UpdateCameraPreview();
     }
 }
+
