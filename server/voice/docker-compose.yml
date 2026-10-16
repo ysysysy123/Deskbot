@@ -1,0 +1,40 @@
+services:
+  deskbot-voice:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: deskbot-voice-server:latest
+    container_name: deskbot-voice
+    restart: unless-stopped
+    network_mode: "host" # Host networking recommended for low-latency WebSocket & direct LAN device connection
+    volumes:
+      - ./.env:/app/.env:ro
+      - ./config.yaml:/app/config.yaml:ro
+      - ./data:/app/data
+      - ./models:/app/models
+    environment:
+      - PYTHONUNBUFFERED=1
+    # When not using host network mode, expose the ports:
+    # ports:
+    #   - "8000:8000" # WebSocket Voice
+    #   - "8003:8003" # OTA Service
+    #   - "8004:8004" # Admin API (Local)
+    #   - "8006:8006" # Browser Test
+    #   - "8010:8010" # Music Gateway
+
+  # 可选：如果本台服务器带有 NVIDIA 显卡，可直接在同机启动 Ollama 容器运行 Qwen 27B
+  # qwen-ollama:
+  #   image: ollama/ollama:latest
+  #   container_name: deskbot-ollama
+  #   restart: unless-stopped
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ~/.ollama:/root/.ollama
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - driver: nvidia
+  #             count: all
+  #             capabilities: [gpu]
