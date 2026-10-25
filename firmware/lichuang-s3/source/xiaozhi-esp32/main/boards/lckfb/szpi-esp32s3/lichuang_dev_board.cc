@@ -13,6 +13,7 @@
 #if CONFIG_DESKBOT_MOTION_PCA9685
 #include "dual_wheel_controller.h"
 #include "servo_control_ui.h"
+#include "ble_touch_service.h"
 #endif
 
 #include <esp_log.h>
@@ -328,8 +329,9 @@ private:
             return;
         }
         if (esp_lcd_touch_new_i2c_ft5x06(tp_io_handle, &tp_cfg, &tp) != ESP_OK || tp == nullptr) {
-            ESP_LOGW(TAG, "FT5x06 touch controller not found, continuing without touch");
+            ESP_LOGW(TAG, "FT5x06 touch controller not found, registering virtual touch indev");
             esp_lcd_panel_io_del(tp_io_handle);
+            BleTouchService::GetInstance().RegisterVirtualTouchIndev();
             return;
         }
 
@@ -584,6 +586,10 @@ private:
 
             // 5. Restore backlight to full user setting smoothly
             b->GetBacklight()->RestoreBrightness();
+
+            // Start BLE Touch & Telemetry Service
+            BleTouchService::GetInstance().Start(b->motion_controller_.get(), b->imu_.get(), b->camera_);
+            ESP_LOGI(TAG, "BLE touch service started");
 
             ESP_LOGI(TAG, "Deferred peripheral initialization complete.");
             vTaskDelete(nullptr);

@@ -1,0 +1,1136 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Deskbot 实战派实时同屏 & 蓝牙控制台</title>
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --card-bg: #111827;
+            --card-border: #1e293b;
+            --accent-color: #00e5ff;
+            --accent-success: #10b981;
+            --accent-warn: #f59e0b;
+            --accent-danger: #ef4444;
+            --text-main: #f8fafc;
+            --text-dim: #94a3b8;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        /* Top Header */
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 14px;
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+        }
+
+        .title {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--accent-color);
+        }
+
+        .btn-conn {
+            background: #0288d1;
+            color: #fff;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-conn.connected {
+            background: var(--accent-danger);
+        }
+
+        /* Status bar */
+        .status-bar {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+        }
+
+        .status-badge {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            padding: 6px 8px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .status-badge .lbl {
+            font-size: 10px;
+            color: var(--text-dim);
+            margin-bottom: 2px;
+        }
+
+        .status-badge .val {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--accent-color);
+        }
+
+        .pulse-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #555;
+            margin-right: 4px;
+        }
+
+        .pulse-dot.active {
+            background: var(--accent-success);
+            box-shadow: 0 0 8px var(--accent-success);
+        }
+
+        /* Card common */
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+            font-weight: 600;
+            color: #b0bec5;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            padding-bottom: 6px;
+        }
+
+        /* Screen & Touch Canvas Container */
+        .screen-container {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 320 / 240;
+            background: #000;
+            border: 2px solid #37474f;
+            border-radius: 8px;
+            overflow: hidden;
+            user-select: none;
+            touch-action: none;
+            box-shadow: inset 0 0 16px rgba(0,0,0,0.8);
+        }
+
+        #screenCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: block;
+            cursor: crosshair;
+        }
+
+        .screen-overlay-loading {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: rgba(11, 15, 25, 0.85);
+            color: var(--accent-color);
+            font-size: 13px;
+            gap: 8px;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+
+        /* Stream Controls Bar */
+        .stream-controls {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 6px;
+            font-size: 12px;
+            padding-top: 4px;
+        }
+
+        .stream-left {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .stream-right {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-stream {
+            background: #1e293b;
+            color: var(--text-main);
+            border: 1px solid #334155;
+            border-radius: 6px;
+            padding: 5px 10px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .btn-stream:active {
+            background: var(--accent-color);
+            color: #000;
+        }
+
+        .btn-stream.active {
+            background: #0288d1;
+            border-color: #00e5ff;
+        }
+
+        .progress-bar-wrap {
+            height: 4px;
+            background: #1e293b;
+            border-radius: 2px;
+            overflow: hidden;
+            width: 100%;
+            display: none;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            width: 0%;
+            background: var(--accent-color);
+            transition: width 0.05s;
+        }
+
+        /* Section 2: Motion Control */
+        .motion-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            width: 100%;
+            max-width: 320px;
+            margin: 0 auto;
+        }
+
+        .btn-ctrl {
+            background: #1e293b;
+            color: var(--text-main);
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 12px 0;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            user-select: none;
+            touch-action: none;
+            transition: background 0.1s, transform 0.1s;
+        }
+
+        .btn-ctrl:active {
+            background: #0288d1;
+            transform: scale(0.96);
+        }
+
+        .btn-stop {
+            background: #7f1d1d;
+            border-color: var(--accent-danger);
+            color: #fca5a5;
+        }
+
+        .btn-stop:active {
+            background: var(--accent-danger);
+            color: #fff;
+        }
+
+        .slider-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 12px;
+        }
+
+        .slider-row span {
+            width: 60px;
+            color: var(--text-dim);
+        }
+
+        .slider-row input[type=range] {
+            flex: 1;
+            accent-color: var(--accent-color);
+        }
+
+        .slider-row b {
+            width: 45px;
+            text-align: right;
+            color: var(--accent-color);
+        }
+
+        /* Section 3: Telemetry */
+        .tele-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 6px;
+            font-size: 11px;
+        }
+
+        .tele-item {
+            background: #151c27;
+            padding: 6px 8px;
+            border-radius: 6px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .tele-item span {
+            color: var(--text-dim);
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div>
+            <div class="title">Deskbot 实时同屏控制台 <span style="font-size: 10px; background: #10b981; padding: 2px 6px; border-radius: 4px; color: #fff;">v2.6.0-stable</span></div>
+            <div style="font-size: 10px; color: var(--text-dim);">ESP32-S3 BLE 虚拟触屏 · 画面同步 · 遥测</div>
+        </div>
+        <button id="btnConnect" class="btn-conn">连接板子</button>
+    </header>
+
+    <div class="status-bar">
+        <div class="status-badge">
+            <div class="lbl"><span id="pulseDot" class="pulse-dot"></span>连接状态</div>
+            <div class="val" id="lblConn">未连接</div>
+        </div>
+        <div class="status-badge">
+            <div class="lbl">通信延迟 / 帧率</div>
+            <div class="val" id="lblPing">-- ms</div>
+        </div>
+        <div class="status-badge">
+            <div class="lbl">触控坐标 (X, Y)</div>
+            <div class="val" id="lblCoord">-- , --</div>
+        </div>
+    </div>
+
+    <!-- 1. 核心交互区：实时同屏 + 虚拟触控一体化画布 -->
+    <div class="card">
+        <div class="card-header">
+            <span>📺 板载实时同屏 & 触控交互 (320 × 240)</span>
+            <span id="lblStreamStatus" style="font-size: 11px; color: var(--accent-color);">未连接</span>
+        </div>
+
+        <!-- 320x240 画面与触控画布 -->
+        <div class="screen-container" id="screenBox">
+            <canvas id="screenCanvas" width="320" height="240"></canvas>
+            <div id="screenLoading" class="screen-overlay-loading">
+                <div style="font-size: 24px;">🤖</div>
+                <div id="loadingText">请先点击右上角【连接板子】配对蓝牙</div>
+            </div>
+        </div>
+
+        <div class="progress-bar-wrap" id="progWrap">
+            <div class="progress-bar-fill" id="progFill"></div>
+        </div>
+
+        <!-- 同屏辅助控制栏 -->
+        <div class="stream-controls">
+            <div class="stream-left">
+                <label style="cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                    <input type="checkbox" id="chkAutoSync" checked style="accent-color: var(--accent-color);">
+                    <span>连续同屏 (Live Sync)</span>
+                </label>
+            </div>
+            <div class="stream-right">
+                <select id="selFpsMode" class="btn-stream" onchange="changeFpsMode(this.value)" title="选择同步帧率模式" style="background:#1e293b; color:var(--accent-color); border:1px solid #334155; border-radius:6px; padding:4px 6px;">
+                    <option value="fast" selected>🚀 极速 (~6-8 FPS)</option>
+                    <option value="balanced">⚖️ 均衡 (~4 FPS)</option>
+                    <option value="hd">🖼️ 高清 (~2 FPS)</option>
+                </select>
+                <button class="btn-stream" id="btnSourceScreen" onclick="switchSource(0)" title="显示小智界面">🖥️ 屏幕</button>
+                <button class="btn-stream" id="btnSourceCam" onclick="switchSource(1)" title="显示GC2145摄像头画面">📷 相机</button>
+                <button class="btn-stream" onclick="manualRefresh()" title="立即手动刷新一帧">🔄 刷新</button>
+                <button class="btn-stream" onclick="saveScreenshot()" title="保存当前截屏到手机">💾 保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. 双轮舵机控制 -->
+    <div class="card">
+        <div class="card-header">
+            <span>⚙️ 双轮运动控制 (PCA9685 SG5010)</span>
+            <span style="font-size: 11px; color: var(--accent-warn);">死区: 1510~1610µs</span>
+        </div>
+
+        <div class="motion-grid">
+            <div></div>
+            <button class="btn-ctrl" onpointerdown="sendDrive(25, 25, 0)" onpointerup="sendDrive(0, 0, 0)">▲ 前进</button>
+            <div></div>
+
+            <button class="btn-ctrl" onpointerdown="sendDrive(-20, 20, 0)" onpointerup="sendDrive(0, 0, 0)">◀ 左转</button>
+            <button class="btn-ctrl btn-stop" onclick="sendDrive(0, 0, 0)">■ 刹车</button>
+            <button class="btn-ctrl" onpointerdown="sendDrive(20, -20, 0)" onpointerup="sendDrive(0, 0, 0)">右转 ▶</button>
+
+            <div></div>
+            <button class="btn-ctrl" onpointerdown="sendDrive(-25, -25, 0)" onpointerup="sendDrive(0, 0, 0)">▼ 后退</button>
+            <div></div>
+        </div>
+
+        <div class="slider-row" style="margin-top: 4px;">
+            <span>左轮调速</span>
+            <input type="range" id="sliderLeft" min="-100" max="100" value="0" oninput="updateSliders()">
+            <b id="valLeft">0%</b>
+        </div>
+        <div class="slider-row">
+            <span>右轮调速</span>
+            <input type="range" id="sliderRight" min="-100" max="100" value="0" oninput="updateSliders()">
+            <b id="valRight">0%</b>
+        </div>
+    </div>
+
+    <!-- 3. 姿态与系统遥测 (10Hz) -->
+    <div class="card">
+        <div class="card-header">
+            <span>📊 姿态与动力遥测 (QMI8658 10Hz)</span>
+            <span style="font-size: 11px; color: var(--accent-success);">实时更新</span>
+        </div>
+        <div class="tele-grid">
+            <div class="tele-item"><span>Roll (翻滚角):</span><b id="teleRoll">0.0°</b></div>
+            <div class="tele-item"><span>Pitch (俯仰角):</span><b id="telePitch">0.0°</b></div>
+            <div class="tele-item"><span>Yaw (偏航角):</span><b id="teleYaw">0.0°</b></div>
+            <div class="tele-item"><span>左轮脉宽:</span><b id="teleLeftPwm">1560 µs</b></div>
+            <div class="tele-item"><span>右轮脉宽:</span><b id="teleRightPwm">1560 µs</b></div>
+            <div class="tele-item"><span>空闲内存:</span><b id="teleMem">-- KB</b></div>
+            <div class="tele-item"><span>加速度 (X,Y,Z):</span><b id="teleAccel">0, 0, 0</b></div>
+            <div class="tele-item"><span>角速度 (X,Y,Z):</span><b id="teleGyro">0, 0, 0</b></div>
+        </div>
+    </div>
+
+    <!-- 4. 实时诊断控制台 (Diagnostic Console) -->
+    <div class="card" id="cardDebugLog">
+        <div class="card-header">
+            <span>🛠️ 实时通信与触控诊断日志</span>
+            <div style="display: flex; gap: 6px; align-items: center;">
+                <select id="selWriteMode" onchange="changeWriteMode(this.value)" style="background:#1e293b; color:var(--accent-color); border:1px solid #334155; border-radius:6px; font-size:11px; padding:2px 4px;">
+                    <option value="no_response" selected>⚡ 极速无应答 (NUS标准, 推荐)</option>
+                    <option value="with_response">🛡️ 带ACK应答 (With Response)</option>
+                </select>
+                <button class="btn-stream" style="padding: 2px 6px; font-size: 11px;" onclick="copyDebugLog()">📋 复制日志</button>
+                <button class="btn-stream" style="padding: 2px 6px; font-size: 11px;" onclick="clearDebugLog()">🗑️ 清空</button>
+            </div>
+        </div>
+        <div id="debugLogBox" style="background:#080c14; border:1px solid #1e293b; border-radius:6px; padding:8px; height:130px; overflow-y:auto; font-family:Consolas, monospace; font-size:11px; display:flex; flex-direction:column; gap:3px;">
+            <div style="color: #64748b;">[系统就绪] 等待连接开发板...</div>
+        </div>
+    </div>
+
+    <script>
+        const NUS_SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+        const NUS_RX_UUID      = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
+        const NUS_TX_UUID      = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
+
+        let bleDevice = null;
+        let rxChar = null;
+        let txChar = null;
+        let pingTimer = null;
+        let pingSendTime = 0;
+        let isConnected = false;
+        let isManualDisconnect = false;
+        let reconnectTimer = null;
+
+        // -----------------------------------------------------------------
+        // Diagnostic Logging & Mode Control
+        // -----------------------------------------------------------------
+        let bleWriteMode = 'no_response'; // 'no_response' (Default, fastest, NUS standard) or 'with_response'
+
+        function logDebug(msg, type = 'info') {
+            const box = document.getElementById('debugLogBox');
+            if (!box) return;
+            const now = new Date();
+            const ts = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}.${now.getMilliseconds().toString().padStart(3, '0')}`;
+            const div = document.createElement('div');
+            div.style.wordBreak = 'break-all';
+            div.style.lineHeight = '1.3';
+            if (type === 'error') {
+                div.style.color = '#f87171';
+                div.style.fontWeight = 'bold';
+            } else if (type === 'success') {
+                div.style.color = '#34d399';
+            } else if (type === 'warn') {
+                div.style.color = '#fbbf24';
+            } else {
+                div.style.color = '#94a3b8';
+            }
+            div.textContent = `[${ts}] ${msg}`;
+            box.appendChild(div);
+            if (box.childNodes.length > 100) {
+                box.removeChild(box.firstChild);
+            }
+            box.scrollTop = box.scrollHeight;
+        }
+
+        window.addEventListener('error', (e) => {
+            logDebug(`[Page Error] ${e.message}`, 'error');
+        });
+        window.addEventListener('unhandledrejection', (e) => {
+            logDebug(`[Promise Rejection] ${e.reason ? (e.reason.message || e.reason) : e}`, 'error');
+        });
+
+        function bytesToHex(bytes) {
+            if (!bytes || bytes.length === 0) return '[]';
+            return Array.from(bytes).map(b => b.toString(16).padStart(2, '0').toUpperCase()).join(' ');
+        }
+
+        function copyDebugLog() {
+            const box = document.getElementById('debugLogBox');
+            if (!box) return;
+            const text = Array.from(box.children).map(c => c.textContent).join('\n');
+            navigator.clipboard.writeText(text).then(() => {
+                alert('诊断日志已成功复制到剪贴板！');
+            }).catch(() => {
+                alert('复制失败，请手动选择日志框内文字复制');
+            });
+        }
+
+        function clearDebugLog() {
+            const box = document.getElementById('debugLogBox');
+            if (box) box.innerHTML = '<div style="color: #64748b;">[日志已清空]</div>';
+        }
+
+        function changeWriteMode(mode) {
+            bleWriteMode = mode;
+            logDebug(`BLE 写入模式已切换为: ${mode === 'no_response' ? '⚡ 极速无应答 (NUS标准)' : '🛡️ 带ACK应答 (With Response)'}`, 'warn');
+        }
+
+        // -----------------------------------------------------------------
+        // Robust Serialized BLE Write Queue
+        // -----------------------------------------------------------------
+        const bleWriteQueue = [];
+        let isBleWriting = false;
+
+        async function processBleWriteQueue() {
+            if (isBleWriting || bleWriteQueue.length === 0 || !rxChar || !isConnected) {
+                return;
+            }
+            isBleWriting = true;
+
+            while (bleWriteQueue.length > 0 && isConnected && rxChar) {
+                const item = bleWriteQueue.shift();
+                const t0 = performance.now();
+                let method = '';
+                try {
+                    if (bleWriteMode === 'no_response') {
+                        if (rxChar.writeValueWithoutResponse) {
+                            method = 'WithoutRsp';
+                            await rxChar.writeValueWithoutResponse(item.bytes);
+                        } else if (rxChar.writeValue) {
+                            method = 'writeValue';
+                            await rxChar.writeValue(item.bytes);
+                        } else if (rxChar.writeValueWithResponse) {
+                            method = 'WithRsp';
+                            await rxChar.writeValueWithResponse(item.bytes);
+                        }
+                    } else {
+                        if (rxChar.writeValueWithResponse) {
+                            method = 'WithRsp';
+                            await rxChar.writeValueWithResponse(item.bytes);
+                        } else if (rxChar.writeValue) {
+                            method = 'writeValue';
+                            await rxChar.writeValue(item.bytes);
+                        } else if (rxChar.writeValueWithoutResponse) {
+                            method = 'WithoutRsp';
+                            await rxChar.writeValueWithoutResponse(item.bytes);
+                        }
+                    }
+                    const cost = Math.round(performance.now() - t0);
+                    logDebug(`[TX OK] ${item.tag || 'Data'}: ${bytesToHex(item.bytes)} (${method}, ${cost}ms)`, 'success');
+                    if (item.resolve) item.resolve();
+                } catch (err) {
+                    logDebug(`[TX ERR] ${item.tag || 'Data'} 写入失败 (${method}): ${err.message || err}`, 'error');
+                    console.warn('BLE write error:', err);
+                    if (item.reject) item.reject(err);
+                }
+                // Inter-packet breath (25ms) prevents GATT operation already in progress
+                await new Promise(r => setTimeout(r, 25));
+            }
+
+            isBleWriting = false;
+        }
+
+        function sendBlePacket(bytes, tag = '') {
+            if (!rxChar || !isConnected) return Promise.resolve();
+            if (bleWriteQueue.length > 8) {
+                bleWriteQueue.splice(0, 2);
+            }
+            return new Promise((resolve, reject) => {
+                bleWriteQueue.push({ bytes, tag, resolve, reject });
+                processBleWriteQueue();
+            });
+        }
+
+        // Image stream assembly state
+        let currentFrameId = -1;
+        let totalChunks = 0;
+        let receivedChunks = new Map();
+        let currentSource = 0; // 0=Screen, 1=Camera
+        let screenImage = null; // Stored HTMLImageElement
+        let frameCount = 0;
+        let lastFrameTime = performance.now();
+        let fps = 0;
+        let isRequestingFrame = false;
+
+        // Active touch state
+        let touchState = {
+            isDown: false,
+            x: 160,
+            y: 120
+        };
+
+        const canvas = document.getElementById('screenCanvas');
+        const ctx = canvas.getContext('2d');
+        const screenLoading = document.getElementById('screenLoading');
+        const loadingText = document.getElementById('loadingText');
+        const chkAutoSync = document.getElementById('chkAutoSync');
+        const lblStreamStatus = document.getElementById('lblStreamStatus');
+
+        // Draw initial placeholder
+        drawCanvas();
+
+        function drawCanvas() {
+            ctx.clearRect(0, 0, 320, 240);
+            if (screenImage) {
+                // Draw actual screen content from ESP32
+                ctx.drawImage(screenImage, 0, 0, 320, 240);
+            } else {
+                // Sleek tech grid
+                ctx.fillStyle = '#0f172a';
+                ctx.fillRect(0, 0, 320, 240);
+                ctx.strokeStyle = '#1e293b';
+                ctx.lineWidth = 1;
+                for (let x = 0; x < 320; x += 32) {
+                    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, 240); ctx.stroke();
+                }
+                for (let y = 0; y < 240; y += 24) {
+                    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(320, y); ctx.stroke();
+                }
+            }
+
+            // Draw touch pointer indicator if touching
+            if (touchState.isDown) {
+                const { x, y } = touchState;
+                // Outer glow
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(x, y, 18, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(0, 229, 255, 0.35)';
+                ctx.fill();
+                ctx.strokeStyle = '#00e5ff';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // Crosshair
+                ctx.beginPath();
+                ctx.moveTo(x - 8, y); ctx.lineTo(x + 8, y);
+                ctx.moveTo(x, y - 8); ctx.lineTo(x, y + 8);
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+                ctx.restore();
+            }
+        }
+
+        // -----------------------------------------------------------------
+        // BLE Connection
+        // -----------------------------------------------------------------
+        const btnConnect = document.getElementById('btnConnect');
+        const lblConn = document.getElementById('lblConn');
+        const pulseDot = document.getElementById('pulseDot');
+
+        btnConnect.addEventListener('click', async () => {
+            if (isConnected) {
+                isManualDisconnect = true;
+                if (reconnectTimer) clearTimeout(reconnectTimer);
+                if (bleDevice && bleDevice.gatt.connected) {
+                    bleDevice.gatt.disconnect();
+                }
+                return;
+            }
+
+            try {
+                if (!navigator.bluetooth) {
+                    alert('当前浏览器不支持 Web 蓝牙！\nAndroid 推荐 Chrome / Edge 浏览器；\niOS 请使用 App Store 免费的 Bluefy 浏览器。');
+                    return;
+                }
+
+                isManualDisconnect = false;
+                loadingText.textContent = '正在发现并连接 Deskbot-Touch...';
+                screenLoading.style.display = 'flex';
+
+                bleDevice = await navigator.bluetooth.requestDevice({
+                    filters: [{ name: 'Deskbot-Touch' }],
+                    optionalServices: [NUS_SERVICE_UUID]
+                });
+
+                bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
+                await connectGattServer();
+
+            } catch (err) {
+                console.error(err);
+                if (err.name !== 'NotFoundError') {
+                    alert('连接失败: ' + err.message);
+                }
+                loadingText.textContent = '请先点击右上角【连接板子】配对蓝牙';
+            }
+        });
+
+        async function connectGattServer() {
+            logDebug('正在连接 GATT 服务器...', 'info');
+            const server = await bleDevice.gatt.connect();
+            logDebug('GATT 连接建立，正在发现 NUS 串口服务...', 'info');
+            const service = await server.getPrimaryService(NUS_SERVICE_UUID);
+            rxChar = await service.getCharacteristic(NUS_RX_UUID);
+            txChar = await service.getCharacteristic(NUS_TX_UUID);
+
+            const rxProps = [];
+            if (rxChar.properties.write) rxProps.push('WRITE');
+            if (rxChar.properties.writeWithoutResponse) rxProps.push('WRITE_NO_RSP');
+            logDebug(`RX 特征值就绪 [${rxProps.join('|')}]`, 'info');
+
+            await txChar.startNotifications();
+            txChar.addEventListener('characteristicvaluechanged', onTxNotification);
+            logDebug('TX 遥测与画面通知已订阅开启', 'success');
+
+            isConnected = true;
+            lblConn.textContent = '已连接';
+            btnConnect.textContent = '断开';
+            btnConnect.classList.add('connected');
+            pulseDot.classList.add('active');
+
+            loadingText.textContent = '正在拉取板载实时画面...';
+            lblStreamStatus.textContent = '同步中...';
+
+            // Paced ping / heartbeat timer (every 1500ms, only when idle)
+            if (pingTimer) clearInterval(pingTimer);
+            pingTimer = setInterval(sendHeartbeat, 1500);
+
+            // Immediately request the first screen frame!
+            setTimeout(() => requestSnapshot(currentSource), 100);
+        }
+
+        function onDisconnected(event) {
+            isConnected = false;
+            lblConn.textContent = '未连接';
+            btnConnect.textContent = '连接板子';
+            btnConnect.classList.remove('connected');
+            pulseDot.classList.remove('active');
+            if (pingTimer) clearInterval(pingTimer);
+            lblStreamStatus.textContent = '未连接';
+
+            logDebug(`[GATT 断开] 蓝牙连接已断开 (${event ? event.type : 'normal'})`, 'error');
+
+            if (!isManualDisconnect && bleDevice) {
+                loadingText.textContent = '蓝牙连接断开，正在尝试自动重连...';
+                screenLoading.style.display = 'flex';
+                if (reconnectTimer) clearTimeout(reconnectTimer);
+                reconnectTimer = setTimeout(async () => {
+                    if (isManualDisconnect) return;
+                    try {
+                        logDebug('正在尝试自动重连...', 'info');
+                        await connectGattServer();
+                    } catch (e) {
+                        logDebug(`自动重连失败: ${e.message}`, 'error');
+                        onDisconnected();
+                    }
+                }, 1500);
+            } else {
+                loadingText.textContent = '蓝牙已断开，请重新连接';
+                screenLoading.style.display = 'flex';
+            }
+        }
+
+        // Heartbeat Ping (only sent when not busy downloading screen chunks)
+        function sendHeartbeat() {
+            if (!rxChar || !isConnected || isRequestingFrame) return;
+            try {
+                pingSendTime = performance.now();
+                const buf = new Uint8Array(5);
+                buf[0] = 0x03; // BLE_MSG_HEARTBEAT
+                const ts = Date.now() & 0xFFFFFFFF;
+                buf[1] = (ts >> 24) & 0xFF;
+                buf[2] = (ts >> 16) & 0xFF;
+                buf[3] = (ts >> 8)  & 0xFF;
+                buf[4] = ts & 0xFF;
+                sendBlePacket(buf);
+            } catch (e) {}
+        }
+
+        // -----------------------------------------------------------------
+        // BLE Data Notification Handler
+        // -----------------------------------------------------------------
+        function onTxNotification(event) {
+            const val = event.target.value;
+            if (val.byteLength < 1) return;
+            const type = val.getUint8(0);
+
+            if (type === 0x83) { // PONG
+                const rtt = Math.round(performance.now() - pingSendTime);
+                document.getElementById('lblPing').textContent = `${rtt} ms | ${fps} FPS`;
+            } else if (type === 0x81 && val.byteLength >= 23) { // 10Hz TELEMETRY
+                const ax = val.getInt16(1) / 1000.0;
+                const ay = val.getInt16(3) / 1000.0;
+                const az = val.getInt16(5) / 1000.0;
+                const gx = (val.getInt16(7) / 10.0).toFixed(1);
+                const gy = (val.getInt16(9) / 10.0).toFixed(1);
+                const gz = (val.getInt16(11) / 10.0).toFixed(1);
+                const pitch = (val.getInt16(13) / 10.0).toFixed(1);
+                const roll = (val.getInt16(15) / 10.0).toFixed(1);
+                const lpwm = val.getUint16(19);
+                const rpwm = val.getUint16(21);
+
+                document.getElementById('teleRoll').textContent = `${roll}°`;
+                document.getElementById('telePitch').textContent = `${pitch}°`;
+                document.getElementById('teleLeftPwm').textContent = `${lpwm} µs`;
+                document.getElementById('teleRightPwm').textContent = `${rpwm} µs`;
+                document.getElementById('teleAccel').textContent = `${ax.toFixed(2)}, ${ay.toFixed(2)}, ${az.toFixed(2)}`;
+                document.getElementById('teleGyro').textContent = `${gx}, ${gy}, ${gz}`;
+
+            } else if (type === 0x82 && val.byteLength >= 11) { // IMAGE CHUNK
+                const frameId = val.getUint16(1);
+                const total = val.getUint16(3);
+                const chunkIdx = val.getUint16(5);
+                const chunkLen = val.getUint16(7);
+
+                if (frameId !== currentFrameId) {
+                    currentFrameId = frameId;
+                    totalChunks = total;
+                    receivedChunks.clear();
+                    document.getElementById('progWrap').style.display = 'block';
+                }
+
+                // CRITICAL FIX: CLONE CHUNK DATA!
+                // val.buffer is a shared/mutating internal buffer in Web Bluetooth;
+                // a simple Uint8Array view will be overwritten by the next notification!
+                const chunkData = new Uint8Array(chunkLen);
+                chunkData.set(new Uint8Array(val.buffer, val.byteOffset + 9, chunkLen));
+                receivedChunks.set(chunkIdx, chunkData);
+
+                const progress = Math.round((receivedChunks.size / totalChunks) * 100);
+                document.getElementById('progFill').style.width = `${progress}%`;
+
+                // REFRESH WATCHDOG ON EVERY ARRIVING CHUNK:
+                // Prevents aborting while chunks are in active transit!
+                if (frameTimeoutTimer) clearTimeout(frameTimeoutTimer);
+                frameTimeoutTimer = setTimeout(() => {
+                    isRequestingFrame = false;
+                    document.getElementById('progWrap').style.display = 'none';
+
+                    // Track missing chunks for diagnosis
+                    const missing = [];
+                    for (let i = 0; i < totalChunks; i++) {
+                        if (!receivedChunks.has(i)) missing.push(i);
+                    }
+                    console.warn(`Frame #${currentFrameId} timeout. Missing ${missing.length} chunks:`, missing);
+                    lblStreamStatus.textContent = `丢包重试 (${receivedChunks.size}/${totalChunks})`;
+
+                    if (chkAutoSync.checked && isConnected) {
+                        setTimeout(() => requestSnapshot(currentSource), 100);
+                    }
+                }, 1500);
+
+                if (receivedChunks.size === totalChunks) {
+                    if (frameTimeoutTimer) {
+                        clearTimeout(frameTimeoutTimer);
+                        frameTimeoutTimer = null;
+                    }
+                    isRequestingFrame = false;
+
+                    // Frame fully assembled
+                    let totalBytes = 0;
+                    for (let i = 0; i < totalChunks; i++) {
+                        const c = receivedChunks.get(i);
+                        totalBytes += (c ? c.length : 0);
+                    }
+                    const fullBuf = new Uint8Array(totalBytes);
+                    let offset = 0;
+                    for (let i = 0; i < totalChunks; i++) {
+                        const c = receivedChunks.get(i);
+                        if (c) {
+                            fullBuf.set(c, offset);
+                            offset += c.length;
+                        }
+                    }
+
+                    const hexHeader = fullBuf.length >= 4 
+                        ? `${fullBuf[0].toString(16).toUpperCase()} ${fullBuf[1].toString(16).toUpperCase()}`
+                        : 'NONE';
+
+                    const blob = new Blob([fullBuf], { type: 'image/jpeg' });
+                    const url = URL.createObjectURL(blob);
+                    const img = new Image();
+                    img.onload = () => {
+                        screenImage = img;
+                        screenLoading.style.display = 'none';
+                        drawCanvas();
+                        URL.revokeObjectURL(url);
+
+                        // Calculate FPS
+                        frameCount++;
+                        const now = performance.now();
+                        if (now - lastFrameTime >= 1000) {
+                            fps = frameCount;
+                            frameCount = 0;
+                            lastFrameTime = now;
+                        }
+
+                        lblStreamStatus.textContent = `实时同步 ${(totalBytes/1024).toFixed(1)}KB (${fps} FPS)`;
+
+                        // Auto live stream loop with dynamic FPS mode pacing
+                        if (chkAutoSync.checked && isConnected) {
+                            setTimeout(() => {
+                                requestSnapshot(currentSource);
+                            }, syncIntervalMs);
+                        }
+                    };
+                    img.onerror = (e) => {
+                        console.error('JPEG decode failed. SOI:', hexHeader, e);
+                        lblStreamStatus.textContent = `解码异常: 0x${hexHeader} (${(totalBytes/1024).toFixed(1)}KB)`;
+                        if (chkAutoSync.checked && isConnected) {
+                            setTimeout(() => requestSnapshot(currentSource), 200);
+                        }
+                    };
+                    img.src = url;
+                    setTimeout(() => { document.getElementById('progWrap').style.display = 'none'; }, 150);
+                }
+            }
+        }
+
+        // -----------------------------------------------------------------
+        // Snapshot Request & FPS Modes
+        // -----------------------------------------------------------------
+        let frameTimeoutTimer = null;
+        let currentQuality = 30;
+        let syncIntervalMs = 20;
+
+        function changeFpsMode(mode) {
+            if (mode === 'fast') {
+                currentQuality = 30;
+                syncIntervalMs = 20;
+            } else if (mode === 'balanced') {
+                currentQuality = 40;
+                syncIntervalMs = 40;
+            } else if (mode === 'hd') {
+                currentQuality = 55;
+                syncIntervalMs = 80;
+            }
+        }
+
+        function requestSnapshot(source) {
+            if (!rxChar || !isConnected) return;
+            if (isRequestingFrame) return;
+
+            try {
+                isRequestingFrame = true;
+                currentSource = source;
+
+                if (frameTimeoutTimer) clearTimeout(frameTimeoutTimer);
+                frameTimeoutTimer = setTimeout(() => {
+                    isRequestingFrame = false;
+                    document.getElementById('progWrap').style.display = 'none';
+                    if (chkAutoSync.checked && isConnected) {
+                        requestSnapshot(currentSource);
+                    }
+                }, 2500);
+
+                // [0x04, source(1), quality(1)]
+                const buf = new Uint8Array([0x04, source, currentQuality]);
+                sendBlePacket(buf, 'SNAP_REQ');
+            } catch (e) {
+                isRequestingFrame = false;
+            }
+        }
+
+        function switchSource(source) {
+            currentSource = source;
+            document.getElementById('btnSourceScreen').classList.toggle('active', source === 0);
+            document.getElementById('btnSourceCam').classList.toggle('active', source === 1);
+            manualRefresh();
+        }
+
+        function manualRefresh() {
+            if (frameTimeoutTimer) clearTimeout(frameTimeoutTimer);
+            isRequestingFrame = false;
+            requestSnapshot(currentSource);
+        }
+
+        function saveScreenshot() {
+            if (!screenImage) return;
+            const a = document.createElement('a');
+            a.download = `deskbot_screen_${Date.now()}.png`;
+            a.href = canvas.toDataURL('image/png');
+            a.click();
+        }
+
+        // -----------------------------------------------------------------
+        // Unified Touch Injection Directly on Screen Canvas
+        // -----------------------------------------------------------------
+        function getCanvasCoords(e) {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const clientX = e.clientX ?? (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
+            const clientY = e.clientY ?? (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
+            const x = Math.max(0, Math.min(319, Math.round((clientX - rect.left) * scaleX)));
+            const y = Math.max(0, Math.min(239, Math.round((clientY - rect.top) * scaleY)));
+            return { x, y };
+        }
+
+        function sendTouchEvent(action, x, y) {
+            touchState.isDown = (action !== 2); // 0=down, 1=move, 2=up
+            touchState.x = x;
+            touchState.y = y;
+            document.getElementById('lblCoord').textContent = `${x}, ${y}`;
+            drawCanvas();
+
+            if (!rxChar || !isConnected) return;
+            try {
+                const actNames = ['DOWN', 'MOVE', 'UP'];
+                const actStr = actNames[action] || action;
+                // [0x01, action(1), x(2), y(2)]
+                const buf = new Uint8Array(6);
+                buf[0] = 0x01; // BLE_MSG_TOUCH
+                buf[1] = action;
+                buf[2] = (x >> 8) & 0xFF;
+                buf[3] = x & 0xFF;
+                buf[4] = (y >> 8) & 0xFF;
+                buf[5] = y & 0xFF;
+                sendBlePacket(buf, `TOUCH_${actStr}(${x},${y})`);
+            } catch (e) {}
+
+            // If user releases touch and auto-sync is off, automatically refresh the screen after 150ms!
+            if (action === 2 && !chkAutoSync.checked && isConnected) {
+                setTimeout(() => requestSnapshot(currentSource), 150);
+            }
+        }
+
+        // Unified Pointer & Touch Handling (Clean, resilient, no setPointerCapture)
+        let touchDownTime = 0;
+        let isTouching = false;
+        let pendingUpTimer = null;
+
+        canvas.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            isTouching = true;
+            touchDownTime = performance.now();
+            if (pendingUpTimer) { clearTimeout(pendingUpTimer); pendingUpTimer = null; }
+            const { x, y } = getCanvasCoords(e);
+            logDebug(`[画布按下] x=${x}, y=${y}`, 'info');
+            sendTouchEvent(0, x, y); // BLE_TOUCH_DOWN
+        });
+
+        let lastTouchSendTime = 0;
+        canvas.addEventListener('pointermove', (e) => {
+            if (!isTouching && !touchState.isDown) return;
+            e.preventDefault();
+            const now = performance.now();
+            if (now - lastTouchSendTime < 60) return; // 16Hz rate limit
+            lastTouchSendTime = now;
+            const { x, y } = getCanvasCoords(e);
+            sendTouchEvent(1, x, y); // BLE_TOUCH_MOVE
+        });
+
+        function endTouch(e) {
+            if (!isTouching) return;
+            if (e && e.cancelable) e.preventDefault();
+            isTouching = false;
+            const { x, y } = getCanvasCoords(e || {});
+            const pressDuration = performance.now() - touchDownTime;
+
+            // Ensure at least 50ms press duration for LVGL widget click state machine
+            if (pressDuration < 50) {
+                if (pendingUpTimer) clearTimeout(pendingUpTimer);
+                pendingUpTimer = setTimeout(() => {
+                    logDebug(`[画布抬起 (延迟保持50ms)] x=${x}, y=${y}`, 'info');
+                    sendTouchEvent(2, x, y); // BLE_TOUCH_UP
+                    pendingUpTimer = null;
+                }, 50 - pressDuration);
+            } else {
+                logDebug(`[画布抬起] x=${x}, y=${y} (持续 ${Math.round(pressDuration)}ms)`, 'info');
+                sendTouchEvent(2, x, y); // BLE_TOUCH_UP
+            }
+        }
+
+        canvas.addEventListener('pointerup', endTouch);
+        canvas.addEventListener('pointercancel', endTouch);
+
+        // -----------------------------------------------------------------
+        // Servo Motion Control (With deduplication)
+        // -----------------------------------------------------------------
+        let lastSentLeft = 0;
+        let lastSentRight = 0;
+
+        function sendDrive(leftSpeed, rightSpeed, durationMs = 0) {
+            if (!rxChar || !isConnected) return;
+            // Prevent spamming identical stop/speed packets
+            if (durationMs === 0 && leftSpeed === lastSentLeft && rightSpeed === lastSentRight) {
+                return;
+            }
+            lastSentLeft = leftSpeed;
+            lastSentRight = rightSpeed;
+
+            try {
+                // [0x02, left(1), right(1), duration_ms(2)]
+                const buf = new Uint8Array(5);
+                buf[0] = 0x02; // BLE_MSG_SERVO
+                buf[1] = (leftSpeed + 256) & 0xFF;
+                buf[2] = (rightSpeed + 256) & 0xFF;
+                buf[3] = (durationMs >> 8) & 0xFF;
+                buf[4] = durationMs & 0xFF;
+                sendBlePacket(buf, `DRIVE(L:${leftSpeed}, R:${rightSpeed})`);
+            } catch (e) {}
+        }
+
+        function updateSliders() {
+            const left = parseInt(document.getElementById('sliderLeft').value);
+            const right = parseInt(document.getElementById('sliderRight').value);
+            document.getElementById('valLeft').textContent = `${left}%`;
+            document.getElementById('valRight').textContent = `${right}%`;
+            sendDrive(left, right, 0);
+        }
+    </script>
+</body>
+</html>
