@@ -36,3 +36,10 @@
 - **[架构决策记录 (ADR)](decisions/0001-modular-monorepo.md)**：模块化 Monorepo 演进决策。
 - **[路线图 (Roadmap)](roadmap.md)**：项目演进规划与功能里程碑。
 - **[团队工作流规范 (Team Workflow)](team-workflow.md)**：分支管理与提交流程。
+
+### 4. 硬件原理图与设计资料 (Hardware Schematics)
+- **[立创·实战派 ESP32-S3 硬件原理图专区](hardware/README.md)**
+  - 主板完整官方原理图（V1.0.1，原理图-1/2/3 对应主控总线、供电/摄像头/屏幕、音频编解码）
+  - ST7789 2.4寸屏幕数据手册与 J4 接口引脚定义 (`TFT-H013A6QQIGC5N10.pdf`)
+  - 双目表情副屏原理图 (`DualEye-Schematic.pdf` / `DualEye-Schematic.png`)
+  - 嘉立创 EDA 在线开源工程（可直接在线查看 PCB、原理图与导出 BOM）
