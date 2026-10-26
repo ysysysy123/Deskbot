@@ -5,6 +5,7 @@
 #include "board.h"
 #include "cjson_utils.h"
 #include "display.h"
+#include "eye_uart_link.h"
 #include "mcp_server.h"
 #include "mqtt_protocol.h"
 #include "settings.h"
@@ -93,9 +94,15 @@ void Application::Initialize() {
     };
     audio_service_.SetCallbacks(callbacks);
 
+    // 双眼板串口链路：立创 J2-2(GPIO10) -> DualEye P2-9，J2-1(GPIO11) <- P2-10
+    EyeUartLink::Init();
+    EyeUartLink::SendState("THINKING");
+    EyeUartLink::Ping();
     // Add state change listeners
     state_machine_.AddStateChangeListener([this](DeviceState old_state, DeviceState new_state) {
         xEventGroupSetBits(event_group_, MAIN_EVENT_STATE_CHANGED);
+        // 状态变化同步给双眼板；离开 Speaking 时会自动清掉情绪覆盖
+        EyeUartLink::SendState(EyeUartLink::StateFromDeviceState(new_state));
     });
 
     // Start the clock timer to update the status bar
@@ -670,8 +677,13 @@ void Application::InitializeProtocol() {
         } else if (strcmp(type->valuestring, "llm") == 0) {
             auto emotion = cJSON_GetObjectItem(root, "emotion");
             if (cJSON_IsString(emotion)) {
-                Schedule([display, emotion_str = std::string(emotion->valuestring)]() {
+                Schedule([this, display, emotion_str = std::string(emotion->valuestring)]() {
                     display->SetEmotion(emotion_str.c_str());
+                    // 仅在播报中覆盖双眼表情；其他状态由状态机决定，避免旧情绪残留
+                    if (state_machine_.GetState() == kDeviceStateSpeaking) {
+                        EyeUartLink::SendState(
+                            EyeUartLink::StateFromEmotion(emotion_str.c_str()));
+                    }
                 });
             }
         } else if (strcmp(type->valuestring, "mcp") == 0) {
