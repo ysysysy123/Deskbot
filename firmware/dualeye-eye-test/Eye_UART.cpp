@@ -23,6 +23,9 @@ void reply(const char *message)
 {
   eye_uart.print(message);
   eye_uart.print('\n');
+  // 调试镜像：同时打到 USB 串口，方便电脑直接观察协议往来
+  Serial.print(message);
+  Serial.print('\n');
 }
 
 bool parse_percent(const char *text, int8_t &value)
@@ -108,8 +111,9 @@ void process_line(char *line)
       reply("ERR BUSY");
       return;
     }
-    eye_uart.print("OK STATE ");
-    eye_uart.println(name);
+    char ack[48];
+    snprintf(ack, sizeof(ack), "OK STATE %s", name);
+    reply(ack);
     return;
   }
   if (strcmp(command, "GAZE") == 0) {
@@ -136,6 +140,9 @@ void process_line(char *line)
 
 void EyeUart_Init(void)
 {
+  // USB 调试通道：电脑可以直接发 STATE/GAZE/BLINK，不必接主控
+  Serial.begin(EYE_UART_BAUD);
+
   eye_uart.setRxBufferSize(256);
   eye_uart.begin(EYE_UART_BAUD, SERIAL_8N1, EYE_UART_RX_PIN, EYE_UART_TX_PIN);
   reply("READY EYE_UART_V1");
@@ -143,26 +150,32 @@ void EyeUart_Init(void)
 
 void EyeUart_Update(void)
 {
-  while (eye_uart.available() > 0) {
-    const int incoming = eye_uart.read();
-    if (incoming == '\r') {
-      continue;
-    }
-    if (incoming == '\n') {
-      if (line_overflow) {
-        reply("ERR OVERFLOW");
-      } else {
-        line_buffer[line_length] = '\0';
-        process_line(line_buffer);
+  // 两路输入共用同一套解析器：UART1（主控）+ USB（调试）
+  auto consume = [](auto &stream) {
+    while (stream.available() > 0) {
+      const int incoming = stream.read();
+      if (incoming == '\r') {
+        continue;
       }
-      line_length = 0;
-      line_overflow = false;
-      continue;
+      if (incoming == '\n') {
+        if (line_overflow) {
+          reply("ERR OVERFLOW");
+        } else {
+          line_buffer[line_length] = '\0';
+          process_line(line_buffer);
+        }
+        line_length = 0;
+        line_overflow = false;
+        continue;
+      }
+      if (line_length + 1 < LINE_CAPACITY) {
+        line_buffer[line_length++] = static_cast<char>(incoming);
+      } else {
+        line_overflow = true;
+      }
     }
-    if (line_length + 1 < LINE_CAPACITY) {
-      line_buffer[line_length++] = static_cast<char>(incoming);
-    } else {
-      line_overflow = true;
-    }
-  }
+  };
+
+  consume(eye_uart);
+  consume(Serial);
 }
