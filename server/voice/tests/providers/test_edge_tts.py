@@ -27,12 +27,13 @@ class FakeTranscoder:
             yield self._pcm[offset:offset + chunk_size]
 
 
-async def test_default_edge_tts_connects_to_current_microsoft_endpoint(monkeypatch):
+async def test_default_edge_tts_uses_upstream_endpoint_and_v2_protocol(monkeypatch):
     pytest.importorskip("edge_tts")
     import aiohttp
     from yarl import URL
 
     requests = []
+    versions = []
 
     class WebSocket:
         async def send_str(self, message):
@@ -48,6 +49,7 @@ async def test_default_edge_tts_connects_to_current_microsoft_endpoint(monkeypat
     async def ws_connect(session, url, **kwargs):
         parsed = URL(url)
         requests.append((parsed.host, parsed.path, set(parsed.query)))
+        versions.append(parsed.query["Sec-MS-GEC-Version"])
         yield WebSocket()
 
     monkeypatch.setattr(aiohttp.ClientSession, "ws_connect", ws_connect)
@@ -58,9 +60,10 @@ async def test_default_edge_tts_connects_to_current_microsoft_endpoint(monkeypat
 
     assert [part async for part in provider.synthesize("hello")] == [b"pcm!"]
     assert requests == [(
-        "api.msedgeservices.com", "/tts/cognitiveservices/websocket/v1",
-        {"Ocp-Apim-Subscription-Key", "ConnectionId", "Sec-MS-GEC", "Sec-MS-GEC-Version"},
+        "speech.platform.bing.com", "/consumer/speech/synthesize/readaloud/edge/v1",
+        {"TrustedClientToken", "ConnectionId", "Sec-MS-GEC", "Sec-MS-GEC-Version"},
     )]
+    assert versions[0].startswith("2-")
     assert transcoder.inputs == [b"mp3"]
 
 

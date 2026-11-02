@@ -1,5 +1,6 @@
 # Offline tests use fake model providers; no Torch/model downloads are needed.
 aiohttp==3.13.2
+edge-tts==7.3.1
 websockets==14.2
 PyYAML==6.0.3
 python-dotenv==1.2.1
