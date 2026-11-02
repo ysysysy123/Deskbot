@@ -166,7 +166,11 @@ async def test_abort_replaces_a_cancelled_normal_stop_that_was_not_recorded():
     assert transport.send_cancelled.is_set()
     assert tts_states(transport) == ["start", "sentence_start", "stop"]
     assert ("bytes", b"opus") in transport.events
-    assert memory.saved == [("device-a", "s1", "user", "hello")]
+    assert memory.saved[0] == ("device-a", "s1", "user", "hello")
+    assert len(memory.saved) == 2
+    assert memory.saved[1][2] == "assistant"
+    assert memory.saved[1][3].startswith("reply.")
+    assert "本轮中断" in memory.saved[1][3]
 
 
 async def test_abort_does_not_duplicate_a_recorded_stop_when_send_swallows_cancel():
@@ -180,7 +184,9 @@ async def test_abort_does_not_duplicate_a_recorded_stop_when_send_swallows_cance
 
     assert transport.send_cancelled.is_set()
     assert tts_states(transport) == ["start", "sentence_start", "stop"]
-    assert memory.saved == [("device-a", "s1", "user", "hello")]
+    assert len(memory.saved) == 2
+    assert memory.saved[1][3].startswith("reply.")
+    assert "本轮中断" in memory.saved[1][3]
 
 
 async def test_abort_during_completed_assistant_save_keeps_full_reply_and_summary():
@@ -203,6 +209,39 @@ async def test_abort_during_completed_assistant_save_keeps_full_reply_and_summar
     ]
     assert memory.summary_devices == ["device-a"]
     assert session.state is SessionState.IDLE
+
+
+async def test_interrupted_audio_remembers_only_sent_segment_and_labels_partial_delivery():
+    class HalfSentenceTTS:
+        def __init__(self):
+            self.gate = asyncio.Event()
+
+        async def synthesize(self, text):
+            yield b"pcm"
+            await self.gate.wait()
+            yield b"pcm"
+
+    class PacketTransport(FakeTransport):
+        def __init__(self):
+            super().__init__()
+            self.packet = asyncio.Event()
+
+        async def send_bytes(self, data):
+            await super().send_bytes(data)
+            self.packet.set()
+
+    transport, memory = PacketTransport(), FakeMemory()
+    session = make_session(asr=FakeASR("讲个例子"), llm=FakeLLM(["第一段。完全没发送的第二段。"]),
+                           tts=HalfSentenceTTS(), memory=memory, transport=transport,
+                           codec=FakeCodec(decoded=b"pcm", encoded={b"pcm": [b"opus"]}))
+    await start_spoken_reply(session)
+    await transport.packet.wait()
+    await session.abort()
+    saved = memory.saved[-1][3]
+    assert memory.saved[-1][2] == "assistant"
+    assert "第一段" in saved and "仅发送部分音频" in saved
+    assert "完全没发送的第二段" not in saved
+    assert "未确认设备播放" in saved
 
 
 async def test_abort_cancels_gated_llm_but_preserves_user_memory():

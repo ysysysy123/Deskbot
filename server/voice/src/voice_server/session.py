@@ -5,6 +5,7 @@ import logging
 import re
 import sys
 import time
+from dataclasses import dataclass
 from contextlib import aclosing
 from typing import Any
 
@@ -20,6 +21,13 @@ _LOGGER = logging.getLogger(__name__)
 
 class SessionLimitError(ValueError):
     close_code = 1009
+
+
+@dataclass
+class _SentSegment:
+    text: str
+    packets: int = 0
+    complete: bool = False
 
 
 def extract_music_query(text: str) -> str | None:
@@ -246,6 +254,8 @@ class VoiceSession:
         tts_failed = False
         stage = "asr"
         turn_mode = self._listen_mode
+        sent_segments: list[_SentSegment] = []
+        assistant_save_started = False
         try:
             text = transcript if transcript is not None else await wait_for(
                 self._asr.transcribe(pcm, 16_000), self._asr_timeout_s
@@ -303,7 +313,8 @@ class VoiceSession:
                     stage = "tts"
                     tts_started_at = time.monotonic()
                     try:
-                        tts_started = await self._speak_sentence(sentence, tts_started, generation, display=True, audio=audio)
+                        tts_started = await self._speak_sentence(sentence, tts_started, generation, display=True, audio=audio,
+                                                                 sent_segments=sent_segments)
                     except Exception:
                         tts_failed = True
                         raise
@@ -323,6 +334,7 @@ class VoiceSession:
                 if not self._is_current(generation):
                     return
                 stage = "memory"
+                assistant_save_started = True
                 await self._memory.remember(self.device_id, self.session_id, "assistant", assistant_text)
                 self._memory.schedule_summary(self.device_id)
         except asyncio.CancelledError:
@@ -345,6 +357,23 @@ class VoiceSession:
                 except Exception:
                     pass
         finally:
+            if metrics["status"] == "running" and not self._is_current(generation):
+                metrics["status"] = "cancelled"
+            if not assistant_save_started and any(segment.packets for segment in sent_segments):
+                parts = []
+                for segment in sent_segments:
+                    if not segment.packets:
+                        continue
+                    if segment.complete:
+                        parts.append(segment.text)
+                    else:
+                        parts.append(f"（下一段仅发送部分音频，预定文本为「{segment.text}」；未完整发送。）")
+                content = "".join(parts) + "（本轮中断；以上仅表示服务端发送，未确认设备播放。）"
+                try:
+                    await self._memory.remember(self.device_id, self.session_id, "assistant", content)
+                    self._memory.schedule_summary(self.device_id)
+                except Exception:
+                    _LOGGER.exception("Unable to save interrupted reply: session=%s", self.session_id)
             metrics["total_ms"] = self._turn_elapsed_ms()
             if metrics["status"] == "running":
                 failed_tool = next((call for call in metrics.get("tool_calls", []) if call["status"] == "error"), None)
@@ -513,7 +542,8 @@ class VoiceSession:
             producer.cancel()
             await asyncio.gather(producer, return_exceptions=True)
 
-    async def _speak_sentence(self, sentence: str, started: bool, generation: int, *, display: bool, audio=None) -> bool:
+    async def _speak_sentence(self, sentence: str, started: bool, generation: int, *, display: bool, audio=None,
+                              sent_segments: list[_SentSegment] | None = None) -> bool:
         if not self._is_current(generation):
             return started
         if not started:
@@ -528,6 +558,9 @@ class VoiceSession:
         if not await self._send_json(generation, make_tts(self.session_id, "sentence_start", sentence)):
             return started
         sent_packets = 0
+        segment = _SentSegment(sentence)
+        if sent_segments is not None:
+            sent_segments.append(segment)
         source = audio if audio is not None else self._tts.synthesize(sentence).__aiter__()
         async with aclosing(source) as iterator:
             while True:
@@ -541,6 +574,7 @@ class VoiceSession:
                     if self.last_turn is not None and "first_audio_ms" not in self.last_turn:
                         self.last_turn["first_audio_ms"] = self._turn_elapsed_ms()
                     sent_packets += 1
+                    segment.packets += 1
                     if self.last_turn is not None:
                         self.last_turn["audio_packets"] = self.last_turn.get("audio_packets", 0) + 1
                         self.last_turn["audio_bytes"] = self.last_turn.get("audio_bytes", 0) + len(packet)
@@ -549,6 +583,7 @@ class VoiceSession:
                         await asyncio.sleep(self._audio_packet_interval_s)
         if sent_packets == 0:
             raise RuntimeError("TTS produced no audio packets")
+        segment.complete = True
         return started
 
     async def _play_music(self, track: Any, generation: int) -> None:
