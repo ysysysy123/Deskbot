@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Deskbot 服务端语音与对话工作展示：模型评测、系统实现、设备接入和实机联调。">
+  <meta name="theme-color" content="#142a2c"><title>Deskbot · 从声音到交互</title>
+  <link rel="stylesheet" href="styles.css"><script src="app.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#overview">跳转到内容</a>
+<header class="topbar">
+  <a class="brand" href="#overview" aria-label="Deskbot 首页"><span class="brand-icon"><i></i><i></i></span>DESKBOT<span class="brand-label">ENGINEERING JOURNAL</span></a>
+  <nav aria-label="章节导航"><a href="#scope">工作</a><a href="#benchmark">模型实验</a><a href="#architecture">架构</a><a href="#timeline">进展</a><a href="#evidence">验证</a></nav>
+  <button class="present-toggle" id="presentToggle">演讲模式 <span>↗</span></button>
+</header>
+<main>
+<section id="overview" class="hero chapter" data-title="从声音到交互" data-note="我负责服务端语音与对话部分。这次介绍三类交付：模型评测依据、语音系统实现，以及设备联调与验证工具。当前配置为本地 VAD/ASR 加云端模型和语音合成。">
+  <div class="hero-copy"><div class="eyebrow"><span class="status-dot"></span>阶段工作展示 · 2026.08—10</div>
+    <h1>让机器人<br>听懂，<span class="serif">回应，</span><br><span class="accent">并开始行动。</span></h1>
+    <p class="hero-desc">Deskbot 服务端语音与对话<br>从模型评测，到交互链路，再到实机联调。</p>
+    <div class="hero-actions"><a class="primary" href="#benchmark">查看模型实验 <span>↗</span></a><a class="text-link" href="#scope">探索全部工作 ↓</a></div>
+    <div class="hero-meta"><span>ROLE <b>服务端语音 / BE-VOICE</b></span><span>REVIEW <b>2026.10.16</b></span></div>
+  </div>
+  <div class="hero-art" aria-label="Deskbot 语音与工具交互架构示意，非硬件实拍">
+    <div class="art-label">VOICE → CONTEXT → RESPONSE</div>
+    <svg class="robot" viewBox="0 0 560 500" role="img" aria-labelledby="robotTitle">
+      <title id="robotTitle">桌面机器人的服务端交互示意</title>
+      <defs><pattern id="grid" width="28" height="28" patternUnits="userSpaceOnUse"><path d="M28 0H0V28" fill="none" stroke="#d5e5df" stroke-opacity=".09"/></pattern><linearGradient id="body" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#e8eee4"/><stop offset="1" stop-color="#9cbbb1"/></linearGradient><linearGradient id="screen" x2="0" y2="1"><stop stop-color="#12272a"/><stop offset="1" stop-color="#244a48"/></linearGradient></defs>
+      <rect width="560" height="500" fill="url(#grid)"/><ellipse cx="285" cy="420" rx="153" ry="30" fill="#071d20" opacity=".5"/>
+      <g fill="none" stroke="#bddc6c" stroke-width="1" opacity=".55"><path d="M92 165H142V228H174"/><path d="M388 226H446V130H478"/><path d="M370 337H457V372H490"/><circle cx="92" cy="165" r="4"/><circle cx="478" cy="130" r="4"/><circle cx="490" cy="372" r="4"/></g>
+      <g transform="rotate(-6 280 270)"><path d="M213 320L203 390Q281 428 365 392L351 315" fill="url(#body)"/><rect x="155" y="139" width="248" height="206" rx="63" fill="url(#body)"/><rect x="174" y="160" width="210" height="156" rx="44" fill="url(#screen)"/>
+      <rect class="eye" x="217" y="208" width="27" height="54" rx="13" fill="#d4f09a"/><rect class="eye" x="312" y="208" width="27" height="54" rx="13" fill="#d4f09a"/><path d="M266 274Q280 287 294 274" stroke="#d4f09a" stroke-width="4" fill="none" stroke-linecap="round"/>
+      <circle cx="280" cy="151" r="5" fill="#456860"/><path d="M250 369H311" stroke="#52766e" stroke-width="4" stroke-linecap="round"/><path d="M263 380H298" stroke="#52766e" stroke-width="4" stroke-linecap="round"/></g>
+      <g fill="#c9d7cf" font-size="12" font-family="monospace"><text x="45" y="149">ASR / 听懂</text><text x="408" y="109">LLM / 回应</text><text x="424" y="399">MCP / 行动</text></g>
+    </svg>
+    <div class="signal"><span>INPUT SIGNAL</span><div class="wave" aria-hidden="true"></div><span>16 kHz</span></div>
+    <div class="art-foot"><span>DESKBOT / SERVER SIDE</span><span>架构概念示意</span></div>
+  </div>
+</section>
+
+<section id="scope" class="chapter section" data-title="七个工作方向" data-note="从模型选择、服务搭建、连续交互、记忆接口，到工具接入、联调平台和故障修复，形成完整交付。硬件驱动与独立视觉模块按团队分工完成。点击条目可展开具体工作。">
+  <div class="section-head"><div><div class="eyebrow">01 / THE WORK</div><h2>一条完整链路，<br>七个工作方向。</h2></div><p>围绕实时语音交互，<br>把实验、实现和验证连接起来。</p></div>
+  <div class="work-layout"><div class="scope-aside"><span class="large-number">07</span><h3>从选型到交付</h3><p>模型评测提供选择依据；服务与工具接入实现交互；联调和诊断支撑实际运行。</p><span class="tag">个人主责：服务端语音与对话</span></div>
+    <div class="work-list">
+      <details open><summary><span>01</span><h3>模型评测与选型</h3><b>↗</b></summary><p>Linux + Conda 复刻 ASR/TTS 对比实验；固定输入、预热与五次重复测试；记录加载、推理、显存、首音频和 RTF，形成统计与试听产物。</p></details>
+      <details><summary><span>02</span><h3>语音服务基础链路</h3><b>↗</b></summary><p>实现 Python 语音服务，兼容小智 WebSocket v1；接入 Silero VAD、SenseVoice、OpenAI 兼容 LLM、EdgeTTS、FFmpeg 和 Opus 编解码。</p></details>
+      <details><summary><span>03</span><h3>连续对话与播放体验</h3><b>↗</b></summary><p>自动分轮、回复后恢复监听、分句合成、音频按 60 ms 帧节奏下发；浏览器持续对话支持说话打断并取消旧轮。</p></details>
+      <details><summary><span>04</span><h3>设备记忆与扩展接口</h3><b>↗</b></summary><p>SQLite 保存历史与摘要，按设备隔离，提供简单相关检索及管理 API；通过 Provider 与 DialogueBackend 解耦语音链路和模型。</p></details>
+      <details><summary><span>05</span><h3>工具调用与视觉联动</h3><b>↗</b></summary><p>MCP 初始化、工具发现、会话绑定与调用返回；接入拍照、姿态、运动工具，将视觉分析结果接回语音输出。承担语音侧集成与跨模块联调。</p></details>
+      <details><summary><span>06</span><h3>测试界面与运行工具</h3><b>↗</b></summary><p>文字、录音及 WAV 测试入口；在线设备、历史、耗时、日志和模型测速；桌面启动与停止入口，支持 ninfer、Ollama、智谱配置选择。</p></details>
+      <details><summary><span>07</span><h3>稳定性与故障修复</h3><b>↗</b></summary><p>就绪检查、旧会话替换、超时与取消、空回复修复、本地命令 TTS 接口；定位并修复 EdgeTTS 403，协同定位实机摄像头工具缺失。</p></details>
+    </div></div>
+</section>
+
+<section id="benchmark" class="chapter section benchmark" data-title="模型评测与选型" data-note="正式批次采用五次重复，预热不计入统计。本地模型用 CUDA，EdgeTTS 为云端。ASR 覆盖五种语言；TTS 覆盖五类文本。数字为历史实验输出。Qwen3-TTS 本次是整段接口，不能将接口差异当作模型能力排名。">
+  <div class="section-head"><div><div class="eyebrow">02 / MODEL BENCHMARK</div><h2>让选型有据可依。</h2></div><p>固定样本 · 预热后重复 5 次<br>比较响应速度与运行成本</p></div>
+  <div class="benchmark-top"><div class="segmented" role="group" aria-label="模型测试类别"><button class="selected" data-bench="asr" aria-pressed="true">ASR 语音识别</button><button data-bench="tts" aria-pressed="false">TTS 语音合成</button></div><span class="small-label">历史正式批次 / 本地 CUDA + 云端 EdgeTTS</span></div>
+  <div class="experiment-grid"><div class="chart-panel"><div class="chart-toolbar"><h3 id="chartTitle">各语言识别耗时</h3><label>比较指标<select id="metric" aria-label="比较指标"></select></label></div><p id="chartSubtitle" class="muted"></p><div class="legend" id="legend"></div><div id="chart" class="bar-chart" role="img"></div><div class="axis-note" id="axisNote"></div></div>
+  <aside class="experiment-summary"><span class="eyebrow">OBSERVATION</span><h3 id="benchConclusion"></h3><p id="benchBody"></p><div class="metric-highlight"><span id="highlightValue"></span><small id="highlightLabel"></small></div><p class="method-note" id="methodNote"></p></aside></div>
+  <details class="data-details"><summary>查看逐项数据与指标口径 <span>＋</span></summary><div class="table-wrap" id="dataTable"></div></details>
+  <div class="source-line"><span>来源：历史聊天《复刻 ASR 和 TTS 模型对比测试》的结果读取输出。原始 JSON/CSV 本次未找回；非本次复测。</span><button class="text-link" data-open-sources>查看依据 ↗</button></div>
+</section>
+
+<section id="architecture" class="chapter section architecture" data-title="从一句话到一次回应" data-note="点击阶段说明每一部分职责。示意不连接真实服务。用户说完后才进行 ASR；文本按句进入 TTS，并将音频按帧节奏发给设备。模型与对话业务通过独立接口接入。">
+  <div class="section-head"><div><div class="eyebrow">03 / SYSTEM DESIGN</div><h2>从一句话，<br>到一次回应。</h2></div><p>语音传输、对话决策与设备能力<br>通过清晰的接口协作。</p></div>
+  <div class="architecture-tools"><span class="tag">交互链路示意 · 不连接设备</span><button id="playFlow" class="outline">逐步播放链路 ▷</button></div>
+  <div class="flow-path" id="flowPath" role="group" aria-label="语音链路阶段"></div>
+  <div class="flow-bottom"><div class="flow-detail" aria-live="polite"><span id="flowIndex" class="eyebrow"></span><h3 id="flowTitle"></h3><p id="flowText"></p><div id="flowTags" class="tags"></div></div><div class="tool-branch"><div class="branch-line"></div><span class="eyebrow">TOOL BRANCH / 工具分支</span><h3>需要观察或执行时</h3><p>对话后端 → MCP → 当前设备工具</p><div class="tags"><span>拍照</span><span>姿态读取</span><span>运动指令</span></div><p class="muted">照片进入视觉分析；明确观察请求可直接播报描述，其他结果回到对话后端。</p></div></div>
+  <div class="architecture-footer"><span><b>16 kHz</b> 输入</span><span><b>24 kHz</b> 输出</span><span><b>60 ms</b> Opus 帧</span><span><b>WebSocket v1</b> 设备协议</span></div>
+</section>
+
+<section id="interaction" class="chapter section" data-title="对话如何连续起来" data-note="除了模型调用，还实现了上下文、音频队列和取消控制。SQLite 按设备保存历史，不识别同设备前的不同用户。浏览器已支持说话打断，原生 ESP32 的回复期间 VAD 打断仍待完成。">
+  <div class="section-head"><div><div class="eyebrow">04 / INTERACTION ENGINEERING</div><h2>把单次回答，<br>连接成连续对话。</h2></div><p>上下文、播放与取消控制<br>决定交互能否顺畅继续。</p></div>
+  <div class="interaction-grid"><article class="memory-panel"><span class="eyebrow">CONTEXT / 上下文组织</span><h3>每一次回答，带着前文。</h3><div class="context-stack"><span>系统角色与回复风格</span><span>设备历史摘要</span><span>近期消息与简单相关历史</span><span class="context-current">本轮用户输入 → 对话后端</span></div><div class="mini-facts"><span>SQLite 持久化</span><span>Device-Id 隔离</span><span>历史管理 API</span></div><p class="muted">设备身份不等于说话人身份；当前没有声纹识别。</p></article>
+  <article class="playback-panel"><span class="eyebrow">AUDIO / 输出与中断</span><h3>边生成，边衔接播放。</h3><ol class="playback-steps"><li><b>01</b><div><h4>文字按句入队</h4><p>后续文本接收与语音合成并行。</p></div></li><li><b>02</b><div><h4>音频流式转码</h4><p>Edge 音频到达后转 PCM，再编码 Opus。</p></div></li><li><b>03</b><div><h4>按帧节奏下发</h4><p>避免长回复集中涌入设备播放队列。</p></div></li><li><b>04</b><div><h4>中断旧轮，接收新句</h4><p>取消生成和旧播放，回收转码资源。</p></div></li></ol><div class="boundary"><b>能力范围</b> 浏览器支持回复期间 VAD 自动打断；原生 ESP32 支持协议取消，尚未增加同样的自动打断。</div></article></div>
+</section>
+
+<section id="timeline" class="chapter section timeline-section" data-title="阶段进展" data-note="8 月搭建语音服务初版，9 月完成模型实验与真实语音联调，10 月接入设备工具、完善联调平台并修复稳定性问题。点击时间点查看具体交付。">
+  <div class="section-head"><div><div class="eyebrow">05 / PROGRESS</div><h2>从链路初版，<br>走到实机交互。</h2></div><p>2026 年 8 月 — 10 月<br>六个关键节点</p></div>
+  <div class="timeline-tabs" id="timelineTabs" role="group" aria-label="阶段进展"></div>
+  <div class="milestone" aria-live="polite"><div><span id="milestoneDate" class="milestone-date"></span><h3 id="milestoneTitle"></h3><p id="milestoneText"></p></div><div><span class="eyebrow">DELIVERABLES / 阶段交付</span><ul id="milestoneList"></ul><div id="milestoneSource" class="source-tag"></div></div></div>
+  <div class="fix-strip"><span>RECENT FIX</span><p>“没有声音” → 分阶段定位 → TTS 握手 403 → 更新端点 → 在线语音恢复</p><b>10.13</b></div>
+</section>
+
+<section id="evidence" class="chapter section evidence" data-title="成果与验证依据" data-note="测试数字是 10 月 11 日已有记录，不是今天新跑的。真实语音和实机视觉另有联调记录。实机视觉那一轮识别和声音得到确认，但最终状态是 cancelled，所以不说整轮无异常完成。">
+  <div class="section-head"><div><div class="eyebrow">06 / VALIDATION</div><h2>完成了什么，<br>由证据来说明。</h2></div><p>区分自动化回归、真实模型验证<br>与实机现场确认。</p></div>
+  <div class="test-stats"><div><b>342</b><span>Python 测试</span></div><div><b>16</b><span>浏览器逻辑测试</span></div><div><b>7</b><span>启动器测试</span></div><p>2026.10.11 回归记录<br>覆盖协议、会话、记忆与工具逻辑<br><small>自动测试使用模拟模型，不能替代硬件验收。</small></p></div>
+  <div class="evidence-rows"><article><span class="evidence-type">真实模型</span><div><h3>连续语音链路</h3><p>连续两轮 ASR → GLM → EdgeTTS；浏览器麦克风持续运行超过 100 秒，多轮回复后恢复监听。</p></div><time>09.23</time></article><article><span class="evidence-type">输入验收</span><div><h3>浏览器语音打断</h3><p>录音实时输入测试中，第二段话音开始约 362 ms 后打断旧轮；随后识别与回复正常。单次观测，非回声效果结论。</p></div><time>09.24</time></article><article><span class="evidence-type">现场确认</span><div><h3>实机拍照与语音回答</h3><p>设备上报 10 个工具并包含拍照；拍照约 1.18 秒，首段音频约 7.61 秒。用户确认识别并回答，该轮最终状态为 cancelled。</p></div><time>10.13</time></article></div>
+  <div class="evidence-foot">仍待完善：系统性识别准确率评估 · 原生设备自动打断 · 长时间稳定性与并发容量测试</div>
+</section>
+
+<section id="demo" class="chapter section demo" data-title="现场展示与下一步" data-note="现场依次展示：设备在线、普通语音问答、上下文追问、拍照回答、阶段耗时。右侧显示的是建议演示脚本，不会发送真实指令。下一步关注准确率、首音频延迟、设备自动打断和稳定性。">
+  <div class="section-head"><div><div class="eyebrow">07 / SHOW & TELL</div><h2>让成果，<br>在交互中被看见。</h2></div><p>一个连续场景<br>串起服务端的全部工作。</p></div>
+  <div class="demo-grid"><div><span class="tag">演示提词 · 不发送设备指令</span><div class="demo-steps" id="demoSteps"></div></div><div class="demo-card" aria-live="polite"><span id="demoCount" class="eyebrow"></span><blockquote id="demoQuote"></blockquote><div class="demo-observe"><span>展示重点</span><p id="demoObserve"></p></div><div class="demo-controls"><button id="demoPrev" class="outline" aria-label="上一步演示">←</button><button id="demoNext" class="primary">下一步 →</button></div></div></div>
+  <div class="next-work"><h3>下一步，继续把交互做好。</h3><div><span>01</span><p>扩大识别样本<br><b>准确率与噪声条件评估</b></p></div><div><span>02</span><p>减少回复等待<br><b>首音频与本地 TTS 优化</b></p></div><div><span>03</span><p>完善设备体验<br><b>自动打断与持续运行验证</b></p></div></div>
+  <footer><a class="brand" href="#overview">DESKBOT<span class="brand-label">从声音到交互</span></a><button class="text-link" data-open-sources>数据与工作依据 ↗</button><a class="text-link" href="../server-voice-work-summary-2026-10-16.md" download>下载完整讲稿 ↓</a><span>2026.10 / BE-VOICE</span></footer>
+</section>
+</main>
+<div class="presentation-controls" id="presentationControls" hidden><button id="slidePrev" aria-label="上一页">←</button><span id="slideCounter"></span><span id="slideTitle"></span><button id="notesToggle" aria-pressed="false">讲稿</button><button id="fullscreenToggle">全屏</button><button id="slideNext" aria-label="下一页">→</button></div>
+<aside class="speaker-notes" id="speakerNotes" hidden><span>演讲提示</span><p id="noteText"></p></aside>
+<dialog id="sourcesDialog"><div class="dialog-head"><div><span class="eyebrow">SOURCES & SCOPE</span><h2>数据与工作依据</h2></div><button id="closeSources" aria-label="关闭来源说明">×</button></div><div class="source-content"><h3>模型实验</h3><p>历史聊天《复刻 ASR 和 TTS 模型对比测试》保存的正式实验读取输出及交接记录。每项重复 5 次，预热不计统计。本地模型使用 CUDA，EdgeTTS 为云端请求。</p><p>ASR 图显示各语言样本的推理中位数；TTS 图显示各类文本的首音频或总耗时中位数。这里没有准确率、自然度评分或置信区间。Qwen3-TTS 的本次适配器为整段生成，首音频等于总生成时间。</p><p>原始 JSON/CSV 本次未在当前目录找到；所展示数字依据历史保存输出，不是新一轮测量。</p><h3>系统实现与验证</h3><ul><li>Deskbot 当前 server/voice 实现与提交记录。</li><li>server/voice/docs/server-work-log.md：阶段工作、回归与实机记录。</li><li>server/voice/docs/local-testing.md：真实模型与浏览器验收。</li><li>docs/team-workflow.md：BE-VOICE 与其他模块职责。</li></ul><h3>归属与能力范围</h3><p>个人工作按服务端语音、模型实验、设备工具接入和联调归纳。硬件驱动及独立视觉模块属于团队协作；采用现有模型，没有声称自研模型训练。</p><p>当前配置依赖云端 LLM、视觉与 EdgeTTS。浏览器自动打断不代表原生 ESP32 已具备同样能力；多连接支持不代表已完成容量压测。</p><a class="primary" href="../server-voice-work-summary-2026-10-16.md" download>下载完整工作总结 ↓</a></div></dialog>
+<div id="toast" class="toast" role="status" hidden></div>
+</body></html>
