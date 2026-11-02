@@ -1,0 +1,30 @@
+{
+  "ok": true,
+  "model": "glm-4-flash",
+  "temporary_database": true,
+  "input_audio_seconds": 2.064,
+  "asr_provider_load_ms": 4459.8,
+  "paced_output": true,
+  "first_clause_chars": 18,
+  "metrics": {
+    "status": "success",
+    "asr_ms": 142.7,
+    "memory_ms": 1.7,
+    "first_text_ms": 846.7,
+    "first_sentence_ms": 928.0,
+    "first_tts_request_ms": 928.4,
+    "tts_requests": 2,
+    "first_pcm_ms": 3274.7,
+    "pcm_bytes": 213120,
+    "first_audio_ms": 3275.6,
+    "audio_packets": 75,
+    "audio_bytes": 10246,
+    "output_audio_ms": 4500,
+    "tts_ms": 7898.2,
+    "total_ms": 8829.0
+  },
+  "notes": [
+    "单次真实 Provider 检查，不代表 P50/P95。",
+    "未经过实际 WebSocket、VAD、网络设备或扬声器；first_audio_ms 是本进程音频包交给 Transport 的时间。"
+  ]
+}

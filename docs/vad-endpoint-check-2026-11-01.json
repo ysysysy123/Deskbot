@@ -1,0 +1,148 @@
+{
+  "source_audio": "check-tts-conda.wav",
+  "vad": "configured Silero ONNX",
+  "results": [
+    {
+      "sample": "normal",
+      "audio_seconds": 2.064,
+      "inserted_pause_ms": 0,
+      "450_ms": [
+        {
+          "onset_ms": 240,
+          "submitted_ms": 2040,
+          "silence_after_last_vad_speech_ms": 480
+        }
+      ],
+      "600_ms": [
+        {
+          "onset_ms": 240,
+          "submitted_ms": 2160,
+          "silence_after_last_vad_speech_ms": 600
+        }
+      ]
+    },
+    {
+      "sample": "slow_0.7x",
+      "audio_seconds": 2.896,
+      "inserted_pause_ms": 0,
+      "450_ms": [
+        {
+          "onset_ms": 300,
+          "submitted_ms": 2640,
+          "silence_after_last_vad_speech_ms": 480
+        }
+      ],
+      "600_ms": [
+        {
+          "onset_ms": 300,
+          "submitted_ms": 2760,
+          "silence_after_last_vad_speech_ms": 600
+        }
+      ]
+    },
+    {
+      "sample": "normal_pause_300ms",
+      "audio_seconds": 2.364,
+      "inserted_pause_ms": 300,
+      "450_ms": [
+        {
+          "onset_ms": 240,
+          "submitted_ms": 2340,
+          "silence_after_last_vad_speech_ms": 480
+        }
+      ],
+      "600_ms": [
+        {
+          "onset_ms": 240,
+          "submitted_ms": 2460,
+          "silence_after_last_vad_speech_ms": 600
+        }
+      ]
+    },
+    {
+      "sample": "normal_pause_450ms",
+      "audio_seconds": 2.514,
+      "inserted_pause_ms": 450,
+      "450_ms": [
+        {
+          "onset_ms": 240,
+          "submitted_ms": 2460,
+          "silence_after_last_vad_speech_ms": 480
+        }
+      ],
+      "600_ms": [
+        {
+          "onset_ms": 240,
+          "submitted_ms": 2580,
+          "silence_after_last_vad_speech_ms": 600
+        }
+      ]
+    },
+    {
+      "sample": "normal_pause_540ms",
+      "audio_seconds": 2.604,
+      "inserted_pause_ms": 540,
+      "450_ms": [
+        {
+          "onset_ms": 240,
+          "submitted_ms": 1560,
+          "silence_after_last_vad_speech_ms": 480
+        },
+        {
+          "onset_ms": 1560,
+          "submitted_ms": 2580,
+          "silence_after_last_vad_speech_ms": 480
+        }
+      ],
+      "600_ms": [
+        {
+          "onset_ms": 240,
+          "submitted_ms": 2700,
+          "silence_after_last_vad_speech_ms": 600
+        }
+      ]
+    },
+    {
+      "sample": "normal_pause_900ms",
+      "audio_seconds": 2.964,
+      "inserted_pause_ms": 900,
+      "450_ms": [
+        {
+          "onset_ms": 240,
+          "submitted_ms": 1560,
+          "silence_after_last_vad_speech_ms": 480
+        },
+        {
+          "onset_ms": 1980,
+          "submitted_ms": 2940,
+          "silence_after_last_vad_speech_ms": 480
+        }
+      ],
+      "600_ms": [
+        {
+          "onset_ms": 240,
+          "submitted_ms": 1680,
+          "silence_after_last_vad_speech_ms": 600
+        },
+        {
+          "onset_ms": 1980,
+          "submitted_ms": 3060,
+          "silence_after_last_vad_speech_ms": 600
+        }
+      ]
+    },
+    {
+      "sample": "silence_only",
+      "audio_seconds": 2.0,
+      "inserted_pause_ms": 0,
+      "450_ms": [],
+      "600_ms": []
+    }
+  ],
+  "notes": [
+    "Source is a fixed synthetic utterance; slow speech is locally slowed to 0.7x; pauses are inserted at its midpoint.",
+    "The same Silero decisions feed both endpoint thresholds; 60 ms frame grid gives 480 ms for a 450 ms threshold.",
+    "This tests VAD and endpoint behavior on synthetic speech, not real microphone/acoustic echo or human pause distribution.",
+    "Inserted pause length is not identical to VAD-classified silence length."
+  ]
+}

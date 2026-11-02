@@ -1,0 +1,951 @@
+{
+  "repeat": 30,
+  "scenario": "serial local remember + recall_for_turn on synthetic SQLite history",
+  "notes": [
+    "Temporary databases only; no production history, cloud models, WebSocket or speech pipeline.",
+    "Three recall warmups per size; each measured turn inserts one user question then retrieves context.",
+    "Default 5000-message retention and 8000/900-character context/fact budgets; setup excluded.",
+    "Nonempty scenarios start with 20 facts and a summary checkpoint 10 messages behind; text is synthetic."
+  ],
+  "scenarios": [
+    {
+      "initial_messages": 0,
+      "initial_facts": 0,
+      "summary": {
+        "write_ms": {
+          "n": 30,
+          "p50": 0.2,
+          "p95": 0.3
+        },
+        "recall_ms": {
+          "n": 30,
+          "p50": 0.4,
+          "p95": 0.5
+        },
+        "combined_ms": {
+          "n": 30,
+          "p50": 0.6,
+          "p95": 0.8
+        },
+        "context_chars": {
+          "n": 30,
+          "p50": 155.0,
+          "p95": 285.5
+        },
+        "facts": {
+          "n": 30,
+          "p50": 0.0,
+          "p95": 0.0
+        },
+        "recent": {
+          "n": 30,
+          "p50": 15.5,
+          "p95": 28.5
+        },
+        "relevant": {
+          "n": 30,
+          "p50": 0.0,
+          "p95": 0.0
+        }
+      },
+      "runs": [
+        {
+          "write_ms": 0.5206209971220233,
+          "recall_ms": 0.39473100332543254,
+          "combined_ms": 0.9153520004474558,
+          "context_chars": 10,
+          "facts": 0,
+          "recent": 1,
+          "relevant": 0
+        },
+        {
+          "write_ms": 0.3284410013293382,
+          "recall_ms": 0.47316299969679676,
+          "combined_ms": 0.8016040010261349,
+          "context_chars": 20,
+          "facts": 0,
+          "recent": 2,
+          "relevant": 0
+        },
+        {
+          "write_ms": 0.2736290007305797,
+          "recall_ms": 0.522455000464106,
+          "combined_ms": 0.7960840011946857,
+          "context_chars": 30,
+          "facts": 0,
+          "recent": 3,
+          "relevant": 0
+        },
+        {
+          "write_ms": 0.26243699903716333,
+          "recall_ms": 0.42941900028381497,
+          "combined_ms": 0.6918559993209783,
+          "context_chars": 40,
+          "facts": 0,
+          "recent": 4,
+          "relevant": 0
+        },
+        {
+          "write_ms": 0.2689200009626802,
+          "recall_ms": 0.3591659988160245,
+          "combined_ms": 0.6280859997787047,
+          "context_chars": 50,
+          "facts": 0,
+          "recent": 5,
+          "relevant": 0
+        },
+        {
+          "write_ms": 0.24585099890828133,
+          "recall_ms": 0.3188740010955371,
+          "combined_ms": 0.5647250000038184,
+          "context_chars": 60,
+          "facts": 0,
+          "recent": 6,
+          "relevant": 0
+        },
+        {
+          "write_ms": 0.23798199981683865,
+          "recall_ms": 0.36642800114350393,
+          "combined_ms": 0.6044100009603426,
+          "context_chars": 70,
+          "facts": 0,
+          "recent": 7,
+          "relevant": 0
+        },
+        {
+          "write_ms": 0.23982700076885521,
+          "recall_ms": 0.3248780012654606,
+          "combined_ms": 0.5647050020343158,
+          "context_chars": 80,
+          "facts": 0,
+          "recent": 8,
+          "relevant": 0
+        },
+        {
+          "write_ms": 0.2711489978537429,
+          "recall_ms": 0.4195830006210599,
+          "combined_ms": 0.6907319984748028,
+          "context_chars": 90,
+          "facts": 0,
+          "recent": 9,
+          "relevant": 0
+        },
+        {
+          "write_ms": 0.2767890000541229,
+          "recall_ms": 0.37958000029902905,
+          "combined_ms": 0.6563690003531519,
+          "context_chars": 100,
+          "facts": 0,
+          "recent": 10,
+          "relevant": 0
+        },
+        {
+          "write_ms": 0.23457800125470385,
+          "recall_ms": 0.38261100053205155,
+          "combined_ms": 0.6171890017867554,
+          "context_chars": 110,
+          "facts": 0,
+          "recent": 11,
+          "relevant": 0
+        },
+        {
+          "write_ms": 0.24291199952131137,
+          "recall_ms": 0.3337380003358703,
+          "combined_ms": 0.5766499998571817,
+          "context_chars": 120,
+          "facts": 0,
+          "recent": 12,
+          "relevant": 0
+        },
+        {
+          "write_ms": 0.22419399829232134,
+          "recall_ms": 0.3940520000469405,
+          "combined_ms": 0.6182459983392619,
+          "context_chars": 130,
+          "facts": 0,
+          "recent": 13,
+          "relevant": 0
+        },
+        {
+          "write_ms": 0.22870599786983803,
+          "recall_ms": 0.37372600127127953,
+          "combined_ms": 0.6024319991411176,
+          "context_chars": 140,
+          "facts": 0,
+          "recent": 14,
+          "relevant": 0
+        },
+        {
+          "write_ms": 0.21722900055465288,
+          "recall_ms": 0.3959519999625627,
+          "combined_ms": 0.6131810005172156,
+          "context_chars": 150,
+          "facts": 0,
+          "recent": 15,
+          "relevant": 0
+        },
+        {
+          "write_ms": 0.2278969986946322,
+          "recall_ms": 0.3362660027050879,
+          "combined_ms": 0.5641630013997201,
+          "context_chars": 160,
+          "facts": 0,
+          "recent": 16,
+          "relevant": 0
+        },
+        {
+          "write_ms": 0.23216100089484826,
+          "recall_ms": 0.35169600232620724,
+          "combined_ms": 0.5838570032210555,
+          "context_chars": 170,
+          "facts": 0,
+          "recent": 17,
+          "relevant": 0
+        },
+        {
+          "write_ms": 0.22089900085120462,
+          "recall_ms": 0.33808499938459136,
+          "combined_ms": 0.558984000235796,
+          "context_chars": 180,
+          "facts": 0,
+          "recent": 18,
+          "relevant": 0
+        },
+        {
+          "write_ms": 0.23902699831523933,
+          "recall_ms": 0.35405300150159746,
+          "combined_ms": 0.5930799998168368,
+          "context_chars": 190,
+          "facts": 0,
+          "recent": 19,
+          "relevant": 0
+        },
+        {
+          "write_ms": 0.24921300064306706,
+          "recall_ms": 0.4010439988633152,
+          "combined_ms": 0.6502569995063823,
+          "context_chars": 200,
+          "facts": 0,
+          "recent": 20,
+          "relevant": 0
+        },
+        {
+          "write_ms": 0.23570700068376027,
+          "recall_ms": 0.39157699939096346,
+          "combined_ms": 0.6272840000747237,
+          "context_chars": 210,
+          "facts": 0,
+          "recent": 21,
+          "relevant": 0
+        },
+        {
+          "write_ms": 0.23879299988038838,
+          "recall_ms": 0.36118299976806156,
+          "combined_ms": 0.5999759996484499,
+          "context_chars": 220,
+          "facts": 0,
+          "recent": 22,
+          "relevant": 0
+        },
+        {
+          "write_ms": 0.23604699890711345,
+          "recall_ms": 0.36601900137611665,
+          "combined_ms": 0.6020660002832301,
+          "context_chars": 230,
+          "facts": 0,
+          "recent": 23,
+          "relevant": 0
+        },
+        {
+          "write_ms": 0.2484800024831202,
+          "recall_ms": 0.38263399983407,
+          "combined_ms": 0.6311140023171902,
+          "context_chars": 240,
+          "facts": 0,
+          "recent": 24,
+          "relevant": 0
+        },
+        {
+          "write_ms": 0.22165600239532068,
+          "recall_ms": 0.4197870002826676,
+          "combined_ms": 0.6414430026779883,
+          "context_chars": 250,
+          "facts": 0,
+          "recent": 25,
+          "relevant": 0
+        },
+        {
+          "write_ms": 0.230567002290627,
+          "recall_ms": 0.34978399708052166,
+          "combined_ms": 0.5803509993711486,
+          "context_chars": 260,
+          "facts": 0,
+          "recent": 26,
+          "relevant": 0
+        },
+        {
+          "write_ms": 0.22783899839851074,
+          "recall_ms": 0.38103499900898896,
+          "combined_ms": 0.6088739974074997,
+          "context_chars": 270,
+          "facts": 0,
+          "recent": 27,
+          "relevant": 0
+        },
+        {
+          "write_ms": 0.22889200045028701,
+          "recall_ms": 0.3920739982277155,
+          "combined_ms": 0.6209659986780025,
+          "context_chars": 280,
+          "facts": 0,
+          "recent": 28,
+          "relevant": 0
+        },
+        {
+          "write_ms": 0.24250000205938704,
+          "recall_ms": 0.40727499799686484,
+          "combined_ms": 0.6497750000562519,
+          "context_chars": 290,
+          "facts": 0,
+          "recent": 29,
+          "relevant": 0
+        },
+        {
+          "write_ms": 0.2225279968115501,
+          "recall_ms": 0.41522399988025427,
+          "combined_ms": 0.6377519966918044,
+          "context_chars": 300,
+          "facts": 0,
+          "recent": 30,
+          "relevant": 0
+        }
+      ]
+    },
+    {
+      "initial_messages": 500,
+      "initial_facts": 20,
+      "summary": {
+        "write_ms": {
+          "n": 30,
+          "p50": 0.4,
+          "p95": 0.5
+        },
+        "recall_ms": {
+          "n": 30,
+          "p50": 2.0,
+          "p95": 2.2
+        },
+        "combined_ms": {
+          "n": 30,
+          "p50": 2.4,
+          "p95": 2.7
+        },
+        "context_chars": {
+          "n": 30,
+          "p50": 965.0,
+          "p95": 1095.5
+        },
+        "facts": {
+          "n": 30,
+          "p50": 20.0,
+          "p95": 20.0
+        },
+        "recent": {
+          "n": 30,
+          "p50": 25.5,
+          "p95": 38.5
+        },
+        "relevant": {
+          "n": 30,
+          "p50": 5.0,
+          "p95": 5.0
+        }
+      },
+      "runs": [
+        {
+          "write_ms": 0.4617180020431988,
+          "recall_ms": 1.997968000068795,
+          "combined_ms": 2.4596860021119937,
+          "context_chars": 820,
+          "facts": 20,
+          "recent": 11,
+          "relevant": 5
+        },
+        {
+          "write_ms": 0.29082699984428473,
+          "recall_ms": 1.979556996957399,
+          "combined_ms": 2.2703839968016837,
+          "context_chars": 830,
+          "facts": 20,
+          "recent": 12,
+          "relevant": 5
+        },
+        {
+          "write_ms": 0.4308660027163569,
+          "recall_ms": 2.0268209991627373,
+          "combined_ms": 2.457687001879094,
+          "context_chars": 840,
+          "facts": 20,
+          "recent": 13,
+          "relevant": 5
+        },
+        {
+          "write_ms": 0.29419099882943556,
+          "recall_ms": 1.9670319998112973,
+          "combined_ms": 2.261222998640733,
+          "context_chars": 850,
+          "facts": 20,
+          "recent": 14,
+          "relevant": 5
+        },
+        {
+          "write_ms": 0.3584279984352179,
+          "recall_ms": 1.9670879992190748,
+          "combined_ms": 2.3255159976542927,
+          "context_chars": 860,
+          "facts": 20,
+          "recent": 15,
+          "relevant": 5
+        },
+        {
+          "write_ms": 0.37821799924131483,
+          "recall_ms": 1.899398001114605,
+          "combined_ms": 2.27761600035592,
+          "context_chars": 870,
+          "facts": 20,
+          "recent": 16,
+          "relevant": 5
+        },
+        {
+          "write_ms": 0.2868330011551734,
+          "recall_ms": 1.8796779986587353,
+          "combined_ms": 2.1665109998139087,
+          "context_chars": 880,
+          "facts": 20,
+          "recent": 17,
+          "relevant": 5
+        },
+        {
+          "write_ms": 0.4377449986350257,
+          "recall_ms": 1.9987029991170857,
+          "combined_ms": 2.4364479977521114,
+          "context_chars": 890,
+          "facts": 20,
+          "recent": 18,
+          "relevant": 5
+        },
+        {
+          "write_ms": 0.3647310004453175,
+          "recall_ms": 2.0488400004978757,
+          "combined_ms": 2.413571000943193,
+          "context_chars": 900,
+          "facts": 20,
+          "recent": 19,
+          "relevant": 5
+        },
+        {
+          "write_ms": 0.3835909992631059,
+          "recall_ms": 2.0241429992893245,
+          "combined_ms": 2.4077339985524304,
+          "context_chars": 910,
+          "facts": 20,
+          "recent": 20,
+          "relevant": 5
+        },
+        {
+          "write_ms": 0.30857599995215423,
+          "recall_ms": 1.9808159995591268,
+          "combined_ms": 2.289391999511281,
+          "context_chars": 920,
+          "facts": 20,
+          "recent": 21,
+          "relevant": 5
+        },
+        {
+          "write_ms": 0.3491319985187147,
+          "recall_ms": 1.9596640013332944,
+          "combined_ms": 2.308795999852009,
+          "context_chars": 930,
+          "facts": 20,
+          "recent": 22,
+          "relevant": 5
+        },
+        {
+          "write_ms": 0.3903860015270766,
+          "recall_ms": 1.999410000280477,
+          "combined_ms": 2.3897960018075537,
+          "context_chars": 940,
+          "facts": 20,
+          "recent": 23,
+          "relevant": 5
+        },
+        {
+          "write_ms": 0.5069450016890187,
+          "recall_ms": 2.1514539985219017,
+          "combined_ms": 2.6583990002109203,
+          "context_chars": 950,
+          "facts": 20,
+          "recent": 24,
+          "relevant": 5
+        },
+        {
+          "write_ms": 0.5123330010974314,
+          "recall_ms": 2.048718997684773,
+          "combined_ms": 2.5610519987822045,
+          "context_chars": 960,
+          "facts": 20,
+          "recent": 25,
+          "relevant": 5
+        },
+        {
+          "write_ms": 0.38325300192809664,
+          "recall_ms": 2.1490159997483715,
+          "combined_ms": 2.532269001676468,
+          "context_chars": 970,
+          "facts": 20,
+          "recent": 26,
+          "relevant": 5
+        },
+        {
+          "write_ms": 0.5379100002755877,
+          "recall_ms": 2.183235999837052,
+          "combined_ms": 2.7211460001126397,
+          "context_chars": 980,
+          "facts": 20,
+          "recent": 27,
+          "relevant": 5
+        },
+        {
+          "write_ms": 0.5272839989629574,
+          "recall_ms": 2.0981560010113753,
+          "combined_ms": 2.6254399999743327,
+          "context_chars": 990,
+          "facts": 20,
+          "recent": 28,
+          "relevant": 5
+        },
+        {
+          "write_ms": 0.43024900151067413,
+          "recall_ms": 2.5360260005982127,
+          "combined_ms": 2.966275002108887,
+          "context_chars": 1045,
+          "facts": 20,
+          "recent": 29,
+          "relevant": 5
+        },
+        {
+          "write_ms": 0.4462689976207912,
+          "recall_ms": 1.985490001970902,
+          "combined_ms": 2.4317589995916933,
+          "context_chars": 1010,
+          "facts": 20,
+          "recent": 30,
+          "relevant": 5
+        },
+        {
+          "write_ms": 0.5354770000849385,
+          "recall_ms": 2.061921997665195,
+          "combined_ms": 2.5973989977501333,
+          "context_chars": 1020,
+          "facts": 20,
+          "recent": 31,
+          "relevant": 5
+        },
+        {
+          "write_ms": 0.3917399990314152,
+          "recall_ms": 2.0424079993972555,
+          "combined_ms": 2.4341479984286707,
+          "context_chars": 1030,
+          "facts": 20,
+          "recent": 32,
+          "relevant": 5
+        },
+        {
+          "write_ms": 0.38740499803679995,
+          "recall_ms": 2.019998999458039,
+          "combined_ms": 2.407403997494839,
+          "context_chars": 1040,
+          "facts": 20,
+          "recent": 33,
+          "relevant": 5
+        },
+        {
+          "write_ms": 0.4157449984631967,
+          "recall_ms": 2.1130329987499863,
+          "combined_ms": 2.528777997213183,
+          "context_chars": 1050,
+          "facts": 20,
+          "recent": 34,
+          "relevant": 5
+        },
+        {
+          "write_ms": 0.38824600051157176,
+          "recall_ms": 2.0588909974321723,
+          "combined_ms": 2.447136997943744,
+          "context_chars": 1060,
+          "facts": 20,
+          "recent": 35,
+          "relevant": 5
+        },
+        {
+          "write_ms": 0.3126010014966596,
+          "recall_ms": 2.0280669996282086,
+          "combined_ms": 2.340668001124868,
+          "context_chars": 1070,
+          "facts": 20,
+          "recent": 36,
+          "relevant": 5
+        },
+        {
+          "write_ms": 0.38998700256343,
+          "recall_ms": 2.0527889973891433,
+          "combined_ms": 2.4427759999525733,
+          "context_chars": 1080,
+          "facts": 20,
+          "recent": 37,
+          "relevant": 5
+        },
+        {
+          "write_ms": 0.3942420007660985,
+          "recall_ms": 2.073504998406861,
+          "combined_ms": 2.4677469991729595,
+          "context_chars": 1090,
+          "facts": 20,
+          "recent": 38,
+          "relevant": 5
+        },
+        {
+          "write_ms": 0.36930100031895563,
+          "recall_ms": 2.0792759969481267,
+          "combined_ms": 2.4485769972670823,
+          "context_chars": 1100,
+          "facts": 20,
+          "recent": 39,
+          "relevant": 5
+        },
+        {
+          "write_ms": 0.36273899968364276,
+          "recall_ms": 2.0485400018515065,
+          "combined_ms": 2.4112790015351493,
+          "context_chars": 1110,
+          "facts": 20,
+          "recent": 40,
+          "relevant": 5
+        }
+      ]
+    },
+    {
+      "initial_messages": 5000,
+      "initial_facts": 20,
+      "summary": {
+        "write_ms": {
+          "n": 30,
+          "p50": 1.8,
+          "p95": 1.9
+        },
+        "recall_ms": {
+          "n": 30,
+          "p50": 16.2,
+          "p95": 16.5
+        },
+        "combined_ms": {
+          "n": 30,
+          "p50": 18.0,
+          "p95": 18.4
+        },
+        "context_chars": {
+          "n": 30,
+          "p50": 975.0,
+          "p95": 1105.5
+        },
+        "facts": {
+          "n": 30,
+          "p50": 20.0,
+          "p95": 20.0
+        },
+        "recent": {
+          "n": 30,
+          "p50": 25.5,
+          "p95": 38.5
+        },
+        "relevant": {
+          "n": 30,
+          "p50": 5.0,
+          "p95": 5.0
+        }
+      },
+      "runs": [
+        {
+          "write_ms": 1.9603520013333764,
+          "recall_ms": 16.495548999955645,
+          "combined_ms": 18.45590100128902,
+          "context_chars": 830,
+          "facts": 20,
+          "recent": 11,
+          "relevant": 5
+        },
+        {
+          "write_ms": 1.8100489978678524,
+          "recall_ms": 16.546978000405943,
+          "combined_ms": 18.357026998273795,
+          "context_chars": 840,
+          "facts": 20,
+          "recent": 12,
+          "relevant": 5
+        },
+        {
+          "write_ms": 1.8795210016833153,
+          "recall_ms": 16.100184999231715,
+          "combined_ms": 17.97970600091503,
+          "context_chars": 850,
+          "facts": 20,
+          "recent": 13,
+          "relevant": 5
+        },
+        {
+          "write_ms": 1.7517710002721287,
+          "recall_ms": 16.154237997398013,
+          "combined_ms": 17.906008997670142,
+          "context_chars": 860,
+          "facts": 20,
+          "recent": 14,
+          "relevant": 5
+        },
+        {
+          "write_ms": 1.7208680001203902,
+          "recall_ms": 16.1667039974418,
+          "combined_ms": 17.88757199756219,
+          "context_chars": 870,
+          "facts": 20,
+          "recent": 15,
+          "relevant": 5
+        },
+        {
+          "write_ms": 1.7106010018324014,
+          "recall_ms": 16.18537399917841,
+          "combined_ms": 17.89597500101081,
+          "context_chars": 880,
+          "facts": 20,
+          "recent": 16,
+          "relevant": 5
+        },
+        {
+          "write_ms": 1.7183529998874292,
+          "recall_ms": 16.150174997164868,
+          "combined_ms": 17.868527997052297,
+          "context_chars": 890,
+          "facts": 20,
+          "recent": 17,
+          "relevant": 5
+        },
+        {
+          "write_ms": 1.7571949974808376,
+          "recall_ms": 16.158434002136346,
+          "combined_ms": 17.915628999617184,
+          "context_chars": 900,
+          "facts": 20,
+          "recent": 18,
+          "relevant": 5
+        },
+        {
+          "write_ms": 1.8051869992632419,
+          "recall_ms": 16.18948699979228,
+          "combined_ms": 17.99467399905552,
+          "context_chars": 910,
+          "facts": 20,
+          "recent": 19,
+          "relevant": 5
+        },
+        {
+          "write_ms": 1.782576997356955,
+          "recall_ms": 16.181592000066303,
+          "combined_ms": 17.964168997423258,
+          "context_chars": 920,
+          "facts": 20,
+          "recent": 20,
+          "relevant": 5
+        },
+        {
+          "write_ms": 1.745200999721419,
+          "recall_ms": 16.17631800036179,
+          "combined_ms": 17.921519000083208,
+          "context_chars": 930,
+          "facts": 20,
+          "recent": 21,
+          "relevant": 5
+        },
+        {
+          "write_ms": 1.7881649982882664,
+          "recall_ms": 16.13259900113917,
+          "combined_ms": 17.920763999427436,
+          "context_chars": 940,
+          "facts": 20,
+          "recent": 22,
+          "relevant": 5
+        },
+        {
+          "write_ms": 1.8147669979953207,
+          "recall_ms": 16.368702999898233,
+          "combined_ms": 18.183469997893553,
+          "context_chars": 950,
+          "facts": 20,
+          "recent": 23,
+          "relevant": 5
+        },
+        {
+          "write_ms": 1.8170840012317058,
+          "recall_ms": 16.368559998227283,
+          "combined_ms": 18.18564399945899,
+          "context_chars": 960,
+          "facts": 20,
+          "recent": 24,
+          "relevant": 5
+        },
+        {
+          "write_ms": 1.8548350017226767,
+          "recall_ms": 16.18605199837475,
+          "combined_ms": 18.040887000097428,
+          "context_chars": 970,
+          "facts": 20,
+          "recent": 25,
+          "relevant": 5
+        },
+        {
+          "write_ms": 1.8455499994161073,
+          "recall_ms": 16.34673100124928,
+          "combined_ms": 18.19228100066539,
+          "context_chars": 980,
+          "facts": 20,
+          "recent": 26,
+          "relevant": 5
+        },
+        {
+          "write_ms": 1.7971089982893318,
+          "recall_ms": 16.228170003159903,
+          "combined_ms": 18.025279001449235,
+          "context_chars": 990,
+          "facts": 20,
+          "recent": 27,
+          "relevant": 5
+        },
+        {
+          "write_ms": 1.7335329976049252,
+          "recall_ms": 16.138991002662806,
+          "combined_ms": 17.87252400026773,
+          "context_chars": 1000,
+          "facts": 20,
+          "recent": 28,
+          "relevant": 5
+        },
+        {
+          "write_ms": 1.7713080014800653,
+          "recall_ms": 20.370261001517065,
+          "combined_ms": 22.14156900299713,
+          "context_chars": 1058,
+          "facts": 20,
+          "recent": 29,
+          "relevant": 5
+        },
+        {
+          "write_ms": 1.9045240005652886,
+          "recall_ms": 16.159478000190575,
+          "combined_ms": 18.064002000755863,
+          "context_chars": 1020,
+          "facts": 20,
+          "recent": 30,
+          "relevant": 5
+        },
+        {
+          "write_ms": 1.8844309997803066,
+          "recall_ms": 16.36928299922147,
+          "combined_ms": 18.253713999001775,
+          "context_chars": 1030,
+          "facts": 20,
+          "recent": 31,
+          "relevant": 5
+        },
+        {
+          "write_ms": 1.8881670002883766,
+          "recall_ms": 16.468815996631747,
+          "combined_ms": 18.356982996920124,
+          "context_chars": 1040,
+          "facts": 20,
+          "recent": 32,
+          "relevant": 5
+        },
+        {
+          "write_ms": 1.734486999339424,
+          "recall_ms": 16.314789001626195,
+          "combined_ms": 18.04927600096562,
+          "context_chars": 1050,
+          "facts": 20,
+          "recent": 33,
+          "relevant": 5
+        },
+        {
+          "write_ms": 1.6763320018071681,
+          "recall_ms": 16.180932998395292,
+          "combined_ms": 17.85726500020246,
+          "context_chars": 1060,
+          "facts": 20,
+          "recent": 34,
+          "relevant": 5
+        },
+        {
+          "write_ms": 1.903292999486439,
+          "recall_ms": 16.34387699959916,
+          "combined_ms": 18.2471699990856,
+          "context_chars": 1070,
+          "facts": 20,
+          "recent": 35,
+          "relevant": 5
+        },
+        {
+          "write_ms": 1.6393059995607473,
+          "recall_ms": 16.475733998959186,
+          "combined_ms": 18.115039998519933,
+          "context_chars": 1080,
+          "facts": 20,
+          "recent": 36,
+          "relevant": 5
+        },
+        {
+          "write_ms": 1.9011399999726564,
+          "recall_ms": 16.191617000004044,
+          "combined_ms": 18.0927569999767,
+          "context_chars": 1090,
+          "facts": 20,
+          "recent": 37,
+          "relevant": 5
+        },
+        {
+          "write_ms": 1.8829559994628653,
+          "recall_ms": 16.24954299768433,
+          "combined_ms": 18.132498997147195,
+          "context_chars": 1100,
+          "facts": 20,
+          "recent": 38,
+          "relevant": 5
+        },
+        {
+          "write_ms": 1.8131399992853403,
+          "recall_ms": 16.15711900012684,
+          "combined_ms": 17.97025899941218,
+          "context_chars": 1110,
+          "facts": 20,
+          "recent": 39,
+          "relevant": 5
+        },
+        {
+          "write_ms": 1.780050002707867,
+          "recall_ms": 16.19415299865068,
+          "combined_ms": 17.974203001358546,
+          "context_chars": 1120,
+          "facts": 20,
+          "recent": 40,
+          "relevant": 5
+        }
+      ]
+    }
+  ]
+}

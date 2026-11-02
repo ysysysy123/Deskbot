@@ -1,0 +1,39 @@
+{
+  "model": "glm-4-flash",
+  "temporary_database": true,
+  "cases": [
+    {
+      "input": "记住我的咖啡偏好：我喜欢拿铁咖啡。",
+      "reply": "已更新长期记忆。",
+      "elapsed_ms": 5312.7,
+      "facts": [
+        "咖啡偏好：喜欢拿铁咖啡。"
+      ],
+      "recall_answer": "您喜欢拿铁咖啡。",
+      "answer_ms": 868.4,
+      "passed": true
+    },
+    {
+      "input": "记住我现在咖啡改喝美式了，不喝拿铁了。",
+      "reply": "已更新长期记忆。",
+      "elapsed_ms": 5491.4,
+      "facts": [
+        "咖啡偏好：喜欢美式咖啡"
+      ],
+      "recall_answer": "你偏好喝美式咖啡。",
+      "answer_ms": 852.5,
+      "passed": true
+    },
+    {
+      "input": "忘掉我的咖啡偏好。",
+      "reply": "已忘掉这项长期记忆。",
+      "elapsed_ms": 3001.8,
+      "facts": [],
+      "recall_answer": "没记录你的咖啡偏好，不清楚你喜欢什么。",
+      "answer_ms": 1181.1,
+      "passed": true
+    }
+  ],
+  "forget_persists_after_reopen": true,
+  "ok": true
+}

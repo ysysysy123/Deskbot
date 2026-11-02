@@ -306,6 +306,25 @@ python scripts/check_llm.py --config config.yaml "你好"
 python scripts/check_tts.py --config config.yaml "你好" --output data\check-tts.wav
 ```
 
+以下语音与记忆检查使用临时记忆库，不读取真实聊天历史，也不启停现有实例；在线检查需要当前模型配置和外网：
+
+```bash
+python scripts/check_memory.py --json /tmp/memory-check.json
+python scripts/benchmark_memory.py --json /tmp/memory-benchmark.json
+python scripts/check_voice_turn.py data/check-tts-conda.wav --paced --json /tmp/voice-check.json
+python scripts/benchmark_voice_segments.py --repeat 30 --json /tmp/segment-benchmark.json
+python scripts/benchmark_voice_server.py data/check-tts-conda.wav --repeat 30 --json /tmp/websocket-benchmark.json
+python scripts/check_vad_endpoints.py data/check-tts-conda.wav --json /tmp/vad-check.json
+```
+
+`check_memory.py` 用合成的“记住→改口→忘掉”检查真实模型和跨会话回答。`check_voice_turn.py` 运行一次真实 ASR→LLM→TTS→Opus，`--paced` 模拟实机的发送节奏；`--first-clause-chars 0` 可关闭首段短语切分用于对比。它不经过真实 WebSocket、VAD 和扬声器，单次结果不代表 P50/P95。
+
+`benchmark_memory.py` 不调用模型，在初始 0/500/5000 条合成历史（非空场景加 20 条事实和摘要）上测量本地写入与检索的 P50/P95；默认每种规模 30 轮，临时库使用默认保留和上下文预算。它测耗时，不评价模型的语义召回质量。
+
+`benchmark_voice_segments.py` 固定文字流、交替比较整句和短首段，使用真实 TTS 与按节奏发送的 Opus；记录首音频、总时长、请求数及包间隔的 P50/P95。`benchmark_voice_server.py` 在本机随机端口启动隔离实例，经实际 WebSocket 串行测试真实 ASR/LLM/TTS/Opus，每轮使用新的合成设备 ID；记录阶段耗时、客户端等待、进程 CPU 和内存。两者均排除预热样本，结果只代表相应场景，不包含实机扬声器和回声。
+
+`check_vad_endpoints.py` 使用配置的 Silero、本地慢放及插入停顿，比较 450/600 ms 端点，不访问云端。它不能替代真实人声自然停顿和设备麦克风验收。
+
 ASR 脚本直接读取 16 kHz/16-bit/单声道 PCM WAV；其他 FFmpeg 可读媒体会先转为 16 kHz PCM。TTS 检查文件固定为 24 kHz/16-bit/单声道 WAV。
 
 普通自动化测试不调用真实模型、外网或收费 API：
