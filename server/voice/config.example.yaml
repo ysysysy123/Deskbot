@@ -86,6 +86,11 @@ memory:
   summary_threshold: 12
   context_limit: 64
   max_messages_per_device: 5000
+  context_max_chars: 8000
+  facts_max_chars: 900
+  facts_limit: 20
+  idle_delay_s: 20
+  consolidation_max_tokens: 768
 
 local_test:
   host: 127.0.0.1

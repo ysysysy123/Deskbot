@@ -1,10 +1,15 @@
 import asyncio
+import json
 
 import pytest
 
 from voice_server.memory.service import MemoryService
 from voice_server.memory.sqlite import SQLiteMemoryProvider
 from tests.fakes import FakeLLM
+
+
+def consolidated(summary, updates=()):
+    return json.dumps({"summary": summary, "fact_updates": list(updates)}, ensure_ascii=False)
 
 
 class _CloseTrackingSQLiteMemoryProvider(SQLiteMemoryProvider):
@@ -20,8 +25,8 @@ class _CloseTrackingSQLiteMemoryProvider(SQLiteMemoryProvider):
 async def test_summary_runs_at_threshold_and_is_saved_with_its_own_token_limit(tmp_path):
     store = SQLiteMemoryProvider(tmp_path / "memory.db")
     await store.initialize()
-    llm = FakeLLM(["short ", "summary"])
-    service = MemoryService(store, store, llm, summary_threshold=2, summary_max_tokens=37)
+    llm = FakeLLM([consolidated("short summary")])
+    service = MemoryService(store, store, llm, summary_threshold=2, summary_max_tokens=37, idle_delay_s=0)
     await service.remember("a", "s", "user", "first")
     await service.remember("a", "s", "assistant", "second")
 
@@ -35,7 +40,7 @@ async def test_summary_runs_at_threshold_and_is_saved_with_its_own_token_limit(t
 async def test_summary_failure_keeps_raw_messages(tmp_path):
     store = SQLiteMemoryProvider(tmp_path / "memory.db")
     await store.initialize()
-    service = MemoryService(store, store, FakeLLM(error=RuntimeError("offline")), 1)
+    service = MemoryService(store, store, FakeLLM(error=RuntimeError("offline")), 1, idle_delay_s=0)
     await service.remember("a", "s", "user", "kept")
 
     service.schedule_summary("a")
@@ -51,29 +56,23 @@ async def test_summary_uses_previous_summary_and_only_one_live_task_per_device(t
     first_batch = await store.load_summary_batch("a", 1)
     await store.save_summary("a", "old summary", first_batch.through_message_id)
     await store.remember("a", "s", "assistant", "new message")
-    llm = FakeLLM(["new summary"])
-    service = MemoryService(store, store, llm, summary_threshold=1)
+    llm = FakeLLM([consolidated("new summary")])
+    service = MemoryService(store, store, llm, summary_threshold=1, idle_delay_s=0)
 
     service.schedule_summary("a")
     service.schedule_summary("a")
     await service.close()
 
-    assert llm.messages == [
-        [
-            {
-                "role": "system",
-                "content": "请将已有摘要和新增对话整理成简洁、准确的中文长期记忆。保留用户偏好、重要事实、关系和待办事项；不要编造信息。",
-            },
-            {"role": "system", "content": "已有摘要：old summary"},
-            {"role": "assistant", "content": "new message"},
-        ]
-    ]
+    assert len(llm.messages) == 1
+    payload = json.loads(llm.messages[0][1]["content"])
+    assert payload["previous_summary"] == "old summary"
+    assert [message["content"] for message in payload["messages"]] == ["new message"]
 
 
 async def test_blank_summary_does_not_advance_checkpoint(tmp_path):
     store = SQLiteMemoryProvider(tmp_path / "memory.db")
     await store.initialize()
-    service = MemoryService(store, store, FakeLLM(["   "]), 1)
+    service = MemoryService(store, store, FakeLLM(["   "]), 1, idle_delay_s=0)
     await service.remember("a", "s", "user", "kept")
 
     service.schedule_summary("a")
@@ -86,8 +85,8 @@ async def test_cancelled_close_waiter_does_not_cancel_shared_shutdown(tmp_path):
     gate = asyncio.Event()
     store = _CloseTrackingSQLiteMemoryProvider(tmp_path / "memory.db")
     await store.initialize()
-    llm = FakeLLM(["summary"], gate=gate)
-    service = MemoryService(store, store, llm, summary_threshold=1)
+    llm = FakeLLM([consolidated("summary")], gate=gate)
+    service = MemoryService(store, store, llm, summary_threshold=1, idle_delay_s=0)
     await service.remember("a", "s", "user", "message")
     service.schedule_summary("a")
     await llm.started.wait()
@@ -114,7 +113,7 @@ async def test_clear_invalidates_an_inflight_summary_before_it_can_save(tmp_path
             self.clear_finished = asyncio.Event()
             self.saved_summaries = []
 
-        async def save_summary(self, device_id, summary, through_message_id):
+        async def save_consolidation(self, device_id, summary, through_message_id, updates):
             self.save_started.set()
             await self.save_gate.wait()
             self.saved_summaries.append((device_id, summary, through_message_id))
@@ -126,8 +125,8 @@ async def test_clear_invalidates_an_inflight_summary_before_it_can_save(tmp_path
     gate = asyncio.Event()
     store = GatedSummaryStore(tmp_path / "memory.db")
     await store.initialize()
-    llm = FakeLLM(["stale summary"], gate=gate)
-    service = MemoryService(store, store, llm, summary_threshold=1)
+    llm = FakeLLM([consolidated("stale summary")], gate=gate)
+    service = MemoryService(store, store, llm, summary_threshold=1, idle_delay_s=0)
     await service.remember("a", "s", "user", "old message")
 
     service.schedule_summary("a")

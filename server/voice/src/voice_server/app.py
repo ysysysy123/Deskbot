@@ -74,6 +74,9 @@ class ServerApplication:
             Path(config.memory.database_path),
             context_limit=config.memory.context_limit,
             max_messages_per_device=config.memory.max_messages_per_device,
+            context_max_chars=config.memory.context_max_chars,
+            facts_max_chars=config.memory.facts_max_chars,
+            facts_limit=config.memory.facts_limit,
         )
         asr = SenseVoiceASRProvider.from_model_path(
             config.asr.model_path, max_concurrency=config.asr.max_concurrency, language=config.asr.language
@@ -119,7 +122,9 @@ class ServerApplication:
             memory_store,
             llm,
             config.memory.summary_threshold,
-            config.llm.summary_max_tokens,
+            config.memory.consolidation_max_tokens,
+            idle_delay_s=config.memory.idle_delay_s,
+            batch_limit=config.memory.context_limit,
         )
         websocket_server = VoiceWebSocketServer(
             config=config,

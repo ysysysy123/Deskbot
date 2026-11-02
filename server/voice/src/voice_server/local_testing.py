@@ -207,6 +207,7 @@ def create_local_test_app(
                 "ok": True,
                 "device_id": payload.get("device_id", device_id),
                 "summary": payload.get("summary", ""),
+                "facts": payload.get("facts", []),
                 "messages": payload.get("recent_messages", []),
             })
         except Exception:

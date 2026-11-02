@@ -1,4 +1,5 @@
 import json
+from dataclasses import asdict
 from collections.abc import Mapping
 
 from aiohttp import web
@@ -67,6 +68,28 @@ def create_admin_app(config: AppConfig, memory: MemoryService, *, session_status
         await memory.clear(device_id)
         return web.Response(status=204)
 
+    async def get_facts(request: web.Request) -> web.Response:
+        facts = await memory.list_facts(request.match_info["device_id"], include_inactive=request.query.get("include_inactive") == "true")
+        return web.json_response({"facts": [asdict(fact) for fact in facts]})
+
+    async def set_fact(request: web.Request) -> web.Response:
+        payload = await _json_mapping(request)
+        if payload is None:
+            return _error("request body must be a JSON object")
+        try:
+            await memory.set_fact(request.match_info["device_id"], dict(payload))
+        except ValueError as error:
+            return _error(str(error))
+        return web.json_response({"status": "saved"}, status=201)
+
+    async def forget_fact(request: web.Request) -> web.Response:
+        device_id, key = request.match_info["device_id"], request.match_info["fact_key"]
+        facts = await memory.list_facts(device_id)
+        fact = next((fact for fact in facts if fact.fact_key == key), None)
+        if fact is not None:
+            await memory.set_fact(device_id, {**asdict(fact), "action": "forget"})
+        return web.Response(status=204)
+
     async def get_sessions(request: web.Request) -> web.Response:
         sessions = session_status() if session_status is not None else []
         return web.json_response({"sessions": sessions, "active_count": len(sessions)})
@@ -90,6 +113,9 @@ def create_admin_app(config: AppConfig, memory: MemoryService, *, session_status
     app.router.add_get("/api/v1/memory/{device_id}", get_memory)
     app.router.add_post("/api/v1/memory/{device_id}/messages", remember_message)
     app.router.add_delete("/api/v1/memory/{device_id}", clear_memory)
+    app.router.add_get("/api/v1/memory/{device_id}/facts", get_facts)
+    app.router.add_post("/api/v1/memory/{device_id}/facts", set_fact)
+    app.router.add_delete("/api/v1/memory/{device_id}/facts/{fact_key}", forget_fact)
     app.router.add_get("/api/v1/sessions", get_sessions)
     app.router.add_post("/api/v1/sessions/{session_id}/tools", read_device_tool)
     return app
@@ -116,6 +142,7 @@ def _context_response(device_id: str, context: MemoryContext) -> dict[str, objec
     return {
         "device_id": device_id,
         "summary": context.summary,
+        "facts": [asdict(fact) for fact in context.facts],
         "recent_messages": [_message_response(message) for message in context.recent_messages],
         "relevant_memories": [_message_response(message) for message in context.relevant_memories],
     }

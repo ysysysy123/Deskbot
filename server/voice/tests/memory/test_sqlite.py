@@ -7,6 +7,17 @@ import pytest
 from voice_server.memory.sqlite import SQLiteMemoryProvider
 
 
+async def test_recall_ranks_old_answer_before_recent_weak_matches_and_excludes_recent(tmp_path):
+    store = SQLiteMemoryProvider(tmp_path / "memory.db")
+    await store.initialize()
+    await store.remember("a", "s", "user", "我喜欢的咖啡是拿铁，每次都选拿铁。")
+    for index in range(8):
+        await store.remember("a", "s", "user", f"第{index}次路过一家咖啡店。")
+    context = await store.recall("a", "我喜欢的咖啡是什么", 2)
+    assert "拿铁" in context.relevant_memories[0].content
+    assert not ({m.id for m in context.relevant_memories} & {m.id for m in context.recent_messages})
+
+
 class _InterleavingConnection:
     def __init__(self, connection, store):
         self._connection = connection
@@ -94,7 +105,7 @@ async def test_recall_returns_related_history_and_bounds_per_device_rows(tmp_pat
     await store.remember("a", "s", "assistant", "好的")
 
     context = await store.recall("a", "天气怎么样？", 10)
-    assert [message.content for message in context.relevant_memories] == ["天气很好"]
+    assert context.relevant_memories == []  # Already present in recent_messages.
     assert [message.content for message in context.recent_messages] == ["记住了", "天气很好", "好的"]
 
 

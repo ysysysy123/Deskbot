@@ -415,7 +415,7 @@ def test_from_config_constructs_dependencies_without_loading_real_models(monkeyp
     constructed = []
 
     class Store:
-        def __init__(self, path, *, context_limit, max_messages_per_device):
+        def __init__(self, path, *, context_limit, max_messages_per_device, context_max_chars, facts_max_chars, facts_limit):
             constructed.append(("store", path))
 
     class ASR:

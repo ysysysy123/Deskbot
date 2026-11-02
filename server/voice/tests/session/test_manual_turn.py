@@ -128,6 +128,38 @@ async def test_empty_dialogue_response_falls_back_to_error_audio():
     assert session.last_turn["status"] == "error"
 
 
+async def test_memory_command_uses_real_store_and_reconnected_dialogue_reads_fact(tmp_path):
+    import json
+    from voice_server.memory.service import MemoryService
+    from voice_server.memory.sqlite import SQLiteMemoryProvider
+
+    store = SQLiteMemoryProvider(tmp_path / "memory.db")
+    await store.initialize()
+    update = {"fact_key": "preference.coffee", "content": "咖啡偏好：喜欢拿铁", "importance": 2,
+              "source_message_id": 1, "keywords": ["咖啡", "拿铁"], "action": "upsert"}
+    consolidation_llm = FakeLLM([json.dumps({"summary": "", "fact_updates": [update]}, ensure_ascii=False)])
+    memory = MemoryService(store, store, consolidation_llm, 12)
+    reply = "已更新长期记忆。"
+    session = make_session(memory=memory, tts=FakeTTS({reply: [b"pcm"]}),
+                           codec=FakeCodec(encoded={b"pcm": [b"opus"]}))
+    await session.handle_text("记住我的咖啡偏好：喜欢拿铁")
+    await session.wait_until_idle()
+    assert session.last_turn["status"] == "success"
+    assert len(consolidation_llm.messages) == 1
+    assert memory._idle_handles
+    await session.close()
+    dialogue_llm = FakeLLM(["你喜欢拿铁。"])
+    next_session = make_session(session_id="reconnected", memory=memory, llm=dialogue_llm,
+                                tts=FakeTTS({"你喜欢拿铁。": [b"pcm"]}), codec=FakeCodec(encoded={b"pcm": [b"opus"]}))
+    await next_session.handle_text("我喜欢什么咖啡？")
+    await next_session.wait_until_idle()
+    assert next_session.last_turn["status"] == "success"
+    assert any("咖啡偏好：喜欢拿铁" in message["content"] for message in dialogue_llm.messages[0])
+    assert len(consolidation_llm.messages) == 1  # Ordinary question does no extra memory-model call.
+    await next_session.close()
+    await memory.close()
+
+
 async def test_memory_prompt_removes_only_the_recalled_current_user_row():
     current = "same text"
     memory = FakeMemory(
@@ -151,8 +183,7 @@ async def test_memory_prompt_removes_only_the_recalled_current_user_row():
     await session.wait_until_idle()
 
     assert llm.messages == [[
-        {"role": "system", "content": DEFAULT_SYSTEM_PROMPT},
-        {"role": "system", "content": "以下是此前对话的记忆摘要，供回答参考：\nremember preferences"},
+        {"role": "system", "content": DEFAULT_SYSTEM_PROMPT + "\n\n以下是此前对话的记忆摘要，供回答参考：\nremember preferences"},
         {"role": "user", "content": current},
         {"role": "user", "content": current},
     ]]

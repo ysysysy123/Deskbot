@@ -6,6 +6,34 @@ from voice_server.memory.models import MemoryMessage
 from tests.fakes import FakeMemory
 
 
+async def test_fact_api_creates_updates_forgets_and_clears_persistent_memory(aiohttp_client, tmp_path):
+    from voice_server.memory.service import MemoryService
+    from voice_server.memory.sqlite import SQLiteMemoryProvider
+    from tests.fakes import FakeLLM
+
+    store = SQLiteMemoryProvider(tmp_path / "memory.db")
+    await store.initialize()
+    memory = MemoryService(store, store, FakeLLM(), 12, idle_delay_s=20)
+    client = await aiohttp_client(create_admin_app(AppConfig(), memory))
+    route = "/api/v1/memory/a/facts"
+    payload = {"fact_key": "preference.coffee", "content": "咖啡偏好：喜欢拿铁", "keywords": ["咖啡", "拿铁"]}
+    assert (await client.post(route, json=payload)).status == 201
+    assert len((await (await client.get(route)).json())["facts"]) == 1
+    assert (await (await client.get("/api/v1/memory/b/facts")).json())["facts"] == []
+    payload["content"] = "咖啡偏好：改喝美式"
+    payload["keywords"] = ["咖啡", "美式"]
+    assert (await client.post(route, json=payload)).status == 201
+    facts = (await (await client.get(route)).json())["facts"]
+    assert [f["content"] for f in facts] == ["咖啡偏好：改喝美式"]
+    assert (await client.delete(route + "/preference.coffee")).status == 204
+    assert (await (await client.get(route)).json())["facts"] == []
+    history = (await (await client.get(route + "?include_inactive=true")).json())["facts"]
+    assert len(history) == 3
+    assert (await client.delete("/api/v1/memory/a")).status == 204
+    assert (await (await client.get(route + "?include_inactive=true")).json())["facts"] == []
+    await memory.close()
+
+
 def config_with(*, token="", recent_limit=10, max_text_bytes=16_384):
     base = AppConfig()
     return replace(
@@ -27,6 +55,7 @@ async def test_get_memory_returns_context_and_uses_configured_default_limit(aioh
     assert await response.json() == {
         "device_id": "device-a",
         "summary": "summary",
+        "facts": [],
         "recent_messages": [{"role": "user", "content": "hello", "session_id": "session-1", "created_at": "2026-08-06T00:00:00Z"}],
         "relevant_memories": [{"role": "user", "content": "hello", "session_id": "session-1", "created_at": "2026-08-06T00:00:00Z"}],
     }

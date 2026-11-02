@@ -121,6 +121,11 @@ class MemoryConfig:
     summary_threshold: int = 12
     context_limit: int = 64
     max_messages_per_device: int = 5000
+    context_max_chars: int = 8000
+    facts_max_chars: int = 900
+    facts_limit: int = 20
+    idle_delay_s: float = 20.0
+    consolidation_max_tokens: int = 768
 
 
 @dataclass(frozen=True)
@@ -336,6 +341,11 @@ def _validate(config: AppConfig) -> None:
         ("memory.summary_threshold", config.memory.summary_threshold),
         ("memory.context_limit", config.memory.context_limit),
         ("memory.max_messages_per_device", config.memory.max_messages_per_device),
+        ("memory.context_max_chars", config.memory.context_max_chars),
+        ("memory.facts_max_chars", config.memory.facts_max_chars),
+        ("memory.facts_limit", config.memory.facts_limit),
+        ("memory.idle_delay_s", config.memory.idle_delay_s),
+        ("memory.consolidation_max_tokens", config.memory.consolidation_max_tokens),
         ("dialogue.sentence_max_chars", config.dialogue.sentence_max_chars),
         ("dialogue.sentence_queue_size", config.dialogue.sentence_queue_size),
         ("mcp.timeout_seconds", config.mcp.timeout_seconds),

@@ -33,8 +33,10 @@ async def test_detect_text_uses_agent_with_identity_context_and_voice_output():
     request = backend.requests[0]
     assert (request.device_id, request.session_id, request.text) == ("device-a", "s1", "帮我查询")
     assert request.turn_id.startswith("s1:")
-    assert request.messages[0] == {"role": "system", "content": "你是小桌。"}
-    assert "用户喜欢茶" in request.messages[1]["content"]
+    assert request.messages[0]["role"] == "system"
+    assert request.messages[0]["content"].startswith("你是小桌。")
+    assert "用户喜欢茶" in request.messages[0]["content"]
+    assert sum(message["role"] == "system" for message in request.messages) == 1
     assert request.messages[-1] == {"role": "user", "content": "帮我查询"}
     assert asr.inputs == [] and llm.messages == []
     assert ("bytes", b"opus") in session._transport.events

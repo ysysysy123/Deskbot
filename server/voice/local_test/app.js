@@ -60,9 +60,11 @@ async function loadHistory(deviceId = state.historyDeviceId || $("device-id").va
     if (!response.ok || !payload.ok) throw new Error(payload.detail || "历史记录接口响应异常");
     $("transcript").replaceChildren();
     const messages = Array.isArray(payload.messages) ? payload.messages : [];
+    const facts = Array.isArray(payload.facts) ? payload.facts : [];
+    if (facts.length) showMessage("system", `长期记忆：\n${facts.map(fact => `• ${fact.content}`).join("\n")}`);
     if (payload.summary) showMessage("system", `记忆摘要：${payload.summary}`);
     for (const message of messages) showHistoryMessage(message);
-    if (!messages.length && !payload.summary) {
+    if (!messages.length && !payload.summary && !facts.length) {
       const empty = document.createElement("p");
       empty.className = "empty-state";
       empty.textContent = "这个设备还没有历史对话";

@@ -240,7 +240,26 @@ curl.exe -X POST -H "Authorization: Bearer <memory_admin_token>" -H "Content-Typ
 curl.exe -X DELETE -H "Authorization: Bearer <memory_admin_token>" "http://127.0.0.1:8004/api/v1/memory/device-a"
 ```
 
-GET 返回摘要、最近消息和按当前问题做的简单相关历史检索；POST 只接受 `user`/`assistant`；每个设备默认最多保留 5000 条消息，DELETE 同时删除该设备消息与摘要，不能恢复。
+GET 返回摘要、有效事实和最近消息；POST 只接受 `user`/`assistant`；每个设备默认最多保留 5000 条消息，DELETE 同时删除该设备消息、摘要与事实，不能恢复。
+
+### 长期事实与闲时整理
+
+服务现在分别保存近期消息、会话摘要和长期事实。长期事实记录身份、偏好、约定、待办及用户原文出处，跨会话保留；偏好更新后旧版本退出当前上下文。旧数据库首次启动时自动新增表，保留原有消息和摘要。
+
+普通对话结束并空闲 `memory.idle_delay_s`（默认 20 秒）后，达到 12 条新增消息时用一次模型请求整理摘要和事实。新讲话或文本输入会取消待执行/正在执行的后台整理；没有轮询扫描。`记住……`、`忘掉……` 等明确命令会在当轮处理并保存，再播报结果，因此这类命令会增加一次整理模型调用的等待。失败时保留原文并明确说明没有完成长期保存。
+
+事实按 Device-Id 隔离，同一设备的不同使用者仍未自动区分。相关历史按词面匹配度排序，并排除已进入近期上下文的消息。模型历史资料受 `memory.context_max_chars` 约束；事实另有条数和字符预算。新用户更正优先于旧事实，所有系统资料统一组装，普通 LLM 与 MCP 路径使用一致规则。
+
+管理 API 支持：
+
+- `GET /api/v1/memory/{device_id}/facts`：当前事实；增加 `?include_inactive=true` 可查看旧版本和遗忘状态。
+- `POST /api/v1/memory/{device_id}/facts`：创建或更新同一事实键。例如 `{"fact_key":"preference.coffee","content":"咖啡偏好：喜欢拿铁","keywords":["咖啡","拿铁"]}`。
+- `DELETE /api/v1/memory/{device_id}/facts/{fact_key}`：遗忘该项，同时排除匹配主题关键词的旧消息、清理摘要中的对应句子。
+- 原有 `DELETE /api/v1/memory/{device_id}` 现在同时清除消息、摘要、事实和检索排除记录。
+
+单项遗忘用于从回答上下文中移除该项，不物理擦除原始消息或事实版本。原文排除使用已知主题关键词，对完全不同措辞的语义关联仍有局限；长期事实抽取也依赖配置模型的质量。
+
+本地测试页的历史中会显示当前长期事实，设备卡片增加记忆、成句、合成开始、首 PCM 与首音频发送时间。被打断的回复保存已发送语音段并标记中断；没有设备播放确认时，这不等于用户已经听到。
 
 ## 10. 扩展 TTS Provider
 

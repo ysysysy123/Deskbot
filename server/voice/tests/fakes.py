@@ -229,6 +229,12 @@ class FakeMemory:
     async def remember(self, device_id: str, session_id: str, role: str, content: str) -> None:
         self.saved.append((device_id, session_id, role, content))
 
+    def activity(self, device_id: str) -> None:
+        pass
+
+    async def process_command(self, device_id: str, text: str) -> str | None:
+        return None
+
     async def recall(self, device_id: str, query: str, recent_limit: int) -> MemoryContext:
         self.recall_calls.append((device_id, query, recent_limit))
         return self._context
