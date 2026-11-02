@@ -103,6 +103,7 @@ class VoiceSession:
         self._state_machine = SessionStateMachine()
         self._state_machine.transition(SessionState.IDLE)
         self._pcm = bytearray()
+        self._pre_roll = bytearray()
         self._recording_bytes = 0
         self._recording_seconds = 0.0
         self._listen_mode: str | None = None
@@ -134,6 +135,9 @@ class VoiceSession:
             if message.mode == "manual":
                 if self.state is SessionState.IDLE:
                     await self._prepare_turn(message.mode)
+                elif self.state is SessionState.LISTENING and self._listen_mode != "manual":
+                    await self.abort()
+                    await self._prepare_turn(message.mode)
             else:
                 await self.abort()
                 if not self._closed:
@@ -160,19 +164,41 @@ class VoiceSession:
         generation = self._turn_generation
         if len(packet) > self._max_binary_bytes:
             raise SessionLimitError("audio packet exceeds limit")
-        if self._recording_bytes + len(packet) > self._max_recording_bytes:
+        automatic = self._listen_mode in {"auto", "realtime"}
+        if (not automatic or self._heard_speech) and self._recording_bytes + len(packet) > self._max_recording_bytes:
             raise SessionLimitError("recording exceeds byte limit")
         pcm = self._codec.decode_input(packet)
         duration = len(pcm) / (16_000 * 2)
-        if self._recording_seconds + duration > self._max_recording_seconds:
+        is_speech = False
+        if automatic:
+            is_speech = await self._vad.is_speech(pcm, 16_000)
+            if not self._is_current(generation) or self.state is not SessionState.LISTENING:
+                return
+            if not self._heard_speech:
+                if not is_speech:
+                    self._pre_roll.extend(pcm)
+                    # Keep the onset, but do not charge idle silence to a turn.
+                    pre_roll_bytes = min(5760, max(2, int(self._max_recording_seconds * 4000) * 2))
+                    del self._pre_roll[:-pre_roll_bytes]
+                    return
+                self._pcm.extend(self._pre_roll)
+                self._recording_seconds = len(self._pre_roll) / 32000
+                self._pre_roll.clear()
+        if self._recording_bytes + len(packet) > self._max_recording_bytes:
+            raise SessionLimitError("recording exceeds byte limit")
+        at_limit = self._recording_seconds + duration >= self._max_recording_seconds
+        if not automatic and self._recording_seconds + duration > self._max_recording_seconds:
             raise SessionLimitError("recording exceeds duration limit")
+        if automatic and at_limit:
+            pcm = pcm[:max(0, int((self._max_recording_seconds - self._recording_seconds) * 16000)) * 2]
+            duration = len(pcm) / 32000
         self._pcm.extend(pcm)
         self._recording_bytes += len(packet)
         self._recording_seconds += duration
-        if self._listen_mode not in {"auto", "realtime"}:
+        if not automatic:
             return
-        is_speech = await self._vad.is_speech(pcm, 16_000)
-        if not self._is_current(generation) or self.state is not SessionState.LISTENING:
+        if at_limit:
+            self._start_pipeline()
             return
         if is_speech:
             self._heard_speech = True
@@ -558,6 +584,7 @@ class VoiceSession:
 
     def _clear_recording(self) -> None:
         self._pcm.clear()
+        self._pre_roll.clear()
         self._recording_bytes = 0
         self._recording_seconds = 0.0
         self._listen_mode = None
