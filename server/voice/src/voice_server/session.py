@@ -69,6 +69,7 @@ class VoiceSession:
         system_prompt: str = DEFAULT_SYSTEM_PROMPT,
         sentence_max_chars: int = 100,
         sentence_queue_size: int = 2,
+        first_clause_chars: int = 18,
         local_test_turn_events: bool = False,
         audio_packet_interval_s: float = 0.0,
         device_mcp: Any | None = None,
@@ -83,6 +84,7 @@ class VoiceSession:
         self._system_prompt = system_prompt
         self._sentence_max_chars = sentence_max_chars
         self._sentence_queue_size = sentence_queue_size
+        self._first_clause_chars = first_clause_chars
         self._local_test_turn_events = local_test_turn_events
         self._audio_packet_interval_s = max(0.0, audio_packet_interval_s)
         self._device_mcp = device_mcp
@@ -405,7 +407,7 @@ class VoiceSession:
 
         async def produce() -> None:
             try:
-                sentences = SentenceBuffer(self._sentence_max_chars)
+                sentences = SentenceBuffer(self._sentence_max_chars, first_clause_chars=self._first_clause_chars)
                 iterator = self._dialogue.stream(request).__aiter__()
                 remaining = self._llm_timeout_s
                 loop = asyncio.get_running_loop()
@@ -424,8 +426,12 @@ class VoiceSession:
                             self.last_turn["first_text_ms"] = self._turn_elapsed_ms()
                         chunks.append(chunk)
                         for sentence in sentences.feed(chunk):
+                            if request.diagnostics is not None:
+                                request.diagnostics.setdefault("first_sentence_ms", self._turn_elapsed_ms())
                             await queue.put(sentence)
                     for sentence in sentences.flush():
+                        if request.diagnostics is not None:
+                            request.diagnostics.setdefault("first_sentence_ms", self._turn_elapsed_ms())
                         await queue.put(sentence)
                 finally:
                     primary_error = sys.exc_info()[1]
@@ -464,12 +470,18 @@ class VoiceSession:
                 async with aclosing(self._response_sentences(request, chunks, generation)) as sentences:
                     async for sentence in sentences:
                         await queue.put(sentence)
+                        if request.diagnostics is not None:
+                            request.diagnostics.setdefault("first_tts_request_ms", self._turn_elapsed_ms())
+                            request.diagnostics["tts_requests"] = request.diagnostics.get("tts_requests", 0) + 1
                         async with aclosing(self._tts.synthesize(sentence).__aiter__()) as audio:
                             while self._is_current(generation):
                                 try:
                                     pcm = await wait_for(anext(audio), self._tts_timeout_s)
                                 except StopAsyncIteration:
                                     break
+                                if pcm and request.diagnostics is not None:
+                                    request.diagnostics.setdefault("first_pcm_ms", self._turn_elapsed_ms())
+                                    request.diagnostics["pcm_bytes"] = request.diagnostics.get("pcm_bytes", 0) + len(pcm)
                                 for offset in range(0, len(pcm), 2880):
                                     await queue.put(pcm[offset:offset + 2880])
                         await queue.put(None)  # End of this sentence's audio.
@@ -529,6 +541,10 @@ class VoiceSession:
                     if self.last_turn is not None and "first_audio_ms" not in self.last_turn:
                         self.last_turn["first_audio_ms"] = self._turn_elapsed_ms()
                     sent_packets += 1
+                    if self.last_turn is not None:
+                        self.last_turn["audio_packets"] = self.last_turn.get("audio_packets", 0) + 1
+                        self.last_turn["audio_bytes"] = self.last_turn.get("audio_bytes", 0) + len(packet)
+                        self.last_turn["output_audio_ms"] = self.last_turn["audio_packets"] * 60
                     if self._audio_packet_interval_s:
                         await asyncio.sleep(self._audio_packet_interval_s)
         if sent_packets == 0:

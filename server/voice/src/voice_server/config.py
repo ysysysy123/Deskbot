@@ -102,6 +102,7 @@ class DialogueConfig:
     system_prompt: str = DEFAULT_SYSTEM_PROMPT
     sentence_max_chars: int = 100
     sentence_queue_size: int = 2
+    first_clause_chars: int = 18
 
 
 @dataclass(frozen=True)
@@ -346,6 +347,8 @@ def _validate(config: AppConfig) -> None:
 
     if config.llm.max_retries < 0:
         raise ConfigError("llm.max_retries must not be negative")
+    if config.dialogue.first_clause_chars < 0:
+        raise ConfigError("dialogue.first_clause_chars must not be negative")
     if config.memory.max_messages_per_device < 0:
         raise ConfigError("memory.max_messages_per_device must not be negative")
 

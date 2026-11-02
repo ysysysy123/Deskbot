@@ -208,7 +208,7 @@ function renderDeviceTurn(turn, item) {
   box.append(deviceText("div", "small", `最近一轮 · ${labels[turn.status] || turn.status || "未知"}`));
   const metrics = document.createElement("div");
   metrics.className = "device-turn-metrics";
-  for (const [key, label] of [["asr_ms", "ASR 识别"], ["first_text_ms", "首段文字"], ["first_audio_ms", "首段语音"], ["total_ms", "总耗时"]]) {
+  for (const [key, label] of [["asr_ms", "ASR 识别"], ["memory_ms", "记忆读取"], ["first_text_ms", "首段文字"], ["first_sentence_ms", "首段成句"], ["first_tts_request_ms", "开始合成"], ["first_pcm_ms", "首段合成音频"], ["first_audio_ms", "首段语音发出"], ["total_ms", "总耗时"]]) {
     const metric = document.createElement("div");
     const value = turn[key];
     metric.append(deviceText("span", "small", label));
@@ -216,7 +216,7 @@ function renderDeviceTurn(turn, item) {
     metrics.append(metric);
   }
   box.append(metrics);
-  box.append(deviceText("p", "hint", "ASR 为识别耗时；其余从收到本轮输入起计时。"));
+  box.append(deviceText("p", "hint", "ASR、记忆分别为阶段耗时；首段各时间从本轮开始处理累计，未包含设备播放缓冲。"));
   if (turn.input_text) box.append(deviceText("p", "hint", `本轮识别 / 输入：${turn.input_text}`));
   for (const call of turn.tool_calls || []) {
     box.append(deviceText("p", call.status === "error" ? "device-error" : "hint",

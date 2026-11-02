@@ -35,3 +35,17 @@ def test_long_unpunctuated_text_is_emitted_before_end_of_stream():
 def test_length_limit_also_applies_when_one_delta_contains_a_long_sentence():
     buffer = SentenceBuffer(max_chars=10)
     assert buffer.feed("abcdefghijklmnop。") == ["abcdefghij", "klmnop。"]
+
+
+def test_decimal_is_kept_intact_across_stream_deltas():
+    buffer = SentenceBuffer()
+    assert buffer.feed("温度是23.") == []
+    assert buffer.feed("5度，版本是3.14。") == ["温度是23.5度，版本是3.14。"]
+    assert buffer.feed("Count 3.") == []
+    assert buffer.feed(" Next.") == ["Count 3.", " Next."]
+
+
+def test_only_first_clause_uses_short_comma_boundary():
+    buffer = SentenceBuffer(first_clause_chars=6)
+    assert buffer.feed("好的，我先给你讲一个例子，后面继续，") == ["好的，我先给你讲一个例子，"]
+    assert buffer.feed("最后总结。") == ["后面继续，最后总结。"]

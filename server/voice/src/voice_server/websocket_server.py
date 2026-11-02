@@ -214,6 +214,7 @@ class VoiceWebSocketServer:
                 system_prompt=self.config.dialogue.system_prompt,
                 sentence_max_chars=self.config.dialogue.sentence_max_chars,
                 sentence_queue_size=self.config.dialogue.sentence_queue_size,
+                first_clause_chars=self.config.dialogue.first_clause_chars,
                 local_test_turn_events=local_test_turn_events,
                 device_mcp=mcp_bridge,
                 # The browser bridge schedules PCM locally; physical devices

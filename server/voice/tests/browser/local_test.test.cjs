@@ -101,14 +101,18 @@ test('device cards distinguish voice connection, MCP initialization, failures an
 
 test('device turn timing shows server measurements and leaves missing audio unset', () => {
   const ui = page();
-  ui.run(`renderDevices({sessions:[{device_id:'device-a',session_id:'a',last_turn:{status:'error',asr_ms:175,first_text_ms:2500,first_audio_ms:null,total_ms:8100,error_stage:'tts',error:'合成超时'}}]});`);
+  ui.run(`renderDevices({sessions:[{device_id:'device-a',session_id:'a',last_turn:{status:'error',asr_ms:175,memory_ms:6,first_text_ms:2500,first_sentence_ms:2600,first_tts_request_ms:2601,first_audio_ms:null,total_ms:8100,error_stage:'tts',error:'合成超时'}}]});`);
   const card = ui.elements.get('device-list').children[0];
   const metrics = card.children.find(child => child.className === 'device-turn').children[1];
   assert.match(textOf(card), /最近一轮 · 失败/);
   assert.match(textOf(metrics.children[0]), /ASR 识别\n0.17 s/);
-  assert.match(textOf(metrics.children[1]), /首段文字\n2.50 s/);
-  assert.match(textOf(metrics.children[2]), /首段语音\n—/);
-  assert.match(textOf(metrics.children[3]), /总耗时\n8.10 s/);
+  assert.match(textOf(metrics.children[1]), /记忆读取\n0.01 s/);
+  assert.match(textOf(metrics.children[2]), /首段文字\n2.50 s/);
+  assert.match(textOf(metrics.children[3]), /首段成句\n2.60 s/);
+  assert.match(textOf(metrics.children[4]), /开始合成\n2.60 s/);
+  assert.match(textOf(metrics.children[5]), /首段合成音频\n—/);
+  assert.match(textOf(metrics.children[6]), /首段语音发出\n—/);
+  assert.match(textOf(metrics.children[7]), /总耗时\n8.10 s/);
   assert.match(textOf(card), /语音合成：合成超时/);
 });
 

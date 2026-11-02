@@ -1,3 +1,7 @@
+import asyncio
+
+import pytest
+
 from tests.fakes import FakeASR, FakeCodec, FakeLLM, FakeMemory, FakeTTS, FakeTransport, FakeVAD
 from voice_server.memory.models import MemoryMessage
 from voice_server.protocol.messages import ListenMessage
@@ -28,6 +32,38 @@ def make_session(**overrides):
     }
     defaults.update(overrides)
     return VoiceSession(**defaults)
+
+
+@pytest.mark.parametrize("first_clause_chars", [0, 18])
+async def test_short_first_clause_can_start_tts_before_model_finishes(first_clause_chars):
+    prefix, tail = "我会先把整个问题拆成几个清楚的步骤，", "再逐项说明。"
+
+    class PausedDialogue:
+        def __init__(self):
+            self.waiting = asyncio.Event()
+            self.resume = asyncio.Event()
+
+        async def stream(self, request):
+            yield prefix
+            self.waiting.set()
+            await self.resume.wait()
+            yield tail
+
+    backend = PausedDialogue()
+    tts = FakeTTS({prefix: [b"pcm"], tail: [b"pcm"], prefix + tail: [b"pcm"]})
+    session = make_session(dialogue_backend=backend, tts=tts, first_clause_chars=first_clause_chars,
+                           codec=FakeCodec(encoded={b"pcm": [b"opus"]}), llm_timeout_s=1)
+    await session.handle_text("请解释")
+    await backend.waiting.wait()
+    if first_clause_chars:
+        await asyncio.wait_for(tts.started.wait(), .5)
+        assert tts.texts[0] == prefix
+    else:
+        assert tts.texts == []
+    backend.resume.set()
+    await session.wait_until_idle()
+    assert session.last_turn["status"] == "success"
+    assert tts.texts == ([prefix, tail] if first_clause_chars else [prefix + tail])
 
 
 async def test_manual_turn_runs_asr_memory_llm_tts_in_order():
@@ -65,6 +101,9 @@ async def test_manual_turn_runs_asr_memory_llm_tts_in_order():
     metrics = session.last_turn
     assert metrics["status"] == "success"
     assert 0 <= metrics["asr_ms"] <= metrics["first_text_ms"] <= metrics["first_audio_ms"] <= metrics["total_ms"]
+    assert metrics["first_text_ms"] <= metrics["first_sentence_ms"] <= metrics["first_tts_request_ms"] <= metrics["first_pcm_ms"] <= metrics["first_audio_ms"]
+    assert metrics["tts_requests"] == 2
+    assert metrics["audio_packets"] == 2
 
 
 async def test_empty_dialogue_response_falls_back_to_error_audio():
