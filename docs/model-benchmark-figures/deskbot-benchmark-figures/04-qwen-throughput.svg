@@ -1,0 +1,461 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="1152pt" height="648pt" viewBox="0 0 1152 648" xmlns="http://www.w3.org/2000/svg" version="1.1">
+ <metadata>
+  <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+   <cc:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dc:date>2026-10-16T06:03:36.627460</dc:date>
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <cc:Agent>
+      <dc:title>Matplotlib v3.11.2, https://matplotlib.org/</dc:title>
+     </cc:Agent>
+    </dc:creator>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="figure_1">
+  <g id="patch_1">
+   <path d="M 0 648 
+L 1152 648 
+L 1152 0 
+L 0 0 
+z
+" style="fill: #f5f4ec"/>
+  </g>
+  <g id="axes_1">
+   <g id="patch_2">
+    <path d="M 120.96 346.68 
+L 524.16 346.68 
+L 524.16 187.92 
+L 120.96 187.92 
+z
+" style="fill: #f5f4ec"/>
+   </g>
+   <g id="matplotlib.axis_1">
+    <g id="xtick_1">
+     <g id="line2d_1">
+      <path d="M 120.96 346.68 
+L 120.96 187.92 
+" clip-path="url(#pee3f397ef6)" style="fill: none; stroke: #dce2d6; stroke-width: 0.65; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_2"/>
+     <g id="text_1">
+      <text style="font-size: 10px; font-family: 'Noto Sans CJK JP'; text-anchor: middle; fill: #647472" x="120.96" y="362.48" transform="rotate(-0 120.96 362.48)">0</text>
+     </g>
+    </g>
+    <g id="xtick_2">
+     <g id="line2d_3">
+      <path d="M 243.141818 346.68 
+L 243.141818 187.92 
+" clip-path="url(#pee3f397ef6)" style="fill: none; stroke: #dce2d6; stroke-width: 0.65; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_4"/>
+     <g id="text_2">
+      <text style="font-size: 10px; font-family: 'Noto Sans CJK JP'; text-anchor: middle; fill: #647472" x="243.141818" y="362.48" transform="rotate(-0 243.141818 362.48)">50</text>
+     </g>
+    </g>
+    <g id="xtick_3">
+     <g id="line2d_5">
+      <path d="M 365.323636 346.68 
+L 365.323636 187.92 
+" clip-path="url(#pee3f397ef6)" style="fill: none; stroke: #dce2d6; stroke-width: 0.65; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_6"/>
+     <g id="text_3">
+      <text style="font-size: 10px; font-family: 'Noto Sans CJK JP'; text-anchor: middle; fill: #647472" x="365.323636" y="362.48" transform="rotate(-0 365.323636 362.48)">100</text>
+     </g>
+    </g>
+    <g id="xtick_4">
+     <g id="line2d_7">
+      <path d="M 487.505455 346.68 
+L 487.505455 187.92 
+" clip-path="url(#pee3f397ef6)" style="fill: none; stroke: #dce2d6; stroke-width: 0.65; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_8"/>
+     <g id="text_4">
+      <text style="font-size: 10px; font-family: 'Noto Sans CJK JP'; text-anchor: middle; fill: #647472" x="487.505455" y="362.48" transform="rotate(-0 487.505455 362.48)">150</text>
+     </g>
+    </g>
+    <g id="text_5">
+     <text style="font-size: 9px; font-family: 'Noto Sans CJK JP'; text-anchor: end; fill: #647472" x="524.16" y="375.6" transform="rotate(-0 524.16 375.6)">tok/s</text>
+    </g>
+   </g>
+   <g id="matplotlib.axis_2">
+    <g id="ytick_1">
+     <g id="line2d_9"/>
+     <g id="text_6">
+      <text style="font-size: 10px; font-family: 'Noto Sans CJK JP'; text-anchor: end; fill: #647472" x="113.96" y="226.07931" transform="rotate(-0 113.96 226.07931)">无 MTP</text>
+     </g>
+    </g>
+    <g id="ytick_2">
+     <g id="line2d_10"/>
+     <g id="text_7">
+      <text style="font-size: 10px; font-family: 'Noto Sans CJK JP'; text-anchor: end; fill: #647472" x="113.96" y="256.493103" transform="rotate(-0 113.96 256.493103)">MTP3</text>
+     </g>
+    </g>
+    <g id="ytick_3">
+     <g id="line2d_11"/>
+     <g id="text_8">
+      <text style="font-size: 10px; font-family: 'Noto Sans CJK JP'; text-anchor: end; fill: #647472" x="113.96" y="286.906897" transform="rotate(-0 113.96 286.906897)">MTP4</text>
+     </g>
+    </g>
+    <g id="ytick_4">
+     <g id="line2d_12"/>
+     <g id="text_9">
+      <text style="font-size: 10px; font-family: 'Noto Sans CJK JP'; text-anchor: end; fill: #647472" x="113.96" y="317.32069" transform="rotate(-0 113.96 317.32069)">MTP5</text>
+     </g>
+    </g>
+   </g>
+   <g id="patch_3">
+    <path d="M 120.96 346.68 
+L 524.16 346.68 
+" style="fill: none; stroke: #dce2d6; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
+   </g>
+   <g id="text_10">
+    <text style="font-size: 9px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #647472" x="120.96" y="181.2834" transform="rotate(-0 120.96 181.2834)">规则数字序列，固定 256-token 输出；记录中位数</text>
+   </g>
+   <g id="patch_4">
+    <path d="M 120.96 214.38 
+L 191.996509 214.38 
+L 191.996509 228.978621 
+L 120.96 228.978621 
+z
+" clip-path="url(#pee3f397ef6)" style="fill: #9aaca6"/>
+   </g>
+   <g id="patch_5">
+    <path d="M 120.96 244.793793 
+L 339.885382 244.793793 
+L 339.885382 259.392414 
+L 120.96 259.392414 
+z
+" clip-path="url(#pee3f397ef6)" style="fill: #246d68"/>
+   </g>
+   <g id="patch_6">
+    <path d="M 120.96 275.207586 
+L 365.568 275.207586 
+L 365.568 289.806207 
+L 120.96 289.806207 
+z
+" clip-path="url(#pee3f397ef6)" style="fill: #246d68"/>
+   </g>
+   <g id="patch_7">
+    <path d="M 120.96 305.621379 
+L 386.387782 305.621379 
+L 386.387782 320.22 
+L 120.96 320.22 
+z
+" clip-path="url(#pee3f397ef6)" style="fill: #246d68"/>
+   </g>
+   <g id="text_11">
+    <text style="font-weight: 700; font-size: 11px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="198.044509" y="225.85931" transform="rotate(-0 198.044509 225.85931)">29.07</text>
+   </g>
+   <g id="text_12">
+    <text style="font-weight: 700; font-size: 11px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="345.933382" y="256.273103" transform="rotate(-0 345.933382 256.273103)">89.59</text>
+   </g>
+   <g id="text_13">
+    <text style="font-weight: 700; font-size: 11px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="371.616" y="286.686897" transform="rotate(-0 371.616 286.686897)">100.10</text>
+   </g>
+   <g id="text_14">
+    <text style="font-weight: 700; font-size: 11px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="392.435782" y="317.10069" transform="rotate(-0 392.435782 317.10069)">108.62</text>
+   </g>
+   <g id="text_15">
+    <text style="font-weight: 700; font-size: 15px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="120.96" y="159.92" transform="rotate(-0 120.96 159.92)">① 参数扫描：比较 MTP 草稿长度</text>
+   </g>
+  </g>
+  <g id="axes_2">
+   <g id="patch_8">
+    <path d="M 714.24 346.68 
+L 1082.88 346.68 
+L 1082.88 187.92 
+L 714.24 187.92 
+z
+" style="fill: #f5f4ec"/>
+   </g>
+   <g id="matplotlib.axis_3">
+    <g id="xtick_5">
+     <g id="line2d_13">
+      <path d="M 714.24 346.68 
+L 714.24 187.92 
+" clip-path="url(#pcce57e9881)" style="fill: none; stroke: #dce2d6; stroke-width: 0.65; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_14"/>
+     <g id="text_16">
+      <text style="font-size: 10px; font-family: 'Noto Sans CJK JP'; text-anchor: middle; fill: #647472" x="714.24" y="362.48" transform="rotate(-0 714.24 362.48)">0</text>
+     </g>
+    </g>
+    <g id="xtick_6">
+     <g id="line2d_15">
+      <path d="M 825.949091 346.68 
+L 825.949091 187.92 
+" clip-path="url(#pcce57e9881)" style="fill: none; stroke: #dce2d6; stroke-width: 0.65; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_16"/>
+     <g id="text_17">
+      <text style="font-size: 10px; font-family: 'Noto Sans CJK JP'; text-anchor: middle; fill: #647472" x="825.949091" y="362.48" transform="rotate(-0 825.949091 362.48)">50</text>
+     </g>
+    </g>
+    <g id="xtick_7">
+     <g id="line2d_17">
+      <path d="M 937.658182 346.68 
+L 937.658182 187.92 
+" clip-path="url(#pcce57e9881)" style="fill: none; stroke: #dce2d6; stroke-width: 0.65; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_18"/>
+     <g id="text_18">
+      <text style="font-size: 10px; font-family: 'Noto Sans CJK JP'; text-anchor: middle; fill: #647472" x="937.658182" y="362.48" transform="rotate(-0 937.658182 362.48)">100</text>
+     </g>
+    </g>
+    <g id="xtick_8">
+     <g id="line2d_19">
+      <path d="M 1049.367273 346.68 
+L 1049.367273 187.92 
+" clip-path="url(#pcce57e9881)" style="fill: none; stroke: #dce2d6; stroke-width: 0.65; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_20"/>
+     <g id="text_19">
+      <text style="font-size: 10px; font-family: 'Noto Sans CJK JP'; text-anchor: middle; fill: #647472" x="1049.367273" y="362.48" transform="rotate(-0 1049.367273 362.48)">150</text>
+     </g>
+    </g>
+    <g id="text_20">
+     <text style="font-size: 9px; font-family: 'Noto Sans CJK JP'; text-anchor: end; fill: #647472" x="1082.88" y="375.6" transform="rotate(-0 1082.88 375.6)">tok/s</text>
+    </g>
+   </g>
+   <g id="matplotlib.axis_4">
+    <g id="ytick_5">
+     <g id="line2d_21"/>
+     <g id="text_21">
+      <text style="font-size: 10px; font-family: 'Noto Sans CJK JP'; text-anchor: end; fill: #647472" x="707.24" y="235.943243" transform="rotate(-0 707.24 235.943243)">原配置</text>
+     </g>
+    </g>
+    <g id="ytick_6">
+     <g id="line2d_22"/>
+     <g id="text_22">
+      <text style="font-size: 10px; font-family: 'Noto Sans CJK JP'; text-anchor: end; fill: #647472" x="707.24" y="307.456757" transform="rotate(-0 707.24 307.456757)">最终 MTP5</text>
+     </g>
+    </g>
+   </g>
+   <g id="patch_9">
+    <path d="M 714.24 346.68 
+L 1082.88 346.68 
+" style="fill: none; stroke: #dce2d6; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
+   </g>
+   <g id="text_23">
+    <text style="font-size: 9px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #647472" x="714.24" y="181.2834" transform="rotate(-0 714.24 181.2834)">三次正式测量；规则序列，256-token 输出</text>
+   </g>
+   <g id="patch_10">
+    <path d="M 714.24 214.38 
+L 779.187665 214.38 
+L 779.187665 248.706486 
+L 714.24 248.706486 
+z
+" clip-path="url(#pcce57e9881)" style="fill: #9aaca6"/>
+   </g>
+   <g id="patch_11">
+    <path d="M 714.24 285.893514 
+L 1014.55872 285.893514 
+L 1014.55872 320.22 
+L 714.24 320.22 
+z
+" clip-path="url(#pcce57e9881)" style="fill: #246d68"/>
+   </g>
+   <g id="text_24">
+    <text style="font-weight: 700; font-size: 11px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="784.717265" y="235.723243" transform="rotate(-0 784.717265 235.723243)">29.07</text>
+   </g>
+   <g id="text_25">
+    <text style="font-weight: 700; font-size: 11px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="1020.08832" y="307.236757" transform="rotate(-0 1020.08832 307.236757)">134.42</text>
+   </g>
+   <g id="text_26">
+    <text style="font-weight: 700; font-size: 15px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="714.24" y="159.92" transform="rotate(-0 714.24 159.92)">② 最终 MTP5：预热后再次复测</text>
+   </g>
+  </g>
+  <g id="axes_3">
+   <g id="patch_12">
+    <path d="M 155.52 544.32 
+L 524.16 544.32 
+L 524.16 437.4 
+L 155.52 437.4 
+z
+" style="fill: #f5f4ec"/>
+   </g>
+   <g id="matplotlib.axis_5">
+    <g id="xtick_9">
+     <g id="line2d_23">
+      <path d="M 155.52 544.32 
+L 155.52 437.4 
+" clip-path="url(#pcfc410b24c)" style="fill: none; stroke: #dce2d6; stroke-width: 0.65; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_24"/>
+     <g id="text_27">
+      <text style="font-size: 10px; font-family: 'Noto Sans CJK JP'; text-anchor: middle; fill: #647472" x="155.52" y="560.12" transform="rotate(-0 155.52 560.12)">0</text>
+     </g>
+    </g>
+    <g id="xtick_10">
+     <g id="line2d_25">
+      <path d="M 267.229091 544.32 
+L 267.229091 437.4 
+" clip-path="url(#pcfc410b24c)" style="fill: none; stroke: #dce2d6; stroke-width: 0.65; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_26"/>
+     <g id="text_28">
+      <text style="font-size: 10px; font-family: 'Noto Sans CJK JP'; text-anchor: middle; fill: #647472" x="267.229091" y="560.12" transform="rotate(-0 267.229091 560.12)">50</text>
+     </g>
+    </g>
+    <g id="xtick_11">
+     <g id="line2d_27">
+      <path d="M 378.938182 544.32 
+L 378.938182 437.4 
+" clip-path="url(#pcfc410b24c)" style="fill: none; stroke: #dce2d6; stroke-width: 0.65; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_28"/>
+     <g id="text_29">
+      <text style="font-size: 10px; font-family: 'Noto Sans CJK JP'; text-anchor: middle; fill: #647472" x="378.938182" y="560.12" transform="rotate(-0 378.938182 560.12)">100</text>
+     </g>
+    </g>
+    <g id="xtick_12">
+     <g id="line2d_29">
+      <path d="M 490.647273 544.32 
+L 490.647273 437.4 
+" clip-path="url(#pcfc410b24c)" style="fill: none; stroke: #dce2d6; stroke-width: 0.65; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_30"/>
+     <g id="text_30">
+      <text style="font-size: 10px; font-family: 'Noto Sans CJK JP'; text-anchor: middle; fill: #647472" x="490.647273" y="560.12" transform="rotate(-0 490.647273 560.12)">150</text>
+     </g>
+    </g>
+    <g id="text_31">
+     <text style="font-size: 9px; font-family: 'Noto Sans CJK JP'; text-anchor: end; fill: #647472" x="524.16" y="573.24" transform="rotate(-0 524.16 573.24)">tok/s</text>
+    </g>
+   </g>
+   <g id="matplotlib.axis_6">
+    <g id="ytick_7">
+     <g id="line2d_31"/>
+     <g id="text_32">
+      <text style="font-size: 10px; font-family: 'Noto Sans CJK JP'; text-anchor: end; fill: #647472" x="148.52" y="466.518065" transform="rotate(-0 148.52 466.518065)">普通中文长文</text>
+     </g>
+    </g>
+    <g id="ytick_8">
+     <g id="line2d_32"/>
+     <g id="text_33">
+      <text style="font-size: 10px; font-family: 'Noto Sans CJK JP'; text-anchor: end; fill: #647472" x="148.52" y="495.26" transform="rotate(-0 148.52 495.26)">Python 代码</text>
+     </g>
+    </g>
+    <g id="ytick_9">
+     <g id="line2d_33"/>
+     <g id="text_34">
+      <text style="font-size: 10px; font-family: 'Noto Sans CJK JP'; text-anchor: end; fill: #647472" x="148.52" y="524.001935" transform="rotate(-0 148.52 524.001935)">规则数字序列</text>
+     </g>
+    </g>
+   </g>
+   <g id="patch_13">
+    <path d="M 155.52 544.32 
+L 524.16 544.32 
+" style="fill: none; stroke: #dce2d6; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
+   </g>
+   <g id="text_35">
+    <text style="font-size: 9px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #647472" x="155.52" y="432.046238" transform="rotate(-0 155.52 432.046238)">中文 / 代码为场景观测；规则序列为最终中位数</text>
+   </g>
+   <g id="patch_14">
+    <path d="M 155.52 455.22 
+L 270.133527 455.22 
+L 270.133527 469.016129 
+L 155.52 469.016129 
+z
+" clip-path="url(#pcfc410b24c)" style="fill: #246d68"/>
+   </g>
+   <g id="patch_15">
+    <path d="M 155.52 483.961935 
+L 345.202036 483.961935 
+L 345.202036 497.758065 
+L 155.52 497.758065 
+z
+" clip-path="url(#pcfc410b24c)" style="fill: #246d68"/>
+   </g>
+   <g id="patch_16">
+    <path d="M 155.52 512.703871 
+L 455.83872 512.703871 
+L 455.83872 526.5 
+L 155.52 526.5 
+z
+" clip-path="url(#pcfc410b24c)" style="fill: #b58b3c"/>
+   </g>
+   <g id="text_36">
+    <text style="font-weight: 700; font-size: 11px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="275.663127" y="466.298065" transform="rotate(-0 275.663127 466.298065)">51.3</text>
+   </g>
+   <g id="text_37">
+    <text style="font-weight: 700; font-size: 11px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="350.731636" y="495.04" transform="rotate(-0 350.731636 495.04)">84.9</text>
+   </g>
+   <g id="text_38">
+    <text style="font-weight: 700; font-size: 11px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="461.36832" y="523.781935" transform="rotate(-0 461.36832 523.781935)">134.4</text>
+   </g>
+   <g id="text_39">
+    <text style="font-weight: 700; font-size: 15px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="155.52" y="409.4" transform="rotate(-0 155.52 409.4)">③ MTP5 实际内容：收益随负载变化</text>
+   </g>
+  </g>
+  <g id="line2d_34">
+   <path d="M 51.84 120.528 
+L 1100.16 120.528 
+" style="fill: none; stroke: #dce2d6; stroke-linecap: square"/>
+  </g>
+  <g id="line2d_35">
+   <path d="M 51.84 586.44 
+L 1100.16 586.44 
+" style="fill: none; stroke: #dce2d6; stroke-linecap: square"/>
+  </g>
+  <g id="text_40">
+   <text style="font-weight: 700; font-size: 10px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #246d68" x="51.84" y="36.016" transform="rotate(-0 51.84 36.016)">DESKBOT  /  MODEL BENCHMARK</text>
+  </g>
+  <g id="text_41">
+   <text style="font-weight: 700; font-size: 27px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="51.84" y="80.784" transform="rotate(-0 51.84 80.784)">本地 Qwen 推理优化：参数扫描与最终复测分开看</text>
+  </g>
+  <g id="text_42">
+   <text style="font-size: 11px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #647472" x="51.84" y="107.528" transform="rotate(-0 51.84 107.528)">服务名 qwen3.8-27b · NInfer / Bonsai 三元量化制品 · RTX 4080 Laptop 12GB · 8K 上下文 / FP8 KV / 单并发</text>
+  </g>
+  <g id="text_43">
+   <text style="font-size: 11px; font-family: 'Noto Sans CJK JP'; text-anchor: end; fill: #647472" x="1100.16" y="40.136" transform="rotate(-0 1100.16 40.136)">04 / 04</text>
+  </g>
+  <g id="text_44">
+   <text style="font-weight: 700; font-size: 10px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #246d68" x="714.24" y="380.104" transform="rotate(-0 714.24 380.104)">最终范围 132.19–136.06 tok/s；相对基线约 4.62 倍。</text>
+  </g>
+  <g id="text_45">
+   <text style="font-weight: 700; font-size: 14px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="639.36" y="427.04" transform="rotate(-0 639.36 427.04)">④ 最终采用的配置与工程取舍</text>
+  </g>
+  <g id="text_46">
+   <text style="font-size: 9.5px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="639.36" y="454.184" transform="rotate(-0 639.36 454.184)">启用 MTP5：--spec mtp --draft-tokens 5 --lm-head-draft</text>
+  </g>
+  <g id="text_47">
+   <text style="font-size: 9.5px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #647472" x="639.36" y="479.456" transform="rotate(-0 639.36 479.456)">保留 --no-prefix-reuse，修复多轮工具请求后的引擎失败。</text>
+  </g>
+  <g id="text_48">
+   <text style="font-size: 9.5px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #647472" x="639.36" y="504.728" transform="rotate(-0 639.36 504.728)">代价：每轮重算历史；长对话的首字等待可能增加。</text>
+  </g>
+  <g id="text_49">
+   <text style="font-size: 9.5px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #647472" x="639.36" y="530" transform="rotate(-0 639.36 530)">prefill 1024 → 2048：2583-token 提示仅提升约 0.45%，未采用。</text>
+  </g>
+  <g id="text_50">
+   <text style="font-size: 9.5px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="639.36" y="555.272" transform="rotate(-0 639.36 555.272)">已接入 Deskbot 启动器，普通多轮及工具定义请求验证成功。</text>
+  </g>
+  <g id="text_51">
+   <text style="font-size: 9px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #647472" x="51.84" y="605.376" transform="rotate(-0 51.84 605.376)">口径：tok/s 为生成阶段吞吐，不是首字延迟或语音端到端延迟。扫描 MTP5 的 108.62 与最终 134.42 属于不同轮次。</text>
+  </g>
+  <g id="text_52">
+   <text style="font-size: 9px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #647472" x="51.84" y="624.816" transform="rotate(-0 51.84 624.816)">来源：历史 NInfer 优化记录；当前文字启动脚本保留 MTP5。未推导中文/代码提速倍数；4.62 倍不适用于所有场景。</text>
+  </g>
+ </g>
+ <defs>
+  <clipPath id="pee3f397ef6">
+   <rect x="120.96" y="187.92" width="403.2" height="158.76"/>
+  </clipPath>
+  <clipPath id="pcce57e9881">
+   <rect x="714.24" y="187.92" width="368.64" height="158.76"/>
+  </clipPath>
+  <clipPath id="pcfc410b24c">
+   <rect x="155.52" y="437.4" width="368.64" height="106.92"/>
+  </clipPath>
+ </defs>
+</svg>

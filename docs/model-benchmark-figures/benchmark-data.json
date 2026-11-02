@@ -1,0 +1,245 @@
+{
+  "provenance": {
+    "asr_tts": "Historical thread 01a082e5-7ba8-75b0-9232-130f86cbcd8c: saved result JSON readout and handoff; original JSON/CSV not recovered in current directories.",
+    "llm": "Historical thread 01a0da00-334d-7b92-a482-539528237576: benchmark progress and final result; current ninfer-chat-start-text confirms MTP5 configuration.",
+    "status": "Historical observations, not a new benchmark. CPU and GPU runs are separate batches."
+  },
+  "asr_gpu": {
+    "languages": [
+      "中文",
+      "英文",
+      "日文",
+      "韩文",
+      "粤语"
+    ],
+    "models": [
+      "SenseVoiceSmall",
+      "Fun-ASR-Nano-2512"
+    ],
+    "latency_median_ms": [
+      [
+        27.325,
+        34.469,
+        34.66,
+        25.54,
+        25.297
+      ],
+      [
+        183.229,
+        292.506,
+        366.971,
+        379.473,
+        203.132
+      ]
+    ],
+    "rtf_median": [
+      [
+        0.004861,
+        0.004801,
+        0.004794,
+        0.005491,
+        0.004858
+      ],
+      [
+        0.032594,
+        0.040738,
+        0.050759,
+        0.081581,
+        0.039006
+      ]
+    ],
+    "load_s": [
+      5.98992459800138,
+      21.464337255998544
+    ],
+    "peak_gpu_allocated_mib": [
+      939.1611328125,
+      3394.0048828125
+    ],
+    "loaded_process_rss_mib": [
+      1140.63671875,
+      3310.921875
+    ],
+    "repeat": 5,
+    "warmup_excluded": true
+  },
+  "asr_cpu": {
+    "models": [
+      "SenseVoiceSmall",
+      "Fun-ASR-Nano-2512"
+    ],
+    "load_s": [
+      5.82,
+      21.71
+    ],
+    "process_rss_gib": [
+      1.87,
+      3.31
+    ],
+    "rtf_median_range": [
+      [
+        0.03,
+        0.031
+      ],
+      [
+        0.153,
+        0.357
+      ]
+    ],
+    "note": "Earlier CPU batch summary; per-sample values not recovered. Ranges are sample-median ranges, not confidence intervals."
+  },
+  "tts": {
+    "samples": [
+      "短句",
+      "桌宠对话",
+      "技术混合",
+      "数字",
+      "长文本"
+    ],
+    "models": [
+      "EdgeTTS · 云端流式",
+      "Qwen3-TTS 0.6B · GPU整段"
+    ],
+    "first_audio_median_s": [
+      [
+        1.100474,
+        1.114228,
+        1.129709,
+        1.21823,
+        1.2202
+      ],
+      [
+        2.083379,
+        5.147105,
+        6.889711,
+        6.695985,
+        18.594846
+      ]
+    ],
+    "total_median_s": [
+      [
+        1.475119,
+        1.514887,
+        1.563802,
+        1.645798,
+        1.835227
+      ],
+      [
+        2.083379,
+        5.147105,
+        6.889711,
+        6.695985,
+        18.594846
+      ]
+    ],
+    "rtf_median": [
+      [
+        0.682926,
+        0.317187,
+        0.238676,
+        0.267871,
+        0.098036
+      ],
+      [
+        0.81382,
+        0.814415,
+        0.844327,
+        1.087011,
+        0.821327
+      ]
+    ],
+    "audio_median_s": [
+      [
+        2.16,
+        4.776,
+        6.552,
+        6.144,
+        18.72
+      ],
+      [
+        2.56,
+        6.32,
+        8.16,
+        6.16,
+        22.64
+      ]
+    ],
+    "qwen_gpu_load_s": 1.508656821999466,
+    "qwen_gpu_peak_allocated_mib": 2769.10302734375,
+    "qwen_cpu": {
+      "load_s": 2.62,
+      "process_rss_gib": 4.6,
+      "rtf_range": [
+        2.42,
+        3.08
+      ]
+    },
+    "repeat": 5,
+    "warmup_excluded": true,
+    "audio_files": 50,
+    "note": "Qwen adapter generates a full waveform: first audio equals total time. Cloud vs local and streaming vs whole-waveform differ."
+  },
+  "llm": {
+    "service_model_id": "qwen3.8-27b",
+    "artifact": "bonsai2_27b_ternary_v2.ninfer",
+    "hardware": "RTX 4080 Laptop 12GB",
+    "engine": "NInfer",
+    "config": {
+      "context": 8192,
+      "kv_dtype": "fp8",
+      "concurrency": 1,
+      "no_prefix_reuse": true,
+      "greedy": true,
+      "no_thinking": true
+    },
+    "scan": {
+      "configs": [
+        "无 MTP",
+        "MTP3",
+        "MTP4",
+        "MTP5"
+      ],
+      "median_tok_s": [
+        29.07,
+        89.59,
+        100.1,
+        108.62
+      ]
+    },
+    "final": {
+      "baseline_median_tok_s": 29.07,
+      "mtp5_median_tok_s": 134.42,
+      "mtp5_runs_range_tok_s": [
+        132.19,
+        136.06
+      ],
+      "output_tokens": 256,
+      "repeat": 3,
+      "warmup": true,
+      "workload": "规则数字序列"
+    },
+    "mtp5_workloads": {
+      "labels": [
+        "普通中文长文",
+        "Python 代码",
+        "规则数字序列"
+      ],
+      "tok_s": [
+        51.3,
+        84.9,
+        134.42
+      ],
+      "note": "Chinese/code are scenario observations. Rule sequence is final repeated-run median. No matched non-MTP baselines for Chinese/code in recovered summary."
+    },
+    "prefill": {
+      "prompt_tokens": 2583,
+      "chunks": [
+        1024,
+        2048
+      ],
+      "observed_gain_pct": 0.45,
+      "adopted": false
+    },
+    "baseline_short_prompt_ttft_ms": 110
+  }
+}

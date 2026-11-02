@@ -1,0 +1,822 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="1152pt" height="648pt" viewBox="0 0 1152 648" xmlns="http://www.w3.org/2000/svg" version="1.1">
+ <metadata>
+  <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+   <cc:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dc:date>2026-10-16T06:03:36.419272</dc:date>
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <cc:Agent>
+      <dc:title>Matplotlib v3.11.2, https://matplotlib.org/</dc:title>
+     </cc:Agent>
+    </dc:creator>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="figure_1">
+  <g id="patch_1">
+   <path d="M 0 648 
+L 1152 648 
+L 1152 0 
+L 0 0 
+z
+" style="fill: #f5f4ec"/>
+  </g>
+  <g id="axes_1">
+   <g id="patch_2">
+    <path d="M 115.2 369.36 
+L 541.44 369.36 
+L 541.44 197.64 
+L 115.2 197.64 
+z
+" style="fill: #f5f4ec"/>
+   </g>
+   <g id="matplotlib.axis_1">
+    <g id="xtick_1">
+     <g id="line2d_1">
+      <path d="M 115.2 369.36 
+L 115.2 197.64 
+" clip-path="url(#p0a9a8354a3)" style="fill: none; stroke: #dce2d6; stroke-width: 0.65; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_2"/>
+     <g id="text_1">
+      <text style="font-size: 10px; font-family: 'Noto Sans CJK JP'; text-anchor: middle; fill: #647472" x="115.2" y="385.16" transform="rotate(-0 115.2 385.16)">0</text>
+     </g>
+    </g>
+    <g id="xtick_2">
+     <g id="line2d_3">
+      <path d="M 207.86087 369.36 
+L 207.86087 197.64 
+" clip-path="url(#p0a9a8354a3)" style="fill: none; stroke: #dce2d6; stroke-width: 0.65; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_4"/>
+     <g id="text_2">
+      <text style="font-size: 10px; font-family: 'Noto Sans CJK JP'; text-anchor: middle; fill: #647472" x="207.86087" y="385.16" transform="rotate(-0 207.86087 385.16)">5</text>
+     </g>
+    </g>
+    <g id="xtick_3">
+     <g id="line2d_5">
+      <path d="M 300.521739 369.36 
+L 300.521739 197.64 
+" clip-path="url(#p0a9a8354a3)" style="fill: none; stroke: #dce2d6; stroke-width: 0.65; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_6"/>
+     <g id="text_3">
+      <text style="font-size: 10px; font-family: 'Noto Sans CJK JP'; text-anchor: middle; fill: #647472" x="300.521739" y="385.16" transform="rotate(-0 300.521739 385.16)">10</text>
+     </g>
+    </g>
+    <g id="xtick_4">
+     <g id="line2d_7">
+      <path d="M 393.182609 369.36 
+L 393.182609 197.64 
+" clip-path="url(#p0a9a8354a3)" style="fill: none; stroke: #dce2d6; stroke-width: 0.65; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_8"/>
+     <g id="text_4">
+      <text style="font-size: 10px; font-family: 'Noto Sans CJK JP'; text-anchor: middle; fill: #647472" x="393.182609" y="385.16" transform="rotate(-0 393.182609 385.16)">15</text>
+     </g>
+    </g>
+    <g id="xtick_5">
+     <g id="line2d_9">
+      <path d="M 485.843478 369.36 
+L 485.843478 197.64 
+" clip-path="url(#p0a9a8354a3)" style="fill: none; stroke: #dce2d6; stroke-width: 0.65; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_10"/>
+     <g id="text_5">
+      <text style="font-size: 10px; font-family: 'Noto Sans CJK JP'; text-anchor: middle; fill: #647472" x="485.843478" y="385.16" transform="rotate(-0 485.843478 385.16)">20</text>
+     </g>
+    </g>
+    <g id="text_6">
+     <text style="font-size: 9px; font-family: 'Noto Sans CJK JP'; text-anchor: end; fill: #647472" x="541.44" y="400.28" transform="rotate(-0 541.44 400.28)">秒</text>
+    </g>
+   </g>
+   <g id="matplotlib.axis_2">
+    <g id="ytick_1">
+     <g id="line2d_11"/>
+     <g id="text_7">
+      <text style="font-size: 10px; font-family: 'Noto Sans CJK JP'; text-anchor: end; fill: #647472" x="108.2" y="229.029281" transform="rotate(-0 108.2 229.029281)">短句</text>
+     </g>
+    </g>
+    <g id="ytick_2">
+     <g id="line2d_12"/>
+     <g id="text_8">
+      <text style="font-size: 10px; font-family: 'Noto Sans CJK JP'; text-anchor: end; fill: #647472" x="108.2" y="258.464641" transform="rotate(-0 108.2 258.464641)">桌宠对话</text>
+     </g>
+    </g>
+    <g id="ytick_3">
+     <g id="line2d_13"/>
+     <g id="text_9">
+      <text style="font-size: 10px; font-family: 'Noto Sans CJK JP'; text-anchor: end; fill: #647472" x="108.2" y="287.9" transform="rotate(-0 108.2 287.9)">技术混合</text>
+     </g>
+    </g>
+    <g id="ytick_4">
+     <g id="line2d_14"/>
+     <g id="text_10">
+      <text style="font-size: 10px; font-family: 'Noto Sans CJK JP'; text-anchor: end; fill: #647472" x="108.2" y="317.335359" transform="rotate(-0 108.2 317.335359)">数字</text>
+     </g>
+    </g>
+    <g id="ytick_5">
+     <g id="line2d_15"/>
+     <g id="text_11">
+      <text style="font-size: 10px; font-family: 'Noto Sans CJK JP'; text-anchor: end; fill: #647472" x="108.2" y="346.770719" transform="rotate(-0 108.2 346.770719)">长文本</text>
+     </g>
+    </g>
+   </g>
+   <g id="patch_3">
+    <path d="M 115.2 369.36 
+L 541.44 369.36 
+" style="fill: none; stroke: #dce2d6; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
+   </g>
+   <g id="text_12">
+    <text style="font-size: 9px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #647472" x="115.2" y="190.5498" transform="rotate(-0 115.2 190.5498)">收到第一段音频需要多久；越低越好</text>
+   </g>
+   <g id="patch_4">
+    <path d="M 115.2 215.357143 
+L 135.594176 215.357143 
+L 135.594176 223.893397 
+L 115.2 223.893397 
+z
+" clip-path="url(#p0a9a8354a3)" style="fill: #246d68"/>
+   </g>
+   <g id="patch_5">
+    <path d="M 115.2 244.792502 
+L 135.849067 244.792502 
+L 135.849067 253.328757 
+L 115.2 253.328757 
+z
+" clip-path="url(#p0a9a8354a3)" style="fill: #246d68"/>
+   </g>
+   <g id="patch_6">
+    <path d="M 115.2 274.227862 
+L 136.135964 274.227862 
+L 136.135964 282.764116 
+L 115.2 282.764116 
+z
+" clip-path="url(#p0a9a8354a3)" style="fill: #246d68"/>
+   </g>
+   <g id="patch_7">
+    <path d="M 115.2 303.663221 
+L 137.77645 303.663221 
+L 137.77645 312.199475 
+L 115.2 312.199475 
+z
+" clip-path="url(#p0a9a8354a3)" style="fill: #246d68"/>
+   </g>
+   <g id="patch_8">
+    <path d="M 115.2 333.098581 
+L 137.812959 333.098581 
+L 137.812959 341.634835 
+L 115.2 341.634835 
+z
+" clip-path="url(#p0a9a8354a3)" style="fill: #246d68"/>
+   </g>
+   <g id="patch_9">
+    <path d="M 115.2 225.365165 
+L 153.809542 225.365165 
+L 153.809542 233.901419 
+L 115.2 233.901419 
+z
+" clip-path="url(#p0a9a8354a3)" style="fill: #9aaca6"/>
+   </g>
+   <g id="patch_10">
+    <path d="M 115.2 254.800525 
+L 210.587045 254.800525 
+L 210.587045 263.336779 
+L 115.2 263.336779 
+z
+" clip-path="url(#p0a9a8354a3)" style="fill: #9aaca6"/>
+   </g>
+   <g id="patch_11">
+    <path d="M 115.2 284.235884 
+L 242.881322 284.235884 
+L 242.881322 292.772138 
+L 115.2 292.772138 
+z
+" clip-path="url(#p0a9a8354a3)" style="fill: #9aaca6"/>
+   </g>
+   <g id="patch_12">
+    <path d="M 115.2 313.671243 
+L 239.291159 313.671243 
+L 239.291159 322.207498 
+L 115.2 322.207498 
+z
+" clip-path="url(#p0a9a8354a3)" style="fill: #9aaca6"/>
+   </g>
+   <g id="patch_13">
+    <path d="M 115.2 343.106603 
+L 459.80292 343.106603 
+L 459.80292 351.642857 
+L 115.2 351.642857 
+z
+" clip-path="url(#p0a9a8354a3)" style="fill: #9aaca6"/>
+   </g>
+   <g id="text_13">
+    <text style="font-size: 9.5px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="140.709056" y="223.23527" transform="rotate(-0 140.709056 223.23527)">1.10</text>
+   </g>
+   <g id="text_14">
+    <text style="font-size: 9.5px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="140.963947" y="252.670629" transform="rotate(-0 140.963947 252.670629)">1.11</text>
+   </g>
+   <g id="text_15">
+    <text style="font-size: 9.5px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="141.250844" y="282.105989" transform="rotate(-0 141.250844 282.105989)">1.13</text>
+   </g>
+   <g id="text_16">
+    <text style="font-size: 9.5px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="142.89133" y="311.541348" transform="rotate(-0 142.89133 311.541348)">1.22</text>
+   </g>
+   <g id="text_17">
+    <text style="font-size: 9.5px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="142.927839" y="340.976708" transform="rotate(-0 142.927839 340.976708)">1.22</text>
+   </g>
+   <g id="text_18">
+    <text style="font-size: 9.5px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="158.924422" y="233.243292" transform="rotate(-0 158.924422 233.243292)">2.08</text>
+   </g>
+   <g id="text_19">
+    <text style="font-size: 9.5px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="215.701925" y="262.678652" transform="rotate(-0 215.701925 262.678652)">5.15</text>
+   </g>
+   <g id="text_20">
+    <text style="font-size: 9.5px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="247.996202" y="292.114011" transform="rotate(-0 247.996202 292.114011)">6.89</text>
+   </g>
+   <g id="text_21">
+    <text style="font-size: 9.5px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="244.406039" y="321.549371" transform="rotate(-0 244.406039 321.549371)">6.70</text>
+   </g>
+   <g id="text_22">
+    <text style="font-size: 9.5px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="464.9178" y="350.98473" transform="rotate(-0 464.9178 350.98473)">18.59</text>
+   </g>
+   <g id="text_23">
+    <text style="font-weight: 700; font-size: 15px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="115.2" y="169.64" transform="rotate(-0 115.2 169.64)">首音频等待时间</text>
+   </g>
+  </g>
+  <g id="axes_2">
+   <g id="patch_14">
+    <path d="M 673.92 369.36 
+L 1088.64 369.36 
+L 1088.64 197.64 
+L 673.92 197.64 
+z
+" style="fill: #f5f4ec"/>
+   </g>
+   <g id="matplotlib.axis_3">
+    <g id="xtick_6">
+     <g id="line2d_16">
+      <path d="M 673.92 369.36 
+L 673.92 197.64 
+" clip-path="url(#p24bf07e5f8)" style="fill: none; stroke: #dce2d6; stroke-width: 0.65; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_17"/>
+     <g id="text_24">
+      <text style="font-size: 10px; font-family: 'Noto Sans CJK JP'; text-anchor: middle; fill: #647472" x="673.92" y="385.16" transform="rotate(-0 673.92 385.16)">0</text>
+     </g>
+    </g>
+    <g id="xtick_7">
+     <g id="line2d_18">
+      <path d="M 764.076522 369.36 
+L 764.076522 197.64 
+" clip-path="url(#p24bf07e5f8)" style="fill: none; stroke: #dce2d6; stroke-width: 0.65; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_19"/>
+     <g id="text_25">
+      <text style="font-size: 10px; font-family: 'Noto Sans CJK JP'; text-anchor: middle; fill: #647472" x="764.076522" y="385.16" transform="rotate(-0 764.076522 385.16)">5</text>
+     </g>
+    </g>
+    <g id="xtick_8">
+     <g id="line2d_20">
+      <path d="M 854.233043 369.36 
+L 854.233043 197.64 
+" clip-path="url(#p24bf07e5f8)" style="fill: none; stroke: #dce2d6; stroke-width: 0.65; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_21"/>
+     <g id="text_26">
+      <text style="font-size: 10px; font-family: 'Noto Sans CJK JP'; text-anchor: middle; fill: #647472" x="854.233043" y="385.16" transform="rotate(-0 854.233043 385.16)">10</text>
+     </g>
+    </g>
+    <g id="xtick_9">
+     <g id="line2d_22">
+      <path d="M 944.389565 369.36 
+L 944.389565 197.64 
+" clip-path="url(#p24bf07e5f8)" style="fill: none; stroke: #dce2d6; stroke-width: 0.65; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_23"/>
+     <g id="text_27">
+      <text style="font-size: 10px; font-family: 'Noto Sans CJK JP'; text-anchor: middle; fill: #647472" x="944.389565" y="385.16" transform="rotate(-0 944.389565 385.16)">15</text>
+     </g>
+    </g>
+    <g id="xtick_10">
+     <g id="line2d_24">
+      <path d="M 1034.546087 369.36 
+L 1034.546087 197.64 
+" clip-path="url(#p24bf07e5f8)" style="fill: none; stroke: #dce2d6; stroke-width: 0.65; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_25"/>
+     <g id="text_28">
+      <text style="font-size: 10px; font-family: 'Noto Sans CJK JP'; text-anchor: middle; fill: #647472" x="1034.546087" y="385.16" transform="rotate(-0 1034.546087 385.16)">20</text>
+     </g>
+    </g>
+    <g id="text_29">
+     <text style="font-size: 9px; font-family: 'Noto Sans CJK JP'; text-anchor: end; fill: #647472" x="1088.64" y="400.28" transform="rotate(-0 1088.64 400.28)">秒</text>
+    </g>
+   </g>
+   <g id="matplotlib.axis_4">
+    <g id="ytick_6">
+     <g id="line2d_26"/>
+     <g id="text_30">
+      <text style="font-size: 10px; font-family: 'Noto Sans CJK JP'; text-anchor: end; fill: #647472" x="666.92" y="229.029281" transform="rotate(-0 666.92 229.029281)">短句</text>
+     </g>
+    </g>
+    <g id="ytick_7">
+     <g id="line2d_27"/>
+     <g id="text_31">
+      <text style="font-size: 10px; font-family: 'Noto Sans CJK JP'; text-anchor: end; fill: #647472" x="666.92" y="258.464641" transform="rotate(-0 666.92 258.464641)">桌宠对话</text>
+     </g>
+    </g>
+    <g id="ytick_8">
+     <g id="line2d_28"/>
+     <g id="text_32">
+      <text style="font-size: 10px; font-family: 'Noto Sans CJK JP'; text-anchor: end; fill: #647472" x="666.92" y="287.9" transform="rotate(-0 666.92 287.9)">技术混合</text>
+     </g>
+    </g>
+    <g id="ytick_9">
+     <g id="line2d_29"/>
+     <g id="text_33">
+      <text style="font-size: 10px; font-family: 'Noto Sans CJK JP'; text-anchor: end; fill: #647472" x="666.92" y="317.335359" transform="rotate(-0 666.92 317.335359)">数字</text>
+     </g>
+    </g>
+    <g id="ytick_10">
+     <g id="line2d_30"/>
+     <g id="text_34">
+      <text style="font-size: 10px; font-family: 'Noto Sans CJK JP'; text-anchor: end; fill: #647472" x="666.92" y="346.770719" transform="rotate(-0 666.92 346.770719)">长文本</text>
+     </g>
+    </g>
+   </g>
+   <g id="patch_15">
+    <path d="M 673.92 369.36 
+L 1088.64 369.36 
+" style="fill: none; stroke: #dce2d6; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
+   </g>
+   <g id="text_35">
+    <text style="font-size: 9px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #647472" x="673.92" y="190.5498" transform="rotate(-0 673.92 190.5498)">完整合成耗时；与左图使用相同比例尺</text>
+   </g>
+   <g id="patch_16">
+    <path d="M 673.92 215.357143 
+L 700.51832 215.357143 
+L 700.51832 223.893397 
+L 673.92 223.893397 
+z
+" clip-path="url(#p24bf07e5f8)" style="fill: #246d68"/>
+   </g>
+   <g id="patch_17">
+    <path d="M 673.92 244.792502 
+L 701.235389 244.792502 
+L 701.235389 253.328757 
+L 673.92 253.328757 
+z
+" clip-path="url(#p24bf07e5f8)" style="fill: #246d68"/>
+   </g>
+   <g id="patch_18">
+    <path d="M 673.92 274.227862 
+L 702.11739 274.227862 
+L 702.11739 282.764116 
+L 673.92 282.764116 
+z
+" clip-path="url(#p24bf07e5f8)" style="fill: #246d68"/>
+   </g>
+   <g id="patch_19">
+    <path d="M 673.92 303.663221 
+L 703.595885 303.663221 
+L 703.595885 312.199475 
+L 673.92 312.199475 
+z
+" clip-path="url(#p24bf07e5f8)" style="fill: #246d68"/>
+   </g>
+   <g id="patch_20">
+    <path d="M 673.92 333.098581 
+L 707.011537 333.098581 
+L 707.011537 341.634835 
+L 673.92 341.634835 
+z
+" clip-path="url(#p24bf07e5f8)" style="fill: #246d68"/>
+   </g>
+   <g id="patch_21">
+    <path d="M 673.92 225.365165 
+L 711.486041 225.365165 
+L 711.486041 233.901419 
+L 673.92 233.901419 
+z
+" clip-path="url(#p24bf07e5f8)" style="fill: #9aaca6"/>
+   </g>
+   <g id="patch_22">
+    <path d="M 673.92 254.800525 
+L 766.729017 254.800525 
+L 766.729017 263.336779 
+L 673.92 263.336779 
+z
+" clip-path="url(#p24bf07e5f8)" style="fill: #9aaca6"/>
+   </g>
+   <g id="patch_23">
+    <path d="M 673.92 284.235884 
+L 798.150476 284.235884 
+L 798.150476 292.772138 
+L 673.92 292.772138 
+z
+" clip-path="url(#p24bf07e5f8)" style="fill: #9aaca6"/>
+   </g>
+   <g id="patch_24">
+    <path d="M 673.92 313.671243 
+L 794.657343 313.671243 
+L 794.657343 322.207498 
+L 673.92 322.207498 
+z
+" clip-path="url(#p24bf07e5f8)" style="fill: #9aaca6"/>
+   </g>
+   <g id="patch_25">
+    <path d="M 673.92 343.106603 
+L 1009.209328 343.106603 
+L 1009.209328 351.642857 
+L 673.92 351.642857 
+z
+" clip-path="url(#p24bf07e5f8)" style="fill: #9aaca6"/>
+   </g>
+   <g id="text_36">
+    <text style="font-size: 9.5px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="705.49496" y="223.23527" transform="rotate(-0 705.49496 223.23527)">1.48</text>
+   </g>
+   <g id="text_37">
+    <text style="font-size: 9.5px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="706.212029" y="252.670629" transform="rotate(-0 706.212029 252.670629)">1.51</text>
+   </g>
+   <g id="text_38">
+    <text style="font-size: 9.5px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="707.09403" y="282.105989" transform="rotate(-0 707.09403 282.105989)">1.56</text>
+   </g>
+   <g id="text_39">
+    <text style="font-size: 9.5px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="708.572525" y="311.541348" transform="rotate(-0 708.572525 311.541348)">1.65</text>
+   </g>
+   <g id="text_40">
+    <text style="font-size: 9.5px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="711.988177" y="340.976708" transform="rotate(-0 711.988177 340.976708)">1.84</text>
+   </g>
+   <g id="text_41">
+    <text style="font-size: 9.5px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="716.462681" y="233.243292" transform="rotate(-0 716.462681 233.243292)">2.08</text>
+   </g>
+   <g id="text_42">
+    <text style="font-size: 9.5px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="771.705657" y="262.678652" transform="rotate(-0 771.705657 262.678652)">5.15</text>
+   </g>
+   <g id="text_43">
+    <text style="font-size: 9.5px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="803.127116" y="292.114011" transform="rotate(-0 803.127116 292.114011)">6.89</text>
+   </g>
+   <g id="text_44">
+    <text style="font-size: 9.5px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="799.633983" y="321.549371" transform="rotate(-0 799.633983 321.549371)">6.70</text>
+   </g>
+   <g id="text_45">
+    <text style="font-size: 9.5px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="1014.185968" y="350.98473" transform="rotate(-0 1014.185968 350.98473)">18.59</text>
+   </g>
+   <g id="text_46">
+    <text style="font-weight: 700; font-size: 15px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="673.92" y="169.64" transform="rotate(-0 673.92 169.64)">总生成时间</text>
+   </g>
+  </g>
+  <g id="axes_3">
+   <g id="table_1">
+    <g id="patch_26">
+     <path d="M 51.84 471.204 
+L 172.8 471.204 
+L 172.8 454.248 
+L 51.84 454.248 
+z
+" style="fill: #e7ebdd; stroke: #dce2d6; stroke-width: 0.6; stroke-linejoin: miter"/>
+    </g>
+    <g id="text_47">
+     <text style="font-weight: 700; font-size: 9px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="62.7264" y="466.146" transform="rotate(-0 62.7264 466.146)">样本</text>
+    </g>
+    <g id="patch_27">
+     <path d="M 172.8 471.204 
+L 281.664 471.204 
+L 281.664 454.248 
+L 172.8 454.248 
+z
+" style="fill: #e7ebdd; stroke: #dce2d6; stroke-width: 0.6; stroke-linejoin: miter"/>
+    </g>
+    <g id="text_48">
+     <text style="font-weight: 700; font-size: 9px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="182.59776" y="465.592641" transform="rotate(-0 182.59776 465.592641)">Edge RTF</text>
+    </g>
+    <g id="patch_28">
+     <path d="M 281.664 471.204 
+L 390.528 471.204 
+L 390.528 454.248 
+L 281.664 454.248 
+z
+" style="fill: #e7ebdd; stroke: #dce2d6; stroke-width: 0.6; stroke-linejoin: miter"/>
+    </g>
+    <g id="text_49">
+     <text style="font-weight: 700; font-size: 9px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="291.46176" y="465.781781" transform="rotate(-0 291.46176 465.781781)">Qwen RTF</text>
+    </g>
+    <g id="patch_29">
+     <path d="M 390.528 471.204 
+L 656.64 471.204 
+L 656.64 454.248 
+L 390.528 454.248 
+z
+" style="fill: #e7ebdd; stroke: #dce2d6; stroke-width: 0.6; stroke-linejoin: miter"/>
+    </g>
+    <g id="text_50">
+     <text style="font-weight: 700; font-size: 9px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="414.47808" y="465.592641" transform="rotate(-0 414.47808 465.592641)">音频时长 Edge / Qwen（s）</text>
+    </g>
+    <g id="patch_30">
+     <path d="M 51.84 488.16 
+L 172.8 488.16 
+L 172.8 471.204 
+L 51.84 471.204 
+z
+" style="fill: #f5f4ec; stroke: #dce2d6; stroke-width: 0.6; stroke-linejoin: miter"/>
+    </g>
+    <g id="text_51">
+     <text style="font-size: 9px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="62.7264" y="483.102" transform="rotate(-0 62.7264 483.102)">短句</text>
+    </g>
+    <g id="patch_31">
+     <path d="M 172.8 488.16 
+L 281.664 488.16 
+L 281.664 471.204 
+L 172.8 471.204 
+z
+" style="fill: #f5f4ec; stroke: #dce2d6; stroke-width: 0.6; stroke-linejoin: miter"/>
+    </g>
+    <g id="text_52">
+     <text style="font-size: 9px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="182.59776" y="483.102" transform="rotate(-0 182.59776 483.102)">0.683</text>
+    </g>
+    <g id="patch_32">
+     <path d="M 281.664 488.16 
+L 390.528 488.16 
+L 390.528 471.204 
+L 281.664 471.204 
+z
+" style="fill: #f5f4ec; stroke: #dce2d6; stroke-width: 0.6; stroke-linejoin: miter"/>
+    </g>
+    <g id="text_53">
+     <text style="font-size: 9px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="291.46176" y="483.102" transform="rotate(-0 291.46176 483.102)">0.814</text>
+    </g>
+    <g id="patch_33">
+     <path d="M 390.528 488.16 
+L 656.64 488.16 
+L 656.64 471.204 
+L 390.528 471.204 
+z
+" style="fill: #f5f4ec; stroke: #dce2d6; stroke-width: 0.6; stroke-linejoin: miter"/>
+    </g>
+    <g id="text_54">
+     <text style="font-size: 9px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="414.47808" y="482.836219" transform="rotate(-0 414.47808 482.836219)">2.16 / 2.56</text>
+    </g>
+    <g id="patch_34">
+     <path d="M 51.84 505.116 
+L 172.8 505.116 
+L 172.8 488.16 
+L 51.84 488.16 
+z
+" style="fill: #f5f4ec; stroke: #dce2d6; stroke-width: 0.6; stroke-linejoin: miter"/>
+    </g>
+    <g id="text_55">
+     <text style="font-size: 9px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="62.7264" y="500.058" transform="rotate(-0 62.7264 500.058)">桌宠对话</text>
+    </g>
+    <g id="patch_35">
+     <path d="M 172.8 505.116 
+L 281.664 505.116 
+L 281.664 488.16 
+L 172.8 488.16 
+z
+" style="fill: #f5f4ec; stroke: #dce2d6; stroke-width: 0.6; stroke-linejoin: miter"/>
+    </g>
+    <g id="text_56">
+     <text style="font-size: 9px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="182.59776" y="500.058" transform="rotate(-0 182.59776 500.058)">0.317</text>
+    </g>
+    <g id="patch_36">
+     <path d="M 281.664 505.116 
+L 390.528 505.116 
+L 390.528 488.16 
+L 281.664 488.16 
+z
+" style="fill: #f5f4ec; stroke: #dce2d6; stroke-width: 0.6; stroke-linejoin: miter"/>
+    </g>
+    <g id="text_57">
+     <text style="font-size: 9px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="291.46176" y="500.058" transform="rotate(-0 291.46176 500.058)">0.814</text>
+    </g>
+    <g id="patch_37">
+     <path d="M 390.528 505.116 
+L 656.64 505.116 
+L 656.64 488.16 
+L 390.528 488.16 
+z
+" style="fill: #f5f4ec; stroke: #dce2d6; stroke-width: 0.6; stroke-linejoin: miter"/>
+    </g>
+    <g id="text_58">
+     <text style="font-size: 9px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="414.47808" y="499.792219" transform="rotate(-0 414.47808 499.792219)">4.78 / 6.32</text>
+    </g>
+    <g id="patch_38">
+     <path d="M 51.84 522.072 
+L 172.8 522.072 
+L 172.8 505.116 
+L 51.84 505.116 
+z
+" style="fill: #f5f4ec; stroke: #dce2d6; stroke-width: 0.6; stroke-linejoin: miter"/>
+    </g>
+    <g id="text_59">
+     <text style="font-size: 9px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="62.7264" y="517.014" transform="rotate(-0 62.7264 517.014)">技术混合</text>
+    </g>
+    <g id="patch_39">
+     <path d="M 172.8 522.072 
+L 281.664 522.072 
+L 281.664 505.116 
+L 172.8 505.116 
+z
+" style="fill: #f5f4ec; stroke: #dce2d6; stroke-width: 0.6; stroke-linejoin: miter"/>
+    </g>
+    <g id="text_60">
+     <text style="font-size: 9px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="182.59776" y="517.014" transform="rotate(-0 182.59776 517.014)">0.239</text>
+    </g>
+    <g id="patch_40">
+     <path d="M 281.664 522.072 
+L 390.528 522.072 
+L 390.528 505.116 
+L 281.664 505.116 
+z
+" style="fill: #f5f4ec; stroke: #dce2d6; stroke-width: 0.6; stroke-linejoin: miter"/>
+    </g>
+    <g id="text_61">
+     <text style="font-size: 9px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="291.46176" y="517.014" transform="rotate(-0 291.46176 517.014)">0.844</text>
+    </g>
+    <g id="patch_41">
+     <path d="M 390.528 522.072 
+L 656.64 522.072 
+L 656.64 505.116 
+L 390.528 505.116 
+z
+" style="fill: #f5f4ec; stroke: #dce2d6; stroke-width: 0.6; stroke-linejoin: miter"/>
+    </g>
+    <g id="text_62">
+     <text style="font-size: 9px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="414.47808" y="516.748219" transform="rotate(-0 414.47808 516.748219)">6.55 / 8.16</text>
+    </g>
+    <g id="patch_42">
+     <path d="M 51.84 539.028 
+L 172.8 539.028 
+L 172.8 522.072 
+L 51.84 522.072 
+z
+" style="fill: #f5f4ec; stroke: #dce2d6; stroke-width: 0.6; stroke-linejoin: miter"/>
+    </g>
+    <g id="text_63">
+     <text style="font-size: 9px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="62.7264" y="533.97" transform="rotate(-0 62.7264 533.97)">数字</text>
+    </g>
+    <g id="patch_43">
+     <path d="M 172.8 539.028 
+L 281.664 539.028 
+L 281.664 522.072 
+L 172.8 522.072 
+z
+" style="fill: #f5f4ec; stroke: #dce2d6; stroke-width: 0.6; stroke-linejoin: miter"/>
+    </g>
+    <g id="text_64">
+     <text style="font-size: 9px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="182.59776" y="533.97" transform="rotate(-0 182.59776 533.97)">0.268</text>
+    </g>
+    <g id="patch_44">
+     <path d="M 281.664 539.028 
+L 390.528 539.028 
+L 390.528 522.072 
+L 281.664 522.072 
+z
+" style="fill: #f5f4ec; stroke: #dce2d6; stroke-width: 0.6; stroke-linejoin: miter"/>
+    </g>
+    <g id="text_65">
+     <text style="font-size: 9px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="291.46176" y="533.97" transform="rotate(-0 291.46176 533.97)">1.087</text>
+    </g>
+    <g id="patch_45">
+     <path d="M 390.528 539.028 
+L 656.64 539.028 
+L 656.64 522.072 
+L 390.528 522.072 
+z
+" style="fill: #f5f4ec; stroke: #dce2d6; stroke-width: 0.6; stroke-linejoin: miter"/>
+    </g>
+    <g id="text_66">
+     <text style="font-size: 9px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="414.47808" y="533.704219" transform="rotate(-0 414.47808 533.704219)">6.14 / 6.16</text>
+    </g>
+    <g id="patch_46">
+     <path d="M 51.84 555.984 
+L 172.8 555.984 
+L 172.8 539.028 
+L 51.84 539.028 
+z
+" style="fill: #f5f4ec; stroke: #dce2d6; stroke-width: 0.6; stroke-linejoin: miter"/>
+    </g>
+    <g id="text_67">
+     <text style="font-size: 9px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="62.7264" y="550.926" transform="rotate(-0 62.7264 550.926)">长文本</text>
+    </g>
+    <g id="patch_47">
+     <path d="M 172.8 555.984 
+L 281.664 555.984 
+L 281.664 539.028 
+L 172.8 539.028 
+z
+" style="fill: #f5f4ec; stroke: #dce2d6; stroke-width: 0.6; stroke-linejoin: miter"/>
+    </g>
+    <g id="text_68">
+     <text style="font-size: 9px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="182.59776" y="550.926" transform="rotate(-0 182.59776 550.926)">0.098</text>
+    </g>
+    <g id="patch_48">
+     <path d="M 281.664 555.984 
+L 390.528 555.984 
+L 390.528 539.028 
+L 281.664 539.028 
+z
+" style="fill: #f5f4ec; stroke: #dce2d6; stroke-width: 0.6; stroke-linejoin: miter"/>
+    </g>
+    <g id="text_69">
+     <text style="font-size: 9px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="291.46176" y="550.926" transform="rotate(-0 291.46176 550.926)">0.821</text>
+    </g>
+    <g id="patch_49">
+     <path d="M 390.528 555.984 
+L 656.64 555.984 
+L 656.64 539.028 
+L 390.528 539.028 
+z
+" style="fill: #f5f4ec; stroke: #dce2d6; stroke-width: 0.6; stroke-linejoin: miter"/>
+    </g>
+    <g id="text_70">
+     <text style="font-size: 9px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="414.47808" y="550.660219" transform="rotate(-0 414.47808 550.660219)">18.72 / 22.64</text>
+    </g>
+   </g>
+  </g>
+  <g id="patch_50">
+   <path d="M 51.84 145.8 
+L 62.208 145.8 
+L 62.208 137.376 
+L 51.84 137.376 
+z
+" style="fill: #246d68; stroke: #246d68; stroke-linejoin: miter"/>
+  </g>
+  <g id="patch_51">
+   <path d="M 311.04 145.8 
+L 321.408 145.8 
+L 321.408 137.376 
+L 311.04 137.376 
+z
+" style="fill: #9aaca6; stroke: #9aaca6; stroke-linejoin: miter"/>
+  </g>
+  <g id="line2d_31">
+   <path d="M 51.84 120.528 
+L 1100.16 120.528 
+" style="fill: none; stroke: #dce2d6; stroke-linecap: square"/>
+  </g>
+  <g id="line2d_32">
+   <path d="M 51.84 586.44 
+L 1100.16 586.44 
+" style="fill: none; stroke: #dce2d6; stroke-linecap: square"/>
+  </g>
+  <g id="text_71">
+   <text style="font-weight: 700; font-size: 10px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #246d68" x="51.84" y="36.016" transform="rotate(-0 51.84 36.016)">DESKBOT  /  MODEL BENCHMARK</text>
+  </g>
+  <g id="text_72">
+   <text style="font-weight: 700; font-size: 27px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="51.84" y="80.784" transform="rotate(-0 51.84 80.784)">TTS 全场景对比：首音频、总耗时与实时率</text>
+  </g>
+  <g id="text_73">
+   <text style="font-size: 11px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #647472" x="51.84" y="107.528" transform="rotate(-0 51.84 107.528)">同一组五类文本，每项预热后重复 5 次；EdgeTTS 云端流式 vs Qwen3-TTS 0.6B GPU 整段生成。</text>
+  </g>
+  <g id="text_74">
+   <text style="font-size: 11px; font-family: 'Noto Sans CJK JP'; text-anchor: end; fill: #647472" x="1100.16" y="40.136" transform="rotate(-0 1100.16 40.136)">03 / 04</text>
+  </g>
+  <g id="text_75">
+   <text style="font-size: 10px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="69.12" y="146.824" transform="rotate(-0 69.12 146.824)">EdgeTTS · 云端流式</text>
+  </g>
+  <g id="text_76">
+   <text style="font-size: 10px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="328.32" y="146.824" transform="rotate(-0 328.32 146.824)">Qwen3-TTS 0.6B · GPU整段</text>
+  </g>
+  <g id="text_77">
+   <text style="font-weight: 700; font-size: 12px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="51.84" y="443.424" transform="rotate(-0 51.84 443.424)">实时率与输出时长 · 不同音色语速会改变 RTF 的分母</text>
+  </g>
+  <g id="text_78">
+   <text style="font-weight: 700; font-size: 12px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="702.72" y="443.424" transform="rotate(-0 702.72 443.424)">本地 Qwen3-TTS · 资源与 CPU 记录</text>
+  </g>
+  <g id="text_79">
+   <text style="font-size: 10px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="702.72" y="470.824" transform="rotate(-0 702.72 470.824)">GPU：加载 1.509 s；峰值 allocated 2769.1 MiB</text>
+  </g>
+  <g id="text_80">
+   <text style="font-size: 10px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="702.72" y="496.096" transform="rotate(-0 702.72 496.096)">CPU：加载 2.62 s；进程 RSS 4.60 GiB</text>
+  </g>
+  <g id="text_81">
+   <text style="font-size: 10px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #193537" x="702.72" y="521.368" transform="rotate(-0 702.72 521.368)">CPU 的 RTF 为 2.42–3.08，慢于实时。</text>
+  </g>
+  <g id="text_82">
+   <text style="font-weight: 700; font-size: 10px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #246d68" x="702.72" y="546.64" transform="rotate(-0 702.72 546.64)">产物：25 个 Edge MP3 + 25 个 Qwen WAV。</text>
+  </g>
+  <g id="text_83">
+   <text style="font-size: 9px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #647472" x="51.84" y="605.376" transform="rotate(-0 51.84 605.376)">解释：Qwen 本次完整 waveform 接口使首音频 = 总耗时；流式/整段及云端/本地条件不同，只比较当时接入方案。</text>
+  </g>
+  <g id="text_84">
+   <text style="font-size: 9px; font-family: 'Noto Sans CJK JP'; text-anchor: start; fill: #647472" x="51.84" y="624.816" transform="rotate(-0 51.84 624.816)">来源：历史 TTS 结果读取输出与 CPU 总结。RTF = 生成时间 / 输出音频时长；未进行正式自然度或音色一致性评分。</text>
+  </g>
+ </g>
+ <defs>
+  <clipPath id="p0a9a8354a3">
+   <rect x="115.2" y="197.64" width="426.24" height="171.72"/>
+  </clipPath>
+  <clipPath id="p24bf07e5f8">
+   <rect x="673.92" y="197.64" width="414.72" height="171.72"/>
+  </clipPath>
+ </defs>
+</svg>
