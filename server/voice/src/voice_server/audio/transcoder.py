@@ -19,20 +19,15 @@ async def _kill_and_reap(process: Any) -> None:
         transport = getattr(stream, "_transport", None)
         if transport is not None:
             transport.close()
-    # The child watcher updates returncode on a later loop turn.  Let that
-    # callback run without awaiting communicate(), whose cancelled readers can
-    # otherwise keep the voice turn blocked.
-    current = asyncio.current_task()
+    # Wait for the killed child, independently of cancelled pipe readers.
+    # Event-loop iteration counts cannot establish that the child was reaped.
     waiter = asyncio.create_task(process.wait())
-    for _ in range(1000):
-        if waiter.done():
-            await waiter
-            return
+    while True:
         try:
-            await asyncio.sleep(0)
+            await asyncio.shield(waiter)
+            return
         except asyncio.CancelledError:
-            if current is not None:
-                current.uncancel()
+            continue
 
 
 class FFmpegTranscoder:
