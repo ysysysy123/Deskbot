@@ -1,6 +1,6 @@
 # 语音服务与 Agent 接口
 
-本模块负责设备语音通信、识别、上下文、回复合成和打断。默认后端是 OpenAI 兼容 LLM；未来 Agent 的规划、工具调用和工具历史在 `DialogueBackend` 内处理，继续向语音层输出可朗读文本。
+本模块负责设备语音通信、识别、上下文、回复合成和打断。默认后端是 OpenAI 兼容 LLM；启用 MCP 时，现有后端负责摄像头、视觉和设备工具调用。自定义 Agent 的规划、工具调用和工具历史也在 `DialogueBackend` 内处理，继续向语音层输出可朗读文本。
 
 ## 上游参考
 
@@ -46,6 +46,8 @@ def stream(request: TurnRequest) -> AsyncIterator[str]: ...
 - `turn_id`：当前轮次标识，用于日志、任务关联和取消。
 - `text`：本轮识别结果或直接输入的文本。
 - `messages`：系统角色、记忆摘要、近期上下文和当前用户消息；当前消息只追加一次。
+- `device_mcp`：当前连接的设备工具通道，可为空。
+- `diagnostics`：本轮共享的诊断字典，后端可写入工具耗时与结果状态。
 
 后端逐块产出可朗读文本。工具参数、工具结果消息和框架内部事件由后端自己处理，最终选择需要说给用户的内容输出。当前契约不承诺通用工具调用协议。
 
@@ -90,15 +92,22 @@ dialogue:
   system_prompt: 你是小桌，使用简洁、自然的中文口语回答。
   sentence_max_chars: 100
   sentence_queue_size: 2
+  first_clause_chars: 18
 memory:
   recent_limit: 10
   summary_threshold: 12
   context_limit: 64
+  context_max_chars: 8000
+  facts_max_chars: 900
+  facts_limit: 20
+  idle_delay_s: 20
 ```
 
-系统提示始终保留；记忆摘要作为单独的参考消息追加。长文本到达 `sentence_max_chars` 后，即使没有句号也会分段；队列满时暂停接收更多文本，避免无限积压。队列等待不消耗 `llm.timeout_s` 的文本生成等待预算；注入 Agent 时同样使用该预算，可按任务耗时调整。
+系统角色、记忆摘要、当前有效事实与相关历史合并为一条系统消息；近期用户的明确更正优先。首段达到 `first_clause_chars` 后可在逗号等短语边界开始合成，0 可关闭；长文本到达 `sentence_max_chars` 后，即使没有句号也会分段。队列满时暂停接收更多文本，队列等待不消耗 `llm.timeout_s` 的文本生成等待预算；注入 Agent 时同样使用该预算，可按任务耗时调整。
 
-对话上下文包含最近消息和摘要尚未覆盖的消息，最多 `context_limit` 条。摘要一次只处理 `summary_threshold` 条，并在成功后推进进度。摘要长期失败、未摘要消息超过上限时，保留最新消息并记录警告；数据库中的原始记录不会删除。这里的上限按消息数计算，不是模型 token 预算。
+对话上下文包含近期消息、摘要、当前事实和按词面匹配排序的相关历史，历史检索排除已进入近期上下文的消息。上下文同时受 `context_limit` 条数和 `context_max_chars` 字符预算限制；事实另受 `facts_limit` 与 `facts_max_chars` 限制。
+
+普通对话空闲达到 `idle_delay_s`，且新增消息达到 `summary_threshold` 后，后台一次生成摘要和事实，再推进整理进度；新活动取消后台整理。明确“记住／忘掉”命令当轮保存后再确认。SQLite 默认每设备保留 5000 条原始消息，事实跨原文滚动清理保留。被打断的回复只保存已发送的内容，并标明部分发送与中断状态。
 
 管理 API 的 `limit` 仍只控制最近消息条数，与对话上下文的扩展窗口分开。
 
@@ -106,14 +115,19 @@ memory:
 
 ```bash
 .venv/bin/python -m pytest -q
+node --test tests/browser/local_test.test.cjs
 ```
 
 测试覆盖实际设备停止报文、本地 WebSocket 和 Opus 编解码、记忆持久化与设备隔离、Agent 接入和取消、点歌、转码进程回收。普通测试使用模拟模型，不验证识别准确率、云服务可用性和真机播放效果。
 
-下一阶段可在这些边界上增加：
+根目录 `Repository checks` 工作流在 PR 和 main push 中运行以上两组离线测试，安装 `requirements-test.txt`、libopus 和 FFmpeg，不下载模型。合并保护需要在仓库设置中单独配置。
 
-1. 实际 Agent 适配器：消费框架事件，输出文本，传递取消。
-2. 流式 ASR 与流式 TTS：当前 ASR 等用户说完才识别，Edge TTS 仍收齐整段音频后转码；句子任务并行不代表音频端到端流式。
-3. 真实语音延迟测量：分别记录静音判定、识别、首段文本和首包音频耗时。
+现有 Edge TTS 将压缩音频流持续送入 FFmpeg 并输出 PCM；合成预取与按节奏发送并行。ASR 仍在一轮录音结束后识别。`scripts/benchmark_voice_server.py` 已覆盖隔离实例中的真实 WebSocket 链路，输出首文字、首句、首 PCM、首音频与资源指标，设备首声和自然插话仍需实机测量。
+
+下一阶段的实施顺序见 [改进计划](../../../docs/voice-next-improvements-plan-2026-11-02.md)：
+
+1. 工具执行结果与语音播报顺序。
+2. TTS 等待与 LLM 首文字长尾的测量和优化。
+3. 取消控制、实机 AEC／自然插话，以及设备首声与停音测量。
 
 当前 SenseVoice 的同步推理取消仍需等待模型线程退出，以保持共享模型的并发上限。需要更快打断时，应单独改造推理任务管理，不靠增加轮询解决。

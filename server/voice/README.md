@@ -329,13 +329,16 @@ ASR 脚本直接读取 16 kHz/16-bit/单声道 PCM WAV；其他 FFmpeg 可读媒
 
 普通自动化测试不调用真实模型、外网或收费 API：
 
-只运行测试时可安装 `requirements-test.txt`，无需安装 Torch、FunASR、ONNX Runtime 或下载模型；系统仍需安装 libopus。Linux 示例：
+只运行测试时可安装 `requirements-test.txt`，无需安装 Torch、FunASR、ONNX Runtime 或下载模型；系统需安装 libopus，真实转码测试需要 FFmpeg，浏览器逻辑测试需要 Node.js。Linux 示例：
 
 ```bash
 python3.11 -m venv .venv
 .venv/bin/python -m pip install -r requirements-test.txt
 .venv/bin/python -m pytest -q
+node --test tests/browser/local_test.test.cjs
 ```
+
+根目录 `Repository checks` 工作流会在 PR 和 main push 中运行这两组离线测试；测试覆盖 HTTP／WebSocket、SQLite、Opus、转码与浏览器逻辑，不调用在线模型。
 
 ```powershell
 $env:VOICE_OPUS_DLL_DIR = "$env:CONDA_PREFIX\Library\bin"

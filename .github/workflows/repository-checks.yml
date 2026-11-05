@@ -14,3 +14,28 @@ jobs:
         shell: bash
         run: |
           find protocol -type f -name '*.json' -print0 | xargs -0 -n1 python -m json.tool >/dev/null
+
+  voice-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: server/voice
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: server/voice/requirements-test.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install audio libraries
+        run: sudo apt-get update && sudo apt-get install -y libopus0 ffmpeg
+      - name: Install offline test dependencies
+        run: python -m pip install -r requirements-test.txt
+      - name: Run Voice Python tests
+        run: python -m pytest -q
+      - name: Run browser logic tests
+        run: node --test tests/browser/local_test.test.cjs
