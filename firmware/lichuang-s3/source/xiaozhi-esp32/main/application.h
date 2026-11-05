@@ -153,6 +153,9 @@ private:
     bool pending_listening_start_ = false;  // Waiting for playback to drain before starting listening (auto mode)
     bool waiting_for_abort_stop_ = false;
     FixedQueue<std::unique_ptr<AudioStreamPacket>, 3> barge_in_audio_;
+    std::string voice_turn_id_;
+    uint32_t voice_turn_index_ = 0;
+    uint32_t voice_playback_generation_ = 0;
     int clock_ticks_ = 0;
     TaskHandle_t activation_task_handle_ = nullptr;
 

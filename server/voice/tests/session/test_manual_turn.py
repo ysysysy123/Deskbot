@@ -86,7 +86,7 @@ async def test_manual_turn_runs_asr_memory_llm_tts_in_order():
     assert transport.events == [
         ("json", {"session_id": "s1", "type": "stt", "text": "你好"}),
         ("json", {"session_id": "s1", "type": "llm", "text": "🙂", "emotion": "happy"}),
-        ("json", {"session_id": "s1", "type": "tts", "state": "start"}),
+        ("json", {"session_id": "s1", "type": "tts", "state": "start", "turn_id": "s1:1"}),
         ("json", {"session_id": "s1", "type": "tts", "state": "sentence_start", "text": "你好。"}),
         ("bytes", b"opus-a"),
         ("json", {"session_id": "s1", "type": "tts", "state": "sentence_start", "text": "很高兴见到你！"}),

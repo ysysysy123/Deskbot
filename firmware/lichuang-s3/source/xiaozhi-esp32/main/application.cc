@@ -88,6 +88,27 @@ void Application::Initialize() {
     callbacks.on_playback_drained = [this]() {
         xEventGroupSetBits(event_group_, MAIN_EVENT_PLAYBACK_DRAINED);
     };
+    callbacks.on_playback_started = [this](const AudioPlaybackTiming& timing) {
+        Schedule([this, timing]() {
+            if (timing.generation != voice_playback_generation_ || voice_turn_id_.empty()) {
+                return;
+            }
+            ESP_LOGI(TAG,
+                     "Voice timing: turn=%s event=first_output generation=%lu voice_end_us=%lld "
+                     "received_us=%lld output_us=%lld",
+                     voice_turn_id_.c_str(), (unsigned long)timing.generation,
+                     (long long)timing.voice_end_us, (long long)timing.received_us,
+                     (long long)timing.output_us);
+        });
+    };
+    callbacks.on_playback_drained_timing = [this](uint32_t generation, int64_t drained_us) {
+        Schedule([this, generation, drained_us]() {
+            if (generation == voice_playback_generation_ && !voice_turn_id_.empty()) {
+                ESP_LOGI(TAG, "Voice timing: turn=%s event=drained generation=%lu drained_us=%lld",
+                         voice_turn_id_.c_str(), (unsigned long)generation, (long long)drained_us);
+            }
+        });
+    };
     callbacks.on_playback_progress = [this](uint32_t playback_id, uint32_t media_position_ms) {
         notify_player_.OnPlaybackProgress(playback_id, media_position_ms);
     };
@@ -630,10 +651,16 @@ void Application::InitializeProtocol() {
                 return;
             }
             if (strcmp(state->valuestring, "start") == 0) {
-                Schedule([this]() {
+                auto turn = cJSON_GetObjectItem(root, "turn_id");
+                std::string turn_id = cJSON_IsString(turn) ? turn->valuestring : "";
+                Schedule([this, turn_id = std::move(turn_id), session = protocol_->session_id()]() {
                     if (waiting_for_abort_stop_) {
                         return;
                     }
+                    voice_playback_generation_ = audio_service_.ResetDecoder();
+                    voice_turn_id_ =
+                        turn_id.empty() ? session + ":device-" + std::to_string(++voice_turn_index_)
+                                        : turn_id;
                     aborted_ = false;
                     SetDeviceState(kDeviceStateSpeaking);
                 });
@@ -920,7 +947,13 @@ void Application::HandleVadChangedEvent() {
 
     // Stop locally before network or server-side cleanup. Incoming old audio
     // is ignored in Listening; the old tts.stop releases the start barrier.
+    const int64_t detected_us = audio_service_.GetVoiceStartedTimeUs();
     audio_service_.ResetDecoder();
+    const int64_t reset_us = esp_timer_get_time();
+    if (!voice_turn_id_.empty()) {
+        ESP_LOGI(TAG, "Voice timing: turn=%s event=barge_in detected_us=%lld reset_us=%lld",
+                 voice_turn_id_.c_str(), (long long)detected_us, (long long)reset_us);
+    }
     waiting_for_abort_stop_ = true;
     AbortSpeaking(kAbortReasonNone);
     SetListeningMode(kListeningModeRealtime);
@@ -1096,7 +1129,6 @@ void Application::HandleStateChangedEvent() {
                 // Only AFE wake word can be detected in speaking mode
                 audio_service_.EnableWakeWordDetection(audio_service_.IsAfeWakeWord());
             }
-            audio_service_.ResetDecoder();
             break;
         case kDeviceStateNotifying:
             display->SetStatus(Lang::Strings::SPEAKING);

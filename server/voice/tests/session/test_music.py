@@ -61,7 +61,7 @@ async def test_music_request_searches_and_reuses_the_device_audio_channel():
     assert transport.events == [
         ("json", {"session_id": "s1", "type": "stt", "text": "播放周杰伦的晴天"}),
         ("json", {"session_id": "s1", "type": "llm", "text": "晴天 - 周杰伦", "emotion": "relaxed"}),
-        ("json", {"session_id": "s1", "type": "tts", "state": "start"}),
+        ("json", {"session_id": "s1", "type": "tts", "state": "start", "turn_id": "s1:1"}),
         ("json", {"session_id": "s1", "type": "tts", "state": "sentence_start", "text": "正在播放：晴天 - 周杰伦"}),
         ("bytes", b"opus-song"),
         ("json", {"session_id": "s1", "type": "tts", "state": "stop"}),

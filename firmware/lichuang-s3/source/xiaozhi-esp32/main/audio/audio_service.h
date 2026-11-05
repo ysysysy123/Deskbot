@@ -79,6 +79,13 @@
         .enable_vbr = true,                                                                    \
     }
 
+struct AudioPlaybackTiming {
+    uint32_t generation = 0;
+    int64_t voice_end_us = 0;
+    int64_t received_us = 0;
+    int64_t output_us = 0;
+};
+
 struct AudioServiceCallbacks {
     std::function<void(void)> on_send_queue_available;
     std::function<void(const std::string&)> on_wake_word_detected;
@@ -87,6 +94,8 @@ struct AudioServiceCallbacks {
     // Fired when the decode/playback queues and their in-flight work are drained.
     std::function<void(void)> on_playback_drained;
     std::function<void(uint32_t playback_id, uint32_t media_position_ms)> on_playback_progress;
+    std::function<void(const AudioPlaybackTiming&)> on_playback_started;
+    std::function<void(uint32_t generation, int64_t drained_us)> on_playback_drained_timing;
 };
 
 enum AudioTaskType {
@@ -123,6 +132,7 @@ public:
     std::unique_ptr<AudioStreamPacket> PopWakeWordPacket();
     const std::string& GetLastWakeWord() const;
     bool IsVoiceDetected() const { return voice_detected_.load(); }
+    int64_t GetVoiceStartedTimeUs();
     bool IsIdle();
     bool IsPlaybackIdle();
     bool IsWakeWordRunning() const {
@@ -145,7 +155,7 @@ public:
     std::unique_ptr<AudioStreamPacket> PopPacketFromSendQueue();
     void PlaySound(const std::string_view& sound);
     bool ReadAudioData(std::vector<int16_t>& data, int sample_rate, int samples);
-    void ResetDecoder();
+    uint32_t ResetDecoder();
     void SetModelsList(srmodel_list_t* models_list);
 
 private:
@@ -194,6 +204,10 @@ private:
     bool output_in_flight_ = false;
     bool playback_drained_notified_ = true;
     uint32_t playback_generation_ = 0;
+    int64_t playback_first_packet_us_ = 0;
+    int64_t playback_voice_end_us_ = 0;
+    int64_t voice_started_us_ = 0;
+    int64_t voice_ended_us_ = 0;
     // For server AEC
     FixedQueue<uint32_t, MAX_TIMESTAMPS_IN_QUEUE> timestamp_queue_;
 

@@ -186,7 +186,7 @@ async def test_asr_failure_speaks_error_text_without_saving_memory(failure: str)
 
     assert tts.texts == [error_text]
     assert transport.events == [
-        ("json", {"session_id": "s1", "type": "tts", "state": "start"}),
+        ("json", {"session_id": "s1", "type": "tts", "state": "start", "turn_id": "s1:1"}),
         ("json", {"session_id": "s1", "type": "tts", "state": "sentence_start", "text": error_text}),
         ("bytes", b"opus-error"),
         ("json", {"session_id": "s1", "type": "tts", "state": "stop"}),

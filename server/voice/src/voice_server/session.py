@@ -701,6 +701,8 @@ class VoiceSession:
     async def _send_json(self, generation: int, message: dict[str, object]) -> bool:
         if not self._is_current(generation):
             return False
+        if message.get("type") == "tts" and message.get("state") == "start":
+            message = {**message, "turn_id": f"{self.session_id}:{generation}"}
         await self._transport.send_json(message)
         return self._is_current(generation)
 

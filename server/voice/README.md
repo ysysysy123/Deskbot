@@ -335,6 +335,8 @@ ASR 脚本直接读取 16 kHz/16-bit/单声道 PCM WAV；其他 FFmpeg 可读媒
 
 普通自动化测试不调用真实模型、外网或收费 API：
 
+固件的设备时钟事件可通过 `python scripts/summarize_device_timings.py /tmp/deskbot-serial.log --json /tmp/device-timings.json` 只读汇总。输出包含 VAD 结束、音频入队、codec 输出及队列清理的实际样本数与分位数；格式和实机验收方法见 [设备侧计时](../../docs/voice-device-timing-and-acceptance-2026-11-04.md)。
+
 只运行测试时可安装 `requirements-test.txt`，无需安装 Torch、FunASR、ONNX Runtime 或下载模型；系统需安装 libopus，真实转码测试需要 FFmpeg，浏览器逻辑测试需要 Node.js。Linux 示例：
 
 ```bash

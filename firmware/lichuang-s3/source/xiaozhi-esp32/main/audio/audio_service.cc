@@ -88,6 +88,14 @@ void AudioService::Initialize(AudioCodec* codec) {
         PushTaskToEncodeQueue(kAudioTaskTypeEncodeToSendQueue, std::move(data));
     });
     audio_engine_->OnVadStateChange([this](bool speaking) {
+        {
+            std::lock_guard<std::mutex> lock(audio_queue_mutex_);
+            if (speaking) {
+                voice_started_us_ = esp_timer_get_time();
+            } else {
+                voice_ended_us_ = esp_timer_get_time();
+            }
+        }
         voice_detected_ = speaking;
         if (callbacks_.on_vad_change) {
             callbacks_.on_vad_change(speaking);
@@ -324,6 +332,7 @@ void AudioService::AudioInputTask() {
 }
 
 void AudioService::AudioOutputTask() {
+    uint32_t last_output_generation = UINT32_MAX;
     while (true) {
         std::unique_lock<std::mutex> lock(audio_queue_mutex_);
         audio_queue_cv_.wait(
@@ -334,6 +343,9 @@ void AudioService::AudioOutputTask() {
 
         auto task = std::move(audio_playback_queue_.front());
         audio_playback_queue_.pop_front();
+        AudioPlaybackTiming timing = {.generation = playback_generation_,
+                                      .voice_end_us = playback_voice_end_us_,
+                                      .received_us = playback_first_packet_us_};
         output_in_flight_ = true;
         audio_queue_cv_.notify_all();
         lock.unlock();
@@ -348,7 +360,13 @@ void AudioService::AudioOutputTask() {
             callbacks_.on_playback_progress(task.playback_id, task.media_position_ms);
         }
 
+        const bool first_output = timing.generation != last_output_generation;
+        last_output_generation = timing.generation;
+        timing.output_us = esp_timer_get_time();
         codec_->OutputData(task.pcm);
+        if (first_output && timing.received_us > 0 && callbacks_.on_playback_started) {
+            callbacks_.on_playback_started(timing);
+        }
 
         /* Update the last output time */
         last_output_time_ = std::chrono::steady_clock::now();
@@ -372,6 +390,9 @@ void AudioService::AudioOutputTask() {
 
         if (notify_drained && callbacks_.on_playback_drained) {
             callbacks_.on_playback_drained();
+        }
+        if (notify_drained && callbacks_.on_playback_drained_timing) {
+            callbacks_.on_playback_drained_timing(timing.generation, esp_timer_get_time());
         }
     }
 
@@ -623,6 +644,9 @@ bool AudioService::PushPacketToDecodeQueue(std::unique_ptr<AudioStreamPacket> pa
         return false;
     }
     playback_drained_notified_ = false;
+    if (packet->playback_id == 0 && playback_first_packet_us_ == 0) {
+        playback_first_packet_us_ = esp_timer_get_time();
+    }
     audio_decode_queue_.push_back(std::move(packet));
     audio_queue_cv_.notify_all();
     return true;
@@ -795,11 +819,19 @@ bool AudioService::IsPlaybackIdle() {
     return IsPlaybackDrainedLocked();
 }
 
-void AudioService::ResetDecoder() {
+int64_t AudioService::GetVoiceStartedTimeUs() {
+    std::lock_guard<std::mutex> lock(audio_queue_mutex_);
+    return voice_started_us_;
+}
+
+uint32_t AudioService::ResetDecoder() {
     bool notify_drained = false;
+    uint32_t generation;
     {
         std::lock_guard<std::mutex> lock(audio_queue_mutex_);
-        ++playback_generation_;
+        generation = ++playback_generation_;
+        playback_first_packet_us_ = 0;
+        playback_voice_end_us_ = voice_ended_us_;
         std::unique_lock<std::mutex> decoder_lock(decoder_mutex_);
         if (opus_decoder_ != nullptr) {
             esp_opus_dec_reset(opus_decoder_);
@@ -815,6 +847,7 @@ void AudioService::ResetDecoder() {
     if (notify_drained && callbacks_.on_playback_drained) {
         callbacks_.on_playback_drained();
     }
+    return generation;
 }
 
 bool AudioService::IsPlaybackDrainedLocked() const {
