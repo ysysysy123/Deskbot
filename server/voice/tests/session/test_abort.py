@@ -301,6 +301,53 @@ async def test_abort_stops_started_tts_and_suppresses_late_audio():
     assert tts.cancelled.is_set()
 
 
+async def test_abort_sends_stop_before_slow_provider_cleanup_finishes():
+    class SlowCleanupTTS:
+        def __init__(self):
+            self.cleaning = asyncio.Event()
+            self.release = asyncio.Event()
+
+        async def synthesize(self, text):
+            yield b"pcm"
+            try:
+                await asyncio.Event().wait()
+            finally:
+                self.cleaning.set()
+                await self.release.wait()
+
+    class PlaybackTransport(FakeTransport):
+        def __init__(self):
+            super().__init__()
+            self.playing = asyncio.Event()
+            self.stopped = asyncio.Event()
+
+        async def send_bytes(self, data):
+            await super().send_bytes(data)
+            self.playing.set()
+
+        async def send_json(self, message):
+            await super().send_json(message)
+            if message.get("type") == "tts" and message.get("state") == "stop":
+                self.stopped.set()
+
+    tts, transport = SlowCleanupTTS(), PlaybackTransport()
+    session = make_session(asr=FakeASR("hello"), llm=FakeLLM(["reply."]), tts=tts,
+                           transport=transport, codec=FakeCodec(decoded=b"pcm", encoded={b"pcm": [b"opus"]}))
+    await start_spoken_reply(session)
+    await transport.playing.wait()
+    abort_task = asyncio.create_task(session.abort())
+    try:
+        await tts.cleaning.wait()
+        await asyncio.wait_for(transport.stopped.wait(), 1)
+        assert not abort_task.done()
+        assert tts_states(transport) == ["start", "sentence_start", "stop"]
+    finally:
+        tts.release.set()
+        await abort_task
+    assert [value for kind, value in transport.events if kind == "bytes"] == [b"opus"]
+    assert session.state is SessionState.IDLE
+
+
 async def test_generation_guard_suppresses_an_old_llm_that_ignores_cancellation():
     gate = asyncio.Event()
     llm = CancellationIgnoringLLM(gate)

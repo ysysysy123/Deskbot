@@ -225,7 +225,7 @@ class VoiceSession:
 
     async def abort(self) -> None:
         self._turn_generation += 1
-        await self._cancel_pipeline()
+        await self._cancel_pipeline(stop_audio=True)
         await self._stop_cancelled_motion()
         self._clear_recording()
         self._state_machine.abort()
@@ -636,11 +636,19 @@ class VoiceSession:
         if await self._send_json(generation, make_tts(self.session_id, "stop")):
             self._tts_started = False
 
-    async def _cancel_pipeline(self) -> None:
+    async def _cancel_pipeline(self, *, stop_audio: bool = False) -> None:
         task = self._pipeline_task
         if task is not None and not task.done():
             task.cancel()
-            await asyncio.gather(task, return_exceptions=True)
+            try:
+                if stop_audio and self._tts_started and not self._closed:
+                    # Schedule after cancellation so an in-flight stop can
+                    # finish first, without waiting for provider cleanup.
+                    await asyncio.create_task(self._stop_lingering_tts())
+            except Exception:
+                _LOGGER.debug("Early audio stop failed: session=%s", self.session_id, exc_info=True)
+            finally:
+                await asyncio.gather(task, return_exceptions=True)
 
     async def _stop_cancelled_motion(self) -> None:
         stop = getattr(self._device_mcp, "stop_active_motion", None)
