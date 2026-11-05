@@ -16,7 +16,7 @@
 
 浏览器持续对话使用 Silero VAD 分轮，回复期间检测到连续约 180 ms 语音时自动打断，停止旧播放并接收新一句。采集时请求浏览器回声消除，效果依赖设备和浏览器，可戴耳机测试。
 
-原生 ESP32 新增设备端 AEC＋realtime＋WebSocket 的插话交接：播放时保留最近 3 个 60 ms Opus 包，VAD 检测到讲话后本地清空播放队列，依次发送 abort、listen/start 和预录音。旧回复的 tts.stop 到达前忽略迟到的 tts.start。MQTT/UDP 和服务端 AEC 保留原路径；实机回声、首字完整性与实际停音仍待硬件验收。
+原生 ESP32 新增设备端 AEC＋realtime＋WebSocket 的插话交接：播放时保留最近 3 个 60 ms Opus 包，VAD 检测到讲话后本地清空播放队列，依次发送 abort、listen/start 和预录音。旧回复的 tts.stop 到达前忽略迟到的 tts.start；停止报文已到达、队列仍播放尾音时也支持插话，此时不再等待第二次停止报文。正常排空后将预录音交还监听链路。MQTT/UDP 和服务端 AEC 保留原路径；实机回声、首字完整性与实际停音仍待硬件验收。
 
 语音 WebSocket 支持设备 MCP 初始化、工具发现和调用；工具与当前实机会话绑定，默认只把配置白名单内的设备工具交给模型，照片通过初始化下发的 HTTP 地址上传分析。服务仍不包含协议 v2/v3、MQTT/UDP、固件包托管、通用 IoT 工具、声纹、多租户或 Web 管理台。Edge TTS 需要外网；也可以使用 `tts.provider: command` 接入本地命令。
 

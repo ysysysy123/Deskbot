@@ -3,6 +3,7 @@ import json
 from dataclasses import replace
 
 import aiohttp
+import pytest
 import websockets
 
 from voice_server.admin_api import create_admin_app
@@ -248,7 +249,8 @@ async def test_offline_real_listeners_persist_isolate_and_abort(
         await second_app.stop()
 
 
-async def test_realtime_abort_restart_keeps_preroll_and_discards_old_reply(tmp_path, unused_tcp_port_factory):
+@pytest.mark.parametrize("while_streaming", [True, False])
+async def test_realtime_abort_restart_keeps_preroll_and_discards_old_reply(tmp_path, unused_tcp_port_factory, while_streaming):
     class RecordingASR:
         def __init__(self):
             self.inputs = []
@@ -265,7 +267,7 @@ async def test_realtime_abort_restart_keeps_preroll_and_discards_old_reply(tmp_p
         async def synthesize(self, text):
             self.calls += 1
             yield b"\0" * 2880
-            if self.calls == 1:
+            if self.calls == 1 and while_streaming:
                 try:
                     await asyncio.Event().wait()
                 finally:
@@ -276,15 +278,20 @@ async def test_realtime_abort_restart_keeps_preroll_and_discards_old_reply(tmp_p
     config = replace(config, vad=replace(config.vad, min_silence_duration_ms=120))
     asr, tts = RecordingASR(), InterruptedPCM()
     app = _application(config, asr, RecordingLLM("回复。"), tts)
-    app._websocket_server._vad_factory = lambda: FakeVAD([True, False, False])
+    app._websocket_server._vad_factory = lambda: FakeVAD([True, False, False] * 2)
     await app.start()
     client = await _connect(config, "realtime-interruption")
     try:
-        await client.send(LISTEN_START)
-        await client.send(_input_packet())
-        await client.send(LISTEN_STOP)
+        await client.send('{"type":"listen","state":"start","mode":"realtime"}')
+        for _ in range(3):
+            await client.send(_input_packet())
         while not isinstance(await asyncio.wait_for(client.recv(), 2), bytes):
             pass
+        if not while_streaming:
+            while True:
+                message = json.loads(await asyncio.wait_for(client.recv(), 2))
+                if message.get("type") == "tts" and message.get("state") == "stop":
+                    break
         # The firmware sends these in order, then flushes its encoded pre-roll.
         await client.send(ABORT)
         await client.send('{"type":"listen","state":"start","mode":"realtime"}')
@@ -303,8 +310,8 @@ async def test_realtime_abort_restart_keeps_preroll_and_discards_old_reply(tmp_p
                 new_turn = True
             if new_turn and message.get("type") == "tts" and message.get("state") == "stop":
                 break
-        assert tts.cancelled.is_set()
-        assert [len(pcm) for pcm in asr.inputs] == [1920, 5760]
+        assert tts.cancelled.is_set() == while_streaming
+        assert [len(pcm) for pcm in asr.inputs] == [5760, 5760]
         assert new_packets == 1
     finally:
         await client.close()

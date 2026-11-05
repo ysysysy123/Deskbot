@@ -236,6 +236,9 @@ void Application::Run() {
         if (bits & MAIN_EVENT_PLAYBACK_DRAINED) {
             if (audio_service_.IsPlaybackIdle()) {
                 notify_player_.OnPlaybackDrained();
+                if (GetDeviceState() == kDeviceStateListening) {
+                    FlushBargeInAudio();
+                }
             }
             // Deferred listening start (auto mode): the playback queue has
             // drained, so it is now safe to enable voice processing.
@@ -264,9 +267,13 @@ void Application::Run() {
 
         if (bits & MAIN_EVENT_SEND_AUDIO) {
             while (auto packet = audio_service_.PopPacketFromSendQueue()) {
-                if (GetDeviceState() == kDeviceStateSpeaking &&
-                    listening_mode_ == kListeningModeRealtime && aec_mode_ == kAecOnDeviceSide &&
-                    protocol_ && protocol_->IsAudioControlOrdered()) {
+                const auto state = GetDeviceState();
+                const bool playing =
+                    state == kDeviceStateSpeaking ||
+                    (state == kDeviceStateListening && !audio_service_.IsPlaybackIdle());
+                if (playing && listening_mode_ == kListeningModeRealtime &&
+                    aec_mode_ == kAecOnDeviceSide && protocol_ &&
+                    protocol_->IsAudioControlOrdered()) {
                     // Keep 180 ms of the already encoded onset while the old
                     // reply is playing; send it after abort + listen/start.
                     if (barge_in_audio_.full()) {
@@ -937,16 +944,16 @@ void Application::HandleVadChangedEvent() {
     auto state = GetDeviceState();
     if (state == kDeviceStateListening) {
         Board::GetInstance().GetLed()->OnStateChanged();
-        return;
     }
-    if (state != kDeviceStateSpeaking || listening_mode_ != kListeningModeRealtime ||
-        aec_mode_ != kAecOnDeviceSide || !audio_service_.IsVoiceDetected() || !protocol_ ||
-        !protocol_->IsAudioControlOrdered()) {
+    const bool playing = state == kDeviceStateSpeaking ||
+                         (state == kDeviceStateListening && !audio_service_.IsPlaybackIdle());
+    if (!playing || listening_mode_ != kListeningModeRealtime || aec_mode_ != kAecOnDeviceSide ||
+        !audio_service_.IsVoiceDetected() || !protocol_ || !protocol_->IsAudioControlOrdered()) {
         return;
     }
 
     // Stop locally before network or server-side cleanup. Incoming old audio
-    // is ignored in Listening; the old tts.stop releases the start barrier.
+    // is ignored in Listening. Only an unfinished stream has a pending stop.
     const int64_t detected_us = audio_service_.GetVoiceStartedTimeUs();
     audio_service_.ResetDecoder();
     const int64_t reset_us = esp_timer_get_time();
@@ -954,10 +961,15 @@ void Application::HandleVadChangedEvent() {
         ESP_LOGI(TAG, "Voice timing: turn=%s event=barge_in detected_us=%lld reset_us=%lld",
                  voice_turn_id_.c_str(), (long long)detected_us, (long long)reset_us);
     }
-    waiting_for_abort_stop_ = true;
+    waiting_for_abort_stop_ = state == kDeviceStateSpeaking;
     AbortSpeaking(kAbortReasonNone);
     SetListeningMode(kListeningModeRealtime);
     protocol_->SendStartListening(kListeningModeRealtime);
+    FlushBargeInAudio();
+    ESP_LOGI(TAG, "Voice interruption: local playback reset; new realtime turn started");
+}
+
+void Application::FlushBargeInAudio() {
     while (!barge_in_audio_.empty()) {
         auto packet = std::move(barge_in_audio_.front());
         barge_in_audio_.pop_front();
@@ -966,7 +978,6 @@ void Application::HandleVadChangedEvent() {
             break;
         }
     }
-    ESP_LOGI(TAG, "Voice interruption: local playback reset; new realtime turn started");
 }
 
 void Application::HandleWakeWordDetectedEvent() {
@@ -1118,6 +1129,9 @@ void Application::HandleStateChangedEvent() {
                 }
             } else {
                 ConfigureWakeWordForListening();
+            }
+            if (audio_service_.IsPlaybackIdle()) {
+                FlushBargeInAudio();
             }
             break;
         case kDeviceStateSpeaking:

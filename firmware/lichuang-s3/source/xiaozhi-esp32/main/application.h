@@ -166,6 +166,7 @@ private:
     void HandleStartListeningEvent();
     void HandleStopListeningEvent();
     void HandleVadChangedEvent();
+    void FlushBargeInAudio();
     void HandleNetworkConnectedEvent();
     void HandleNetworkDisconnectedEvent();
     void HandleActivationDoneEvent();
