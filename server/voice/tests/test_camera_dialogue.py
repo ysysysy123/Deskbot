@@ -24,6 +24,7 @@ class FakeCompletions:
         self.rounds = iter(rounds)
         self.calls = []
         self.closed = 0
+        self.waiting = asyncio.Event()
 
     async def create(self, **kwargs):
         self.calls.append(copy.deepcopy(kwargs))
@@ -33,6 +34,7 @@ class FakeCompletions:
             try:
                 for item in items:
                     if isinstance(item, asyncio.Event):
+                        self.waiting.set()
                         await item.wait()
                     else:
                         yield item
@@ -181,14 +183,20 @@ async def test_device_motion_requires_bounded_duration(aiohttp_client):
     ({"isError": True, "content": [{"type": "text", "text": "用户拒绝摄像头权限"}]}, "用户拒绝摄像头权限"),
     ({"structuredContent": {"success": True}, "content": [{"type": "image", "data": "PHOTO_BYTES"}]}, "不能解读照片内容"),
 ])
-async def test_tool_failure_and_missing_vision_are_reported_to_model(aiohttp_client, result, expected):
+async def test_tool_failure_and_missing_vision_report_the_actual_result(aiohttp_client, result, expected):
     url, _ = await mcp_server(aiohttp_client, [result])
     llm, completions = provider([
-        [chunk(name="self_camera_take_photo", arguments="{}", call_id="photo")], [chunk("实际结果")],
+        [chunk("操作已经成功。"), chunk(name="self_camera_take_photo", arguments="{}", call_id="photo")],
+        [chunk("实际结果")],
     ])
     backend = CameraMcpDialogueBackend(llm, mcp_url=url)
-    assert [part async for part in backend.stream(request())] == ["实际结果"]
-    assert expected in completions.calls[-1]["messages"][-1]["content"]
+    output = [part async for part in backend.stream(request())]
+    if result.get("isError"):
+        assert output == [f"设备操作失败：{expected}"]
+        assert len(completions.calls) == 1
+    else:
+        assert output == ["实际结果"]
+        assert expected in completions.calls[-1]["messages"][-1]["content"]
     assert "PHOTO_BYTES" not in json.dumps(completions.calls)
 
 
@@ -205,9 +213,13 @@ async def test_tool_round_limit_allows_final_answer_without_further_tools(aiohtt
 
 async def test_unbound_browser_keeps_plain_chat_streaming(aiohttp_client):
     url, rpc_calls = await mcp_server(aiohttp_client, [], tools=[])
-    llm, completions = provider([[chunk("你好"), chunk("。")]])
+    gate = asyncio.Event()
+    llm, completions = provider([[chunk("你好"), gate, chunk("。")]])
     backend = CameraMcpDialogueBackend(llm, mcp_url=url)
-    assert [part async for part in backend.stream(request())] == ["你好", "。"]
+    stream = backend.stream(request())
+    assert await anext(stream) == "你好"
+    gate.set()
+    assert [part async for part in stream] == ["。"]
     assert len(rpc_calls) == 1
     assert "tools" not in completions.calls[0]
 
@@ -218,13 +230,63 @@ async def test_abort_closes_tool_stream_and_does_not_execute_partial_call(aiohtt
     llm, completions = provider([[chunk("我来看看。"), chunk(name="self_camera_take_photo", arguments='{"', call_id="photo"), gate]])
     backend = CameraMcpDialogueBackend(llm, mcp_url=url)
     stream = backend.stream(request())
-    assert await anext(stream) == "我来看看。"
     waiting = asyncio.create_task(anext(stream))
-    await asyncio.sleep(0)
+    await completions.waiting.wait()
     waiting.cancel()
     with pytest.raises(asyncio.CancelledError):
         await waiting
     assert completions.closed == 1
+    assert len(rpc_calls) == 1
+
+
+async def test_tool_round_holds_success_claim_until_device_result():
+    class GatedDevice(FakeDeviceMcp):
+        def __init__(self):
+            super().__init__()
+            self.entered = asyncio.Event()
+            self.resume = asyncio.Event()
+
+        async def call_tool(self, name, arguments):
+            self.entered.set()
+            await self.resume.wait()
+            return await super().call_tool(name, arguments)
+
+    device = GatedDevice()
+    llm, completions = provider([
+        [chunk("已经读到姿态。"), chunk(name="device_self_sensor_get_imu", arguments="{}", call_id="imu")],
+        [chunk("姿态读取完成。")],
+    ])
+    backend = CameraMcpDialogueBackend(llm, mcp_url="http://unused")
+    turn = request("继续检查设备")
+    turn = TurnRequest(turn.device_id, turn.session_id, turn.turn_id, turn.text, turn.messages, device)
+    output = []
+
+    async def consume():
+        async for part in backend.stream(turn):
+            output.append(part)
+
+    task = asyncio.create_task(consume())
+    await device.entered.wait()
+    assert output == []
+    device.resume.set()
+    await task
+    assert output == ["姿态读取完成。"]
+    assert device.calls == [("self.sensor.get_imu", {})]
+    assert completions.calls[-1]["messages"][-2]["content"] is None
+
+
+async def test_tool_available_plain_answer_waits_until_no_call_is_confirmed(aiohttp_client):
+    url, rpc_calls = await mcp_server(aiohttp_client, [])
+    gate = asyncio.Event()
+    llm, completions = provider([[chunk("你好"), gate, chunk("。")]])
+    backend = CameraMcpDialogueBackend(llm, mcp_url=url)
+    stream = backend.stream(request("你好"))
+    waiting = asyncio.create_task(anext(stream))
+    await completions.waiting.wait()
+    assert not waiting.done()
+    gate.set()
+    assert await waiting == "你好"
+    assert [part async for part in stream] == ["。"]
     assert len(rpc_calls) == 1
 
 

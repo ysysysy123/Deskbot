@@ -48,6 +48,7 @@ _DEVICE_TOOL_INSTRUCTIONS = (
     "这些工具操作的都是当前说话的实机，不是电脑浏览器。只使用实际列出的工具。"
     "实机相机通常只支持拍照分析，不支持常驻预览；用户说打开摄像头时调用拍照分析即可。"
     "工具返回 success=false 时说明失败原因；success=true 时根据真实结果简短回答。"
+    "运动工具返回布尔成功表示指令已接收；只有结果明确报告动作完成时才说明已经完成移动或转向。"
     "用户要求前进、后退、转向时，必须实际调用对应的 drive 或 turn 工具，不能只口头答应。"
     "历史对话中的执行描述不代表本轮已经执行；本轮没有工具结果就不能声称已收到指令或正在移动。"
 )
@@ -321,20 +322,31 @@ class CameraMcpDialogueBackend:
                             calls.append(item)
                         else:
                             spoken.append(item)
-                            yield item
+                            # Complete tool calls arrive after text deltas. Hold
+                            # this round's text until we know whether it acts.
+                            if not allowed_tools:
+                                yield item
                 if not calls:
+                    if allowed_tools:
+                        for item in spoken:
+                            yield item
                     return
                 if not allowed_tools:
                     yield "本轮设备操作已达到次数上限，请再试一次。"
                     return
                 messages.append({
-                    "role": "assistant", "content": "".join(spoken) or None,
+                    "role": "assistant", "content": None,
                     "tool_calls": [{"id": call.id, "type": "function", "function": {
                         "name": call.name, "arguments": call.arguments,
                     }} for call in calls],
                 })
                 for call in calls:
                     result = await self._execute(client, request, call, available_names, device_tool_names)
+                    summary = json.loads(result)
+                    if summary.get("success") is False:
+                        reason = summary.get("error") or summary.get("tool_message") or "设备未确认操作成功"
+                        yield f"设备操作失败：{reason}"
+                        return
                     messages.append({"role": "tool", "tool_call_id": call.id, "content": result})
 
     async def _execute(

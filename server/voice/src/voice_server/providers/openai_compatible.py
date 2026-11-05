@@ -78,7 +78,7 @@ class OpenAICompatibleLLMProvider:
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]],
     ) -> AsyncIterator[str | ToolCall]:
-        """Stream speech immediately, then yield complete function-call arguments."""
+        """Yield text deltas, then complete tool calls; the backend controls speech."""
         options: dict[str, Any] = {}
         if tools:
             options.update(tools=tools, tool_choice="auto")
