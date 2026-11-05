@@ -12,6 +12,7 @@
 
 class WebsocketProtocol : public Protocol {
 public:
+    bool IsAudioControlOrdered() const override { return true; }
     WebsocketProtocol();
     ~WebsocketProtocol();
 

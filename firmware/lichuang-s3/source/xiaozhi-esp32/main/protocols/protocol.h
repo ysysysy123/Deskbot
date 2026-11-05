@@ -60,6 +60,8 @@ public:
     virtual bool OpenAudioChannel() = 0;
     virtual void CloseAudioChannel(bool send_goodbye = true) = 0;
     virtual bool IsAudioChannelOpened() const = 0;
+    // A shared ordered stream lets abort/listen precede buffered onset audio.
+    virtual bool IsAudioControlOrdered() const { return false; }
     virtual bool SendAudio(std::unique_ptr<AudioStreamPacket> packet) = 0;
     virtual void SendWakeWordDetected(const std::string& wake_word);
     virtual void SendStartListening(ListeningMode mode);

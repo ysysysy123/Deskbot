@@ -237,8 +237,23 @@ void Application::Run() {
             HandleStopListeningEvent();
         }
 
+        if (bits & MAIN_EVENT_VAD_CHANGE) {
+            HandleVadChangedEvent();
+        }
+
         if (bits & MAIN_EVENT_SEND_AUDIO) {
             while (auto packet = audio_service_.PopPacketFromSendQueue()) {
+                if (GetDeviceState() == kDeviceStateSpeaking &&
+                    listening_mode_ == kListeningModeRealtime && aec_mode_ == kAecOnDeviceSide &&
+                    protocol_ && protocol_->IsAudioControlOrdered()) {
+                    // Keep 180 ms of the already encoded onset while the old
+                    // reply is playing; send it after abort + listen/start.
+                    if (barge_in_audio_.full()) {
+                        barge_in_audio_.pop_front();
+                    }
+                    barge_in_audio_.push_back(std::move(packet));
+                    continue;
+                }
                 if (protocol_ && !protocol_->SendAudio(std::move(packet))) {
                     // Drop the remaining packets. Leaving them in the queue would
                     // stall the Opus codec task (it waits for queue space), which in
@@ -253,13 +268,6 @@ void Application::Run() {
 
         if (bits & MAIN_EVENT_WAKE_WORD_DETECTED) {
             HandleWakeWordDetectedEvent();
-        }
-
-        if (bits & MAIN_EVENT_VAD_CHANGE) {
-            if (GetDeviceState() == kDeviceStateListening) {
-                auto led = Board::GetInstance().GetLed();
-                led->OnStateChanged();
-            }
         }
 
         if (bits & MAIN_EVENT_SCHEDULE) {
@@ -623,11 +631,15 @@ void Application::InitializeProtocol() {
             }
             if (strcmp(state->valuestring, "start") == 0) {
                 Schedule([this]() {
+                    if (waiting_for_abort_stop_) {
+                        return;
+                    }
                     aborted_ = false;
                     SetDeviceState(kDeviceStateSpeaking);
                 });
             } else if (strcmp(state->valuestring, "stop") == 0) {
                 Schedule([this]() {
+                    waiting_for_abort_stop_ = false;
                     if (GetDeviceState() == kDeviceStateSpeaking) {
                         if (listening_mode_ == kListeningModeManualStop) {
                             SetDeviceState(kDeviceStateIdle);
@@ -894,6 +906,36 @@ void Application::HandleStopListeningEvent() {
     }
 }
 
+void Application::HandleVadChangedEvent() {
+    auto state = GetDeviceState();
+    if (state == kDeviceStateListening) {
+        Board::GetInstance().GetLed()->OnStateChanged();
+        return;
+    }
+    if (state != kDeviceStateSpeaking || listening_mode_ != kListeningModeRealtime ||
+        aec_mode_ != kAecOnDeviceSide || !audio_service_.IsVoiceDetected() || !protocol_ ||
+        !protocol_->IsAudioControlOrdered()) {
+        return;
+    }
+
+    // Stop locally before network or server-side cleanup. Incoming old audio
+    // is ignored in Listening; the old tts.stop releases the start barrier.
+    audio_service_.ResetDecoder();
+    waiting_for_abort_stop_ = true;
+    AbortSpeaking(kAbortReasonNone);
+    SetListeningMode(kListeningModeRealtime);
+    protocol_->SendStartListening(kListeningModeRealtime);
+    while (!barge_in_audio_.empty()) {
+        auto packet = std::move(barge_in_audio_.front());
+        barge_in_audio_.pop_front();
+        if (!protocol_->SendAudio(std::move(packet))) {
+            barge_in_audio_.clear();
+            break;
+        }
+    }
+    ESP_LOGI(TAG, "Voice interruption: local playback reset; new realtime turn started");
+}
+
 void Application::HandleWakeWordDetectedEvent() {
     if (!protocol_) {
         return;
@@ -1007,6 +1049,8 @@ void Application::HandleStateChangedEvent() {
     switch (new_state) {
         case kDeviceStateUnknown:
         case kDeviceStateIdle:
+            waiting_for_abort_stop_ = false;
+            barge_in_audio_.clear();
             // Keep a just-raised network error visible. SetDeviceState(idle)
             // queues STATE_CHANGED after Alert(), and the idle handler would
             // otherwise wipe the status, emotion, and chat message.
@@ -1044,6 +1088,7 @@ void Application::HandleStateChangedEvent() {
             }
             break;
         case kDeviceStateSpeaking:
+            barge_in_audio_.clear();
             display->SetStatus(Lang::Strings::SPEAKING);
 
             if (listening_mode_ != kListeningModeRealtime) {
