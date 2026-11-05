@@ -313,6 +313,8 @@ python scripts/check_memory.py --json /tmp/memory-check.json
 python scripts/benchmark_memory.py --json /tmp/memory-benchmark.json
 python scripts/check_voice_turn.py data/check-tts-conda.wav --paced --json /tmp/voice-check.json
 python scripts/benchmark_voice_segments.py --repeat 30 --json /tmp/segment-benchmark.json
+python scripts/benchmark_tts_stages.py --repeat 30 --json /tmp/tts-stage.json
+python scripts/benchmark_llm_first_text.py --repeat 30 --json /tmp/llm-first-text.json
 python scripts/benchmark_voice_server.py data/check-tts-conda.wav --repeat 30 --json /tmp/websocket-benchmark.json
 python scripts/check_vad_endpoints.py data/check-tts-conda.wav --json /tmp/vad-check.json
 ```
@@ -324,6 +326,8 @@ python scripts/check_vad_endpoints.py data/check-tts-conda.wav --json /tmp/vad-c
 `benchmark_voice_segments.py` 固定文字流、交替比较整句和短首段，使用真实 TTS 与按节奏发送的 Opus；记录首音频、总时长、请求数及包间隔的 P50/P95。`benchmark_voice_server.py` 在本机随机端口启动隔离实例，经实际 WebSocket 串行测试真实 ASR/LLM/TTS/Opus，每轮使用新的合成设备 ID；记录阶段耗时、客户端等待、进程 CPU 和内存。两者均排除预热样本，结果只代表相应场景，不包含实机扬声器和回声。
 
 `check_vad_endpoints.py` 使用配置的 Silero、本地慢放及插入停顿，比较 450/600 ms 端点，不访问云端。它不能替代真实人声自然停顿和设备麦克风验收。
+
+`benchmark_tts_stages.py` 固定文本比较默认 FFmpeg 与输入小块读取，分别记录首媒体、进程创建、首 PCM 和媒体到 PCM 的 P50/P95；不修改默认参数。`benchmark_llm_first_text.py` 使用固定合成问题记录首文字与明确的 SDK 重试事件计数。两者统计时排除预热，并保留失败样本；测量结论见 [阶段实测](../../docs/voice-stage-analysis-2026-11-04.md)。
 
 ASR 脚本直接读取 16 kHz/16-bit/单声道 PCM WAV；其他 FFmpeg 可读媒体会先转为 16 kHz PCM。TTS 检查文件固定为 24 kHz/16-bit/单声道 WAV。
 

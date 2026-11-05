@@ -1,0 +1,375 @@
+{
+  "ok": true,
+  "model": "glm-4-flash",
+  "scenario": "sequential plain text LLM requests with one fixed synthetic prompt and no history/tools",
+  "text": "请用一句话说明如何整理书桌。",
+  "configured_max_retries": 1,
+  "repeat": 30,
+  "warmup": 1,
+  "failed_measured": 0,
+  "summary": {
+    "first_text_ms": {
+      "n": 30,
+      "p50": 667.0,
+      "p95": 1976.5
+    },
+    "total_ms": {
+      "n": 30,
+      "p50": 1120.6,
+      "p95": 2726.1
+    },
+    "sdk_retry_events": {
+      "n": 30,
+      "p50": 0.0,
+      "p95": 0.0
+    }
+  },
+  "notes": [
+    "Warmups excluded; failures retained in runs and counted separately.",
+    "Retry counts use the installed SDK's INFO retry event, not inference from slow responses.",
+    "No ASR, TTS, tool routing, device playback or production chat history in this scenario."
+  ],
+  "runs": [
+    {
+      "run": 0,
+      "warmup": true,
+      "metrics": {
+        "output_chars": 18,
+        "first_text_ms": 1008.86,
+        "status": "success",
+        "total_ms": 1285.53,
+        "sdk_retry_events": 0
+      }
+    },
+    {
+      "run": 1,
+      "warmup": false,
+      "metrics": {
+        "output_chars": 19,
+        "first_text_ms": 508.8,
+        "status": "success",
+        "total_ms": 1201.25,
+        "sdk_retry_events": 0
+      }
+    },
+    {
+      "run": 2,
+      "warmup": false,
+      "metrics": {
+        "output_chars": 21,
+        "first_text_ms": 629.22,
+        "status": "success",
+        "total_ms": 1243.94,
+        "sdk_retry_events": 0
+      }
+    },
+    {
+      "run": 3,
+      "warmup": false,
+      "metrics": {
+        "output_chars": 18,
+        "first_text_ms": 608.66,
+        "status": "success",
+        "total_ms": 1010.55,
+        "sdk_retry_events": 0
+      }
+    },
+    {
+      "run": 4,
+      "warmup": false,
+      "metrics": {
+        "output_chars": 19,
+        "first_text_ms": 629.13,
+        "status": "success",
+        "total_ms": 872.2,
+        "sdk_retry_events": 0
+      }
+    },
+    {
+      "run": 5,
+      "warmup": false,
+      "metrics": {
+        "output_chars": 25,
+        "first_text_ms": 753.04,
+        "status": "success",
+        "total_ms": 1025.42,
+        "sdk_retry_events": 0
+      }
+    },
+    {
+      "run": 6,
+      "warmup": false,
+      "metrics": {
+        "output_chars": 22,
+        "first_text_ms": 595.24,
+        "status": "success",
+        "total_ms": 999.62,
+        "sdk_retry_events": 0
+      }
+    },
+    {
+      "run": 7,
+      "warmup": false,
+      "metrics": {
+        "output_chars": 13,
+        "first_text_ms": 542.84,
+        "status": "success",
+        "total_ms": 691.45,
+        "sdk_retry_events": 0
+      }
+    },
+    {
+      "run": 8,
+      "warmup": false,
+      "metrics": {
+        "output_chars": 13,
+        "first_text_ms": 520.05,
+        "status": "success",
+        "total_ms": 1038.46,
+        "sdk_retry_events": 0
+      }
+    },
+    {
+      "run": 9,
+      "warmup": false,
+      "metrics": {
+        "output_chars": 18,
+        "first_text_ms": 584.12,
+        "status": "success",
+        "total_ms": 1103.28,
+        "sdk_retry_events": 0
+      }
+    },
+    {
+      "run": 10,
+      "warmup": false,
+      "metrics": {
+        "output_chars": 14,
+        "first_text_ms": 819.12,
+        "status": "success",
+        "total_ms": 1050.15,
+        "sdk_retry_events": 0
+      }
+    },
+    {
+      "run": 11,
+      "warmup": false,
+      "metrics": {
+        "output_chars": 15,
+        "first_text_ms": 1455.52,
+        "status": "success",
+        "total_ms": 1635.78,
+        "sdk_retry_events": 0
+      }
+    },
+    {
+      "run": 12,
+      "warmup": false,
+      "metrics": {
+        "output_chars": 20,
+        "first_text_ms": 2097.76,
+        "status": "success",
+        "total_ms": 2495.83,
+        "sdk_retry_events": 0
+      }
+    },
+    {
+      "run": 13,
+      "warmup": false,
+      "metrics": {
+        "output_chars": 17,
+        "first_text_ms": 990.35,
+        "status": "success",
+        "total_ms": 1493.94,
+        "sdk_retry_events": 0
+      }
+    },
+    {
+      "run": 14,
+      "warmup": false,
+      "metrics": {
+        "output_chars": 17,
+        "first_text_ms": 629.82,
+        "status": "success",
+        "total_ms": 809.72,
+        "sdk_retry_events": 0
+      }
+    },
+    {
+      "run": 15,
+      "warmup": false,
+      "metrics": {
+        "output_chars": 15,
+        "first_text_ms": 532.69,
+        "status": "success",
+        "total_ms": 1089.4,
+        "sdk_retry_events": 0
+      }
+    },
+    {
+      "run": 16,
+      "warmup": false,
+      "metrics": {
+        "output_chars": 19,
+        "first_text_ms": 1051.96,
+        "status": "success",
+        "total_ms": 1548.42,
+        "sdk_retry_events": 0
+      }
+    },
+    {
+      "run": 17,
+      "warmup": false,
+      "metrics": {
+        "output_chars": 17,
+        "first_text_ms": 793.24,
+        "status": "success",
+        "total_ms": 974.91,
+        "sdk_retry_events": 0
+      }
+    },
+    {
+      "run": 18,
+      "warmup": false,
+      "metrics": {
+        "output_chars": 18,
+        "first_text_ms": 1163.33,
+        "status": "success",
+        "total_ms": 1596.41,
+        "sdk_retry_events": 0
+      }
+    },
+    {
+      "run": 19,
+      "warmup": false,
+      "metrics": {
+        "output_chars": 23,
+        "first_text_ms": 773.46,
+        "status": "success",
+        "total_ms": 2077.04,
+        "sdk_retry_events": 0
+      }
+    },
+    {
+      "run": 20,
+      "warmup": false,
+      "metrics": {
+        "output_chars": 23,
+        "first_text_ms": 720.79,
+        "status": "success",
+        "total_ms": 1613.79,
+        "sdk_retry_events": 0
+      }
+    },
+    {
+      "run": 21,
+      "warmup": false,
+      "metrics": {
+        "output_chars": 21,
+        "first_text_ms": 2381.8,
+        "status": "success",
+        "total_ms": 2914.58,
+        "sdk_retry_events": 0
+      }
+    },
+    {
+      "run": 22,
+      "warmup": false,
+      "metrics": {
+        "output_chars": 20,
+        "first_text_ms": 487.09,
+        "status": "success",
+        "total_ms": 859.4,
+        "sdk_retry_events": 0
+      }
+    },
+    {
+      "run": 23,
+      "warmup": false,
+      "metrics": {
+        "output_chars": 24,
+        "first_text_ms": 606.27,
+        "status": "success",
+        "total_ms": 1017.81,
+        "sdk_retry_events": 0
+      }
+    },
+    {
+      "run": 24,
+      "warmup": false,
+      "metrics": {
+        "output_chars": 20,
+        "first_text_ms": 1108.99,
+        "status": "success",
+        "total_ms": 1649.81,
+        "sdk_retry_events": 0
+      }
+    },
+    {
+      "run": 25,
+      "warmup": false,
+      "metrics": {
+        "output_chars": 21,
+        "first_text_ms": 529.89,
+        "status": "success",
+        "total_ms": 928.35,
+        "sdk_retry_events": 0
+      }
+    },
+    {
+      "run": 26,
+      "warmup": false,
+      "metrics": {
+        "output_chars": 19,
+        "first_text_ms": 680.01,
+        "status": "success",
+        "total_ms": 1137.99,
+        "sdk_retry_events": 0
+      }
+    },
+    {
+      "run": 27,
+      "warmup": false,
+      "metrics": {
+        "output_chars": 19,
+        "first_text_ms": 520.56,
+        "status": "success",
+        "total_ms": 832.15,
+        "sdk_retry_events": 0
+      }
+    },
+    {
+      "run": 28,
+      "warmup": false,
+      "metrics": {
+        "output_chars": 13,
+        "first_text_ms": 1828.4,
+        "status": "success",
+        "total_ms": 3194.28,
+        "sdk_retry_events": 0
+      }
+    },
+    {
+      "run": 29,
+      "warmup": false,
+      "metrics": {
+        "output_chars": 21,
+        "first_text_ms": 984.62,
+        "status": "success",
+        "total_ms": 1694.11,
+        "sdk_retry_events": 0
+      }
+    },
+    {
+      "run": 30,
+      "warmup": false,
+      "metrics": {
+        "output_chars": 20,
+        "first_text_ms": 654.03,
+        "status": "success",
+        "total_ms": 1468.3,
+        "sdk_retry_events": 0
+      }
+    }
+  ]
+}

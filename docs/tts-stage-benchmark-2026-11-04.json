@@ -1,0 +1,1240 @@
+{
+  "ok": true,
+  "scenario": "fixed text -> real Edge TTS -> instrumented FFmpeg -> unpaced PCM consumer",
+  "text": "我会先把整个问题拆成几个清楚的步骤，再逐项说明具体的处理方法。",
+  "voice": "zh-CN-XiaoxiaoNeural",
+  "rate": "+0%",
+  "repeat_per_mode": 30,
+  "warmup_per_mode": 1,
+  "notes": [
+    "Alternating mode order; default FFmpeg pipe reads versus input -blocksize 1024.",
+    "Warmups excluded from percentiles; failed measured runs counted separately.",
+    "All stage timestamps are relative to one TTS request on the same monotonic clock.",
+    "transcoder_spawn_ms means process creation returned, not decoder or audio-device readiness.",
+    "No ASR, LLM, memory, production service, ESP32 or speaker in this benchmark."
+  ],
+  "summary": {
+    "default": {
+      "measured": 30,
+      "successful": 30,
+      "failed": 0,
+      "metrics": {
+        "first_media_ms": {
+          "n": 30,
+          "p50": 2296.8,
+          "p95": 2734.9
+        },
+        "transcoder_spawn_ms": {
+          "n": 30,
+          "p50": 1.0,
+          "p95": 1.1
+        },
+        "first_pcm_ms": {
+          "n": 30,
+          "p50": 2330.5,
+          "p95": 2784.2
+        },
+        "media_to_pcm_ms": {
+          "n": 30,
+          "p50": 3.0,
+          "p95": 85.5
+        },
+        "total_ms": {
+          "n": 30,
+          "p50": 2958.7,
+          "p95": 3563.6
+        },
+        "output_audio_ms": {
+          "n": 30,
+          "p50": 6504.0,
+          "p95": 6504.0
+        },
+        "media_chunks": {
+          "n": 30,
+          "p50": 55.0,
+          "p95": 55.0
+        },
+        "media_bytes": {
+          "n": 30,
+          "p50": 39024.0,
+          "p95": 39024.0
+        },
+        "pcm_bytes": {
+          "n": 30,
+          "p50": 312192.0,
+          "p95": 312192.0
+        }
+      }
+    },
+    "small_reads": {
+      "measured": 30,
+      "successful": 30,
+      "failed": 0,
+      "metrics": {
+        "first_media_ms": {
+          "n": 30,
+          "p50": 2347.0,
+          "p95": 2866.1
+        },
+        "transcoder_spawn_ms": {
+          "n": 30,
+          "p50": 1.0,
+          "p95": 1.2
+        },
+        "first_pcm_ms": {
+          "n": 30,
+          "p50": 2351.5,
+          "p95": 2869.0
+        },
+        "media_to_pcm_ms": {
+          "n": 30,
+          "p50": 3.8,
+          "p95": 7.1
+        },
+        "total_ms": {
+          "n": 30,
+          "p50": 3071.5,
+          "p95": 3583.9
+        },
+        "output_audio_ms": {
+          "n": 30,
+          "p50": 6504.0,
+          "p95": 6504.0
+        },
+        "media_chunks": {
+          "n": 30,
+          "p50": 55.0,
+          "p95": 55.0
+        },
+        "media_bytes": {
+          "n": 30,
+          "p50": 39024.0,
+          "p95": 39024.0
+        },
+        "pcm_bytes": {
+          "n": 30,
+          "p50": 312192.0,
+          "p95": 312192.0
+        }
+      }
+    }
+  },
+  "runs": [
+    {
+      "mode": "default",
+      "run": 0,
+      "warmup": true,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 1.26,
+        "first_media_ms": 2339.15,
+        "last_media_ms": 2699.43,
+        "first_pcm_ms": 2341.51,
+        "status": "success",
+        "total_ms": 2988.01,
+        "media_to_pcm_ms": 2.36,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "small_reads",
+      "run": 0,
+      "warmup": true,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 1.05,
+        "first_media_ms": 2558.21,
+        "last_media_ms": 2777.57,
+        "first_pcm_ms": 2559.95,
+        "status": "success",
+        "total_ms": 3050.01,
+        "media_to_pcm_ms": 1.74,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "small_reads",
+      "run": 1,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 1.27,
+        "first_media_ms": 2695.26,
+        "last_media_ms": 3001.15,
+        "first_pcm_ms": 2697.92,
+        "status": "success",
+        "total_ms": 3277.47,
+        "media_to_pcm_ms": 2.66,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "default",
+      "run": 1,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 1.05,
+        "first_media_ms": 2512.25,
+        "last_media_ms": 3332.86,
+        "first_pcm_ms": 2518.07,
+        "status": "success",
+        "total_ms": 3612.18,
+        "media_to_pcm_ms": 5.82,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "default",
+      "run": 2,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 1.08,
+        "first_media_ms": 2295.72,
+        "last_media_ms": 2615.12,
+        "first_pcm_ms": 2402.59,
+        "status": "success",
+        "total_ms": 2893.74,
+        "media_to_pcm_ms": 106.87,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "small_reads",
+      "run": 2,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 1.18,
+        "first_media_ms": 2352.94,
+        "last_media_ms": 2633.36,
+        "first_pcm_ms": 2357.26,
+        "status": "success",
+        "total_ms": 2922.45,
+        "media_to_pcm_ms": 4.32,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "small_reads",
+      "run": 3,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 0.88,
+        "first_media_ms": 2157.02,
+        "last_media_ms": 2726.11,
+        "first_pcm_ms": 2161.67,
+        "status": "success",
+        "total_ms": 3005.69,
+        "media_to_pcm_ms": 4.65,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "default",
+      "run": 3,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 1.12,
+        "first_media_ms": 2389.37,
+        "last_media_ms": 2651.58,
+        "first_pcm_ms": 2448.69,
+        "status": "success",
+        "total_ms": 2929.15,
+        "media_to_pcm_ms": 59.32,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "default",
+      "run": 4,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 1.15,
+        "first_media_ms": 2237.4,
+        "last_media_ms": 2664.68,
+        "first_pcm_ms": 2240.45,
+        "status": "success",
+        "total_ms": 2942.53,
+        "media_to_pcm_ms": 3.05,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "small_reads",
+      "run": 4,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 0.61,
+        "first_media_ms": 2761.72,
+        "last_media_ms": 3277.38,
+        "first_pcm_ms": 2766.31,
+        "status": "success",
+        "total_ms": 3561.85,
+        "media_to_pcm_ms": 4.59,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "small_reads",
+      "run": 5,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 1.06,
+        "first_media_ms": 2165.2,
+        "last_media_ms": 2467.35,
+        "first_pcm_ms": 2168.98,
+        "status": "success",
+        "total_ms": 2905.43,
+        "media_to_pcm_ms": 3.78,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "default",
+      "run": 5,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 0.87,
+        "first_media_ms": 2168.68,
+        "last_media_ms": 2602.99,
+        "first_pcm_ms": 2172.77,
+        "status": "success",
+        "total_ms": 2999.07,
+        "media_to_pcm_ms": 4.1,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "default",
+      "run": 6,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 0.9,
+        "first_media_ms": 2201.32,
+        "last_media_ms": 2735.25,
+        "first_pcm_ms": 2203.21,
+        "status": "success",
+        "total_ms": 3013.69,
+        "media_to_pcm_ms": 1.9,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "small_reads",
+      "run": 6,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 0.79,
+        "first_media_ms": 2341.09,
+        "last_media_ms": 2732.16,
+        "first_pcm_ms": 2345.76,
+        "status": "success",
+        "total_ms": 3137.38,
+        "media_to_pcm_ms": 4.67,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "small_reads",
+      "run": 7,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 1.06,
+        "first_media_ms": 2176.03,
+        "last_media_ms": 2577.52,
+        "first_pcm_ms": 2180.65,
+        "status": "success",
+        "total_ms": 2858.3,
+        "media_to_pcm_ms": 4.62,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "default",
+      "run": 7,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 0.9,
+        "first_media_ms": 2736.13,
+        "last_media_ms": 3188.78,
+        "first_pcm_ms": 2932.66,
+        "status": "success",
+        "total_ms": 3472.87,
+        "media_to_pcm_ms": 196.53,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "default",
+      "run": 8,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 1.51,
+        "first_media_ms": 2821.79,
+        "last_media_ms": 3215.53,
+        "first_pcm_ms": 2824.08,
+        "status": "success",
+        "total_ms": 3750.53,
+        "media_to_pcm_ms": 2.29,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "small_reads",
+      "run": 8,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 1.08,
+        "first_media_ms": 2117.56,
+        "last_media_ms": 2356.47,
+        "first_pcm_ms": 2119.9,
+        "status": "success",
+        "total_ms": 2632.58,
+        "media_to_pcm_ms": 2.35,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "small_reads",
+      "run": 9,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 0.88,
+        "first_media_ms": 2251.13,
+        "last_media_ms": 2542.33,
+        "first_pcm_ms": 2254.11,
+        "status": "success",
+        "total_ms": 2819.86,
+        "media_to_pcm_ms": 2.98,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "default",
+      "run": 9,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 0.95,
+        "first_media_ms": 2293.24,
+        "last_media_ms": 2603.66,
+        "first_pcm_ms": 2295.55,
+        "status": "success",
+        "total_ms": 2887.15,
+        "media_to_pcm_ms": 2.31,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "default",
+      "run": 10,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 0.65,
+        "first_media_ms": 2733.44,
+        "last_media_ms": 3219.91,
+        "first_pcm_ms": 2735.56,
+        "status": "success",
+        "total_ms": 3504.29,
+        "media_to_pcm_ms": 2.12,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "small_reads",
+      "run": 10,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 1.01,
+        "first_media_ms": 2555.11,
+        "last_media_ms": 2929.43,
+        "first_pcm_ms": 2557.67,
+        "status": "success",
+        "total_ms": 3317.93,
+        "media_to_pcm_ms": 2.56,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "small_reads",
+      "run": 11,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 1.05,
+        "first_media_ms": 3043.59,
+        "last_media_ms": 3411.04,
+        "first_pcm_ms": 3045.86,
+        "status": "success",
+        "total_ms": 3685.99,
+        "media_to_pcm_ms": 2.27,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "default",
+      "run": 11,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 1.13,
+        "first_media_ms": 2377.81,
+        "last_media_ms": 2619.93,
+        "first_pcm_ms": 2379.78,
+        "status": "success",
+        "total_ms": 2903.22,
+        "media_to_pcm_ms": 1.97,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "default",
+      "run": 12,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 0.9,
+        "first_media_ms": 2297.87,
+        "last_media_ms": 2743.11,
+        "first_pcm_ms": 2300.13,
+        "status": "success",
+        "total_ms": 3023.56,
+        "media_to_pcm_ms": 2.26,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "small_reads",
+      "run": 12,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 0.95,
+        "first_media_ms": 2547.33,
+        "last_media_ms": 2885.41,
+        "first_pcm_ms": 2551.66,
+        "status": "success",
+        "total_ms": 3272.94,
+        "media_to_pcm_ms": 4.33,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "small_reads",
+      "run": 13,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 1.04,
+        "first_media_ms": 2214.21,
+        "last_media_ms": 2535.43,
+        "first_pcm_ms": 2222.87,
+        "status": "success",
+        "total_ms": 2813.6,
+        "media_to_pcm_ms": 8.66,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "default",
+      "run": 13,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 0.99,
+        "first_media_ms": 2559.95,
+        "last_media_ms": 2758.54,
+        "first_pcm_ms": 2566.66,
+        "status": "success",
+        "total_ms": 3029.28,
+        "media_to_pcm_ms": 6.7,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "default",
+      "run": 14,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 0.96,
+        "first_media_ms": 2146.72,
+        "last_media_ms": 2637.67,
+        "first_pcm_ms": 2151.91,
+        "status": "success",
+        "total_ms": 2909.02,
+        "media_to_pcm_ms": 5.19,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "small_reads",
+      "run": 14,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 1.12,
+        "first_media_ms": 2326.04,
+        "last_media_ms": 2671.25,
+        "first_pcm_ms": 2329.91,
+        "status": "success",
+        "total_ms": 2947.53,
+        "media_to_pcm_ms": 3.86,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "small_reads",
+      "run": 15,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 0.94,
+        "first_media_ms": 2499.33,
+        "last_media_ms": 2933.3,
+        "first_pcm_ms": 2501.29,
+        "status": "success",
+        "total_ms": 3216.23,
+        "media_to_pcm_ms": 1.96,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "default",
+      "run": 15,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 0.54,
+        "first_media_ms": 2445.31,
+        "last_media_ms": 2704.33,
+        "first_pcm_ms": 2448.3,
+        "status": "success",
+        "total_ms": 2982.0,
+        "media_to_pcm_ms": 2.99,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "default",
+      "run": 16,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 0.77,
+        "first_media_ms": 2123.34,
+        "last_media_ms": 2480.44,
+        "first_pcm_ms": 2128.64,
+        "status": "success",
+        "total_ms": 2754.95,
+        "media_to_pcm_ms": 5.3,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "small_reads",
+      "run": 16,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 1.08,
+        "first_media_ms": 2845.43,
+        "last_media_ms": 3101.76,
+        "first_pcm_ms": 2847.24,
+        "status": "success",
+        "total_ms": 3380.13,
+        "media_to_pcm_ms": 1.81,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "small_reads",
+      "run": 17,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 0.92,
+        "first_media_ms": 2733.14,
+        "last_media_ms": 2935.88,
+        "first_pcm_ms": 2735.23,
+        "status": "success",
+        "total_ms": 3206.86,
+        "media_to_pcm_ms": 2.08,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "default",
+      "run": 17,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 0.91,
+        "first_media_ms": 2601.22,
+        "last_media_ms": 2853.05,
+        "first_pcm_ms": 2603.18,
+        "status": "success",
+        "total_ms": 3131.64,
+        "media_to_pcm_ms": 1.95,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "default",
+      "run": 18,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 0.86,
+        "first_media_ms": 2486.41,
+        "last_media_ms": 2804.12,
+        "first_pcm_ms": 2489.34,
+        "status": "success",
+        "total_ms": 3076.32,
+        "media_to_pcm_ms": 2.92,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "small_reads",
+      "run": 18,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 0.94,
+        "first_media_ms": 2273.44,
+        "last_media_ms": 2612.14,
+        "first_pcm_ms": 2277.96,
+        "status": "success",
+        "total_ms": 2905.21,
+        "media_to_pcm_ms": 4.51,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "small_reads",
+      "run": 19,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 0.74,
+        "first_media_ms": 2096.53,
+        "last_media_ms": 2403.72,
+        "first_pcm_ms": 2098.62,
+        "status": "success",
+        "total_ms": 2679.83,
+        "media_to_pcm_ms": 2.08,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "default",
+      "run": 19,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 0.82,
+        "first_media_ms": 2127.41,
+        "last_media_ms": 2627.01,
+        "first_pcm_ms": 2131.62,
+        "status": "success",
+        "total_ms": 2904.89,
+        "media_to_pcm_ms": 4.21,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "default",
+      "run": 20,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 1.06,
+        "first_media_ms": 2435.82,
+        "last_media_ms": 2713.67,
+        "first_pcm_ms": 2438.47,
+        "status": "success",
+        "total_ms": 2987.12,
+        "media_to_pcm_ms": 2.66,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "small_reads",
+      "run": 20,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 1.34,
+        "first_media_ms": 2497.85,
+        "last_media_ms": 2695.38,
+        "first_pcm_ms": 2499.95,
+        "status": "success",
+        "total_ms": 2977.6,
+        "media_to_pcm_ms": 2.1,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "small_reads",
+      "run": 21,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 1.07,
+        "first_media_ms": 2131.7,
+        "last_media_ms": 2437.32,
+        "first_pcm_ms": 2133.8,
+        "status": "success",
+        "total_ms": 2729.75,
+        "media_to_pcm_ms": 2.1,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "default",
+      "run": 21,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 1.1,
+        "first_media_ms": 2219.64,
+        "last_media_ms": 2529.81,
+        "first_pcm_ms": 2221.88,
+        "status": "success",
+        "total_ms": 2808.43,
+        "media_to_pcm_ms": 2.24,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "default",
+      "run": 22,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 0.91,
+        "first_media_ms": 2194.49,
+        "last_media_ms": 2570.76,
+        "first_pcm_ms": 2197.47,
+        "status": "success",
+        "total_ms": 2848.29,
+        "media_to_pcm_ms": 2.98,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "small_reads",
+      "run": 22,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 0.97,
+        "first_media_ms": 2158.62,
+        "last_media_ms": 2486.32,
+        "first_pcm_ms": 2163.69,
+        "status": "success",
+        "total_ms": 2759.8,
+        "media_to_pcm_ms": 5.07,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "small_reads",
+      "run": 23,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 0.83,
+        "first_media_ms": 2238.99,
+        "last_media_ms": 2751.29,
+        "first_pcm_ms": 2241.25,
+        "status": "success",
+        "total_ms": 3141.12,
+        "media_to_pcm_ms": 2.26,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "default",
+      "run": 23,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 0.63,
+        "first_media_ms": 2233.99,
+        "last_media_ms": 2525.01,
+        "first_pcm_ms": 2235.99,
+        "status": "success",
+        "total_ms": 2804.0,
+        "media_to_pcm_ms": 2.0,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "default",
+      "run": 24,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 0.91,
+        "first_media_ms": 2729.71,
+        "last_media_ms": 3072.09,
+        "first_pcm_ms": 2731.56,
+        "status": "success",
+        "total_ms": 3354.66,
+        "media_to_pcm_ms": 1.84,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "small_reads",
+      "run": 24,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 0.85,
+        "first_media_ms": 2211.45,
+        "last_media_ms": 2477.87,
+        "first_pcm_ms": 2215.54,
+        "status": "success",
+        "total_ms": 2757.13,
+        "media_to_pcm_ms": 4.09,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "small_reads",
+      "run": 25,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 1.04,
+        "first_media_ms": 2440.14,
+        "last_media_ms": 2744.86,
+        "first_pcm_ms": 2445.41,
+        "status": "success",
+        "total_ms": 3210.77,
+        "media_to_pcm_ms": 5.27,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "default",
+      "run": 25,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 1.15,
+        "first_media_ms": 2269.75,
+        "last_media_ms": 2648.29,
+        "first_pcm_ms": 2274.06,
+        "status": "success",
+        "total_ms": 2926.92,
+        "media_to_pcm_ms": 4.31,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "default",
+      "run": 26,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 0.97,
+        "first_media_ms": 2550.09,
+        "last_media_ms": 2864.1,
+        "first_pcm_ms": 2586.59,
+        "status": "success",
+        "total_ms": 3150.78,
+        "media_to_pcm_ms": 36.49,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "small_reads",
+      "run": 26,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 0.94,
+        "first_media_ms": 2612.48,
+        "last_media_ms": 3156.29,
+        "first_pcm_ms": 2623.44,
+        "status": "success",
+        "total_ms": 3444.01,
+        "media_to_pcm_ms": 10.96,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "small_reads",
+      "run": 27,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 0.73,
+        "first_media_ms": 2882.94,
+        "last_media_ms": 3284.83,
+        "first_pcm_ms": 2886.73,
+        "status": "success",
+        "total_ms": 3558.13,
+        "media_to_pcm_ms": 3.79,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "default",
+      "run": 27,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 0.73,
+        "first_media_ms": 2211.77,
+        "last_media_ms": 2569.97,
+        "first_pcm_ms": 2214.15,
+        "status": "success",
+        "total_ms": 2850.35,
+        "media_to_pcm_ms": 2.38,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "default",
+      "run": 28,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 0.96,
+        "first_media_ms": 2274.05,
+        "last_media_ms": 2688.98,
+        "first_pcm_ms": 2275.96,
+        "status": "success",
+        "total_ms": 2974.8,
+        "media_to_pcm_ms": 1.91,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "small_reads",
+      "run": 28,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 1.08,
+        "first_media_ms": 2550.52,
+        "last_media_ms": 3326.24,
+        "first_pcm_ms": 2552.61,
+        "status": "success",
+        "total_ms": 3602.01,
+        "media_to_pcm_ms": 2.1,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "small_reads",
+      "run": 29,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 0.82,
+        "first_media_ms": 2380.65,
+        "last_media_ms": 2916.37,
+        "first_pcm_ms": 2384.74,
+        "status": "success",
+        "total_ms": 3228.21,
+        "media_to_pcm_ms": 4.09,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "default",
+      "run": 29,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 1.1,
+        "first_media_ms": 2096.41,
+        "last_media_ms": 2366.59,
+        "first_pcm_ms": 2100.77,
+        "status": "success",
+        "total_ms": 2643.78,
+        "media_to_pcm_ms": 4.36,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "default",
+      "run": 30,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 1.07,
+        "first_media_ms": 2358.37,
+        "last_media_ms": 2552.08,
+        "first_pcm_ms": 2360.93,
+        "status": "success",
+        "total_ms": 2832.28,
+        "media_to_pcm_ms": 2.56,
+        "output_audio_ms": 6504.0
+      }
+    },
+    {
+      "mode": "small_reads",
+      "run": 30,
+      "warmup": false,
+      "metrics": {
+        "media_chunks": 55,
+        "media_bytes": 39024,
+        "pcm_bytes": 312192,
+        "transcoder_spawn_ms": 0.91,
+        "first_media_ms": 2318.6,
+        "last_media_ms": 2500.17,
+        "first_pcm_ms": 2320.64,
+        "status": "success",
+        "total_ms": 2782.23,
+        "media_to_pcm_ms": 2.04,
+        "output_audio_ms": 6504.0
+      }
+    }
+  ]
+}
